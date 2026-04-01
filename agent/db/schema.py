@@ -9,10 +9,11 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS character (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
+    entity_type TEXT NOT NULL DEFAULT 'character' CHECK(entity_type IN ('character','location','creature','visual_asset','generic_troop','faction')),
     description TEXT,
     image_prompt TEXT,
     reference_image_url TEXT,
-    media_gen_id TEXT,
+    media_id TEXT,
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -62,36 +63,36 @@ CREATE TABLE IF NOT EXISTS scene (
     prompt          TEXT,
     image_prompt    TEXT,
     video_prompt    TEXT,
-    character_names TEXT,  -- JSON array of character names
+    character_names TEXT,  -- JSON array of reference entity names (characters, locations, assets)
 
     parent_scene_id TEXT REFERENCES scene(id) ON DELETE SET NULL,
     chain_type      TEXT NOT NULL DEFAULT 'ROOT' CHECK(chain_type IN ('ROOT','CONTINUATION','INSERT')),
 
     -- Vertical orientation
     vertical_image_url          TEXT,
-    vertical_image_media_gen_id TEXT,
+    vertical_image_media_id TEXT,
     vertical_image_status       TEXT NOT NULL DEFAULT 'PENDING' CHECK(vertical_image_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     vertical_video_url          TEXT,
-    vertical_video_media_gen_id TEXT,
+    vertical_video_media_id TEXT,
     vertical_video_status       TEXT NOT NULL DEFAULT 'PENDING' CHECK(vertical_video_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     vertical_upscale_url        TEXT,
-    vertical_upscale_media_gen_id TEXT,
+    vertical_upscale_media_id TEXT,
     vertical_upscale_status     TEXT NOT NULL DEFAULT 'PENDING' CHECK(vertical_upscale_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
 
     -- Horizontal orientation
     horizontal_image_url          TEXT,
-    horizontal_image_media_gen_id TEXT,
+    horizontal_image_media_id TEXT,
     horizontal_image_status       TEXT NOT NULL DEFAULT 'PENDING' CHECK(horizontal_image_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     horizontal_video_url          TEXT,
-    horizontal_video_media_gen_id TEXT,
+    horizontal_video_media_id TEXT,
     horizontal_video_status       TEXT NOT NULL DEFAULT 'PENDING' CHECK(horizontal_video_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     horizontal_upscale_url        TEXT,
-    horizontal_upscale_media_gen_id TEXT,
+    horizontal_upscale_media_id TEXT,
     horizontal_upscale_status     TEXT NOT NULL DEFAULT 'PENDING' CHECK(horizontal_upscale_status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
 
     -- Chain source (for continuation scenes)
-    vertical_end_scene_media_gen_id   TEXT,
-    horizontal_end_scene_media_gen_id TEXT,
+    vertical_end_scene_media_id   TEXT,
+    horizontal_end_scene_media_id TEXT,
 
     -- Trim
     trim_start  REAL,
@@ -112,7 +113,7 @@ CREATE TABLE IF NOT EXISTS request (
     orientation   TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL')),
     status        TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     request_id    TEXT,   -- external operation ID
-    media_gen_id  TEXT,
+    media_id  TEXT,
     output_url    TEXT,
     error_message TEXT,
     retry_count   INTEGER NOT NULL DEFAULT 0,

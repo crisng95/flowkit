@@ -23,27 +23,27 @@ class SceneUpdate(BaseModel):
     display_order: Optional[int] = None
 
     vertical_image_url: Optional[str] = None
-    vertical_image_media_gen_id: Optional[str] = None
+    vertical_image_media_id: Optional[str] = None
     vertical_image_status: Optional[StatusType] = None
     vertical_video_url: Optional[str] = None
-    vertical_video_media_gen_id: Optional[str] = None
+    vertical_video_media_id: Optional[str] = None
     vertical_video_status: Optional[StatusType] = None
     vertical_upscale_url: Optional[str] = None
-    vertical_upscale_media_gen_id: Optional[str] = None
+    vertical_upscale_media_id: Optional[str] = None
     vertical_upscale_status: Optional[StatusType] = None
 
     horizontal_image_url: Optional[str] = None
-    horizontal_image_media_gen_id: Optional[str] = None
+    horizontal_image_media_id: Optional[str] = None
     horizontal_image_status: Optional[StatusType] = None
     horizontal_video_url: Optional[str] = None
-    horizontal_video_media_gen_id: Optional[str] = None
+    horizontal_video_media_id: Optional[str] = None
     horizontal_video_status: Optional[StatusType] = None
     horizontal_upscale_url: Optional[str] = None
-    horizontal_upscale_media_gen_id: Optional[str] = None
+    horizontal_upscale_media_id: Optional[str] = None
     horizontal_upscale_status: Optional[StatusType] = None
 
-    vertical_end_scene_media_gen_id: Optional[str] = None
-    horizontal_end_scene_media_gen_id: Optional[str] = None
+    vertical_end_scene_media_id: Optional[str] = None
+    horizontal_end_scene_media_id: Optional[str] = None
 
     trim_start: Optional[float] = None
     trim_end: Optional[float] = None
@@ -62,27 +62,27 @@ class Scene(BaseModel):
     chain_type: str = "ROOT"
 
     vertical_image_url: Optional[str] = None
-    vertical_image_media_gen_id: Optional[str] = None
+    vertical_image_media_id: Optional[str] = None
     vertical_image_status: str = "PENDING"
     vertical_video_url: Optional[str] = None
-    vertical_video_media_gen_id: Optional[str] = None
+    vertical_video_media_id: Optional[str] = None
     vertical_video_status: str = "PENDING"
     vertical_upscale_url: Optional[str] = None
-    vertical_upscale_media_gen_id: Optional[str] = None
+    vertical_upscale_media_id: Optional[str] = None
     vertical_upscale_status: str = "PENDING"
 
     horizontal_image_url: Optional[str] = None
-    horizontal_image_media_gen_id: Optional[str] = None
+    horizontal_image_media_id: Optional[str] = None
     horizontal_image_status: str = "PENDING"
     horizontal_video_url: Optional[str] = None
-    horizontal_video_media_gen_id: Optional[str] = None
+    horizontal_video_media_id: Optional[str] = None
     horizontal_video_status: str = "PENDING"
     horizontal_upscale_url: Optional[str] = None
-    horizontal_upscale_media_gen_id: Optional[str] = None
+    horizontal_upscale_media_id: Optional[str] = None
     horizontal_upscale_status: str = "PENDING"
 
-    vertical_end_scene_media_gen_id: Optional[str] = None
-    horizontal_end_scene_media_gen_id: Optional[str] = None
+    vertical_end_scene_media_id: Optional[str] = None
+    horizontal_end_scene_media_id: Optional[str] = None
 
     trim_start: Optional[float] = None
     trim_end: Optional[float] = None

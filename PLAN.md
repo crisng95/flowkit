@@ -34,7 +34,7 @@ A **standalone** system (no Veogent dependency) that lets a local Python agent g
 | **Generate Video (references)** | `POST /v1/video:batchAsyncGenerateVideoReferenceImages` | `VIDEO_GENERATION` |
 | **Upscale Video** | `POST /v1/video:batchAsyncGenerateVideoUpsampleVideo` | `VIDEO_GENERATION` |
 | **Upscale Image** | `POST /v1/flow/upsampleImage` | `IMAGE_GENERATION` |
-| **Upload Image** | `POST /v1:uploadUserImage` | none |
+| **Upload Image** | `POST /v1:uploadImage` | none |
 | **Check Video Status** | `POST /v1/video:batchCheckAsyncVideoGenerationStatus` | none |
 | **Get Credits** | `GET /v1/credits` | none |
 | **Get Media** | `GET /v1/media/{mediaId}` | none |
@@ -77,23 +77,23 @@ Same endpoint (`batchGenerateImages`), same wrapper. Each request item adds `ima
 ```json
 {
   "imageInputs": [
-    {"name": "<character_media_gen_id>", "imageInputType": "IMAGE_INPUT_TYPE_BASE_IMAGE"}
+    {"name": "<character_media_id>", "imageInputType": "IMAGE_INPUT_TYPE_BASE_IMAGE"}
   ]
 }
 ```
 
-**Character media_gen_id lifecycle:**
+**Character media_id lifecycle:**
 1. Character has a reference image URL (`imageUri` / `reference_image_url`)
-2. Upload via `POST /v1:uploadUserImage` → returns `{mediaGenerationId: {mediaGenerationId: "actual_id"}}`
-3. Store `actual_id` as character's `media_gen_id`
-4. Before using in image gen, validate: `GET /v1/media/{media_gen_id}` → 200 = valid
-5. If expired/invalid → re-upload reference image → update `media_gen_id`
+2. Upload via `POST /v1:uploadImage` → returns `{mediaId: {mediaId: "actual_id"}}`
+3. Store `actual_id` as character's `media_id`
+4. Before using in image gen, validate: `GET /v1/media/{media_id}` → 200 = valid
+5. If expired/invalid → re-upload reference image → update `media_id`
 6. Pass valid IDs as `imageInputs` in `batchGenerateImages`
 
-**This is different from scene image `mediaGenerationId`!**
-- Character `media_gen_id` = from `uploadUserImage` (user-uploaded reference)
-- Scene image `mediaGenerationId` = from `batchGenerateImages` response (AI-generated)
-- Video `startImage.mediaId` = scene image's `mediaGenerationId`
+**This is different from scene image `mediaId`!**
+- Character `media_id` = from `uploadImage` (user-uploaded reference)
+- Scene image `mediaId` = from `batchGenerateImages` response (AI-generated)
+- Video `startImage.mediaId` = scene image's `mediaId`
 ```
 
 #### Image Generation Response
@@ -103,7 +103,7 @@ Same endpoint (`batchGenerateImages`), same wrapper. Each request item adds `ima
     {
       "image": {
         "generatedImage": {
-          "mediaGenerationId": "CkIK...",  // ← KEY: used as startImage.mediaId for video gen
+          "mediaId": "CkIK...",  // ← KEY: used as startImage.mediaId for video gen
           "encodedImage": "base64...",       // legacy (may be null)
           "fifeUrl": "https://...",          // public URL (new flow)
           "imageUri": "https://..."          // alias
@@ -117,8 +117,8 @@ Same endpoint (`batchGenerateImages`), same wrapper. Each request item adds `ima
 #### Upload Image Response
 ```json
 {
-  "mediaGenerationId": {
-    "mediaGenerationId": "actual_media_id"  // ← nested!
+  "mediaId": {
+    "mediaId": "actual_media_id"  // ← nested!
   }
 }
 ```
@@ -130,7 +130,7 @@ Same endpoint (`batchGenerateImages`), same wrapper. Each request item adds `ima
   "seed": 1234,
   "textInput": { "prompt": "..." },
   "videoModelKey": "veo_3_1_i2v_s_fast_portrait_ultra",
-  "startImage": { "mediaId": "<media_generation_id>" },
+  "startImage": { "mediaId": "<media_id>" },
   "metadata": { "sceneId": "..." }
 }
 ```
@@ -138,7 +138,7 @@ Same endpoint (`batchGenerateImages`), same wrapper. Each request item adds `ima
 #### Video Generation Request (start + end image)
 Same as above but add:
 ```json
-{ "endImage": { "mediaId": "<end_media_generation_id>" } }
+{ "endImage": { "mediaId": "<end_media_id>" } }
 ```
 
 #### Upscale Video Request
@@ -148,7 +148,7 @@ Same as above but add:
   "resolution": "VIDEO_RESOLUTION_4K",
   "seed": 12345,
   "metadata": { "sceneId": "..." },
-  "videoInput": { "mediaId": "<media_generation_id>" },
+  "videoInput": { "mediaId": "<media_id>" },
   "videoModelKey": "veo_3_1_upsampler_4k"
 }
 ```

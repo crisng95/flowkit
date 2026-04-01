@@ -22,7 +22,7 @@ class Request(BaseModel):
     orientation: Optional[str] = None
     status: str = "PENDING"
     request_id: Optional[str] = None
-    media_gen_id: Optional[str] = None
+    media_id: Optional[str] = None
     output_url: Optional[str] = None
     error_message: Optional[str] = None
     retry_count: int = 0

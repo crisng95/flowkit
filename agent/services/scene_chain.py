@@ -28,10 +28,10 @@ async def create_continuation_scene(video_id: str, parent_scene_id: str, prompt:
     )
 
     updates = {}
-    if parent.get("vertical_video_media_gen_id"):
-        updates["vertical_end_scene_media_gen_id"] = parent["vertical_video_media_gen_id"]
-    if parent.get("horizontal_video_media_gen_id"):
-        updates["horizontal_end_scene_media_gen_id"] = parent["horizontal_video_media_gen_id"]
+    if parent.get("vertical_video_media_id"):
+        updates["vertical_end_scene_media_id"] = parent["vertical_video_media_id"]
+    if parent.get("horizontal_video_media_id"):
+        updates["horizontal_end_scene_media_id"] = parent["horizontal_video_media_id"]
 
     if updates:
         scene = await crud.update_scene(scene["id"], **updates)

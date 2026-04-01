@@ -12,10 +12,10 @@ Python agent manages data locally via SQLite and orchestrates everything.
 - Wraps ALL Google Flow API endpoints
 - Exposes to local agent via WebSocket
 - API methods:
-  - generate_image(prompt, characters[], orientation) → mediaGenerationId + imageUrl
-  - generate_video(mediaGenId, prompt, orientation, endSceneMediaGenId?) → mediaGenerationId + videoUrl
-  - upscale_video(mediaGenId, orientation, resolution) → mediaGenerationId + videoUrl
-  - generate_character_image(name, description) → mediaGenerationId + imageUrl
+  - generate_image(prompt, characters[], orientation) → mediaId + imageUrl
+  - generate_video(mediaId, prompt, orientation, endSceneMediaGenId?) → mediaId + videoUrl
+  - upscale_video(mediaId, orientation, resolution) → mediaId + videoUrl
+  - generate_character_image(name, description) → mediaId + imageUrl
   - get_request_status(requestId) → status + output
   - get_credits() → remaining credits + tier
 
@@ -42,7 +42,7 @@ CREATE TABLE character (
     name                TEXT NOT NULL,
     description         TEXT,
     reference_image_url TEXT,
-    media_gen_id        TEXT,
+    media_id        TEXT,
     created_at          DATETIME DEFAULT (datetime('now')),
     updated_at          DATETIME DEFAULT (datetime('now'))
 );
@@ -111,9 +111,9 @@ CREATE TABLE scene (
     vertical_image_url              TEXT,
     vertical_video_url              TEXT,
     vertical_upscale_url            TEXT,
-    vertical_image_media_gen_id     TEXT,
-    vertical_video_media_gen_id     TEXT,
-    vertical_upscale_media_gen_id   TEXT,
+    vertical_image_media_id     TEXT,
+    vertical_video_media_id     TEXT,
+    vertical_upscale_media_id   TEXT,
     vertical_image_status           TEXT DEFAULT 'PENDING',
     vertical_video_status           TEXT DEFAULT 'PENDING',
 
@@ -121,15 +121,15 @@ CREATE TABLE scene (
     horizontal_image_url            TEXT,
     horizontal_video_url            TEXT,
     horizontal_upscale_url          TEXT,
-    horizontal_image_media_gen_id   TEXT,
-    horizontal_video_media_gen_id   TEXT,
-    horizontal_upscale_media_gen_id TEXT,
+    horizontal_image_media_id   TEXT,
+    horizontal_video_media_id   TEXT,
+    horizontal_upscale_media_id TEXT,
     horizontal_image_status         TEXT DEFAULT 'PENDING',
     horizontal_video_status         TEXT DEFAULT 'PENDING',
 
     -- Chain source
-    vertical_end_scene_media_gen_id   TEXT,
-    horizontal_end_scene_media_gen_id TEXT,
+    vertical_end_scene_media_id   TEXT,
+    horizontal_end_scene_media_id TEXT,
 
     -- Trim
     trim_start  REAL,
@@ -155,7 +155,7 @@ CREATE TABLE request (
     orientation     TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL')),
     status          TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     request_id      TEXT,
-    media_gen_id    TEXT,
+    media_id    TEXT,
     output_url      TEXT,
     error_message   TEXT,
     retry_count     INTEGER DEFAULT 0,
@@ -224,7 +224,7 @@ google-flow-agent/
 - Endpoint: aisandbox-pa.googleapis.com
 - Auth: Bearer ya29.* token (captured by extension from Google Labs session)
 - reCAPTCHA v2 enterprise required for most calls
-- Each generated asset gets a unique mediaGenerationId (base64-encoded protobuf)
+- Each generated asset gets a unique mediaId (base64-encoded protobuf)
 - Video generation is async: submit → poll → get result
 - Upscale also async with same pattern
-- endScene parameter chains video from previous scene's mediaGenerationId
+- endScene parameter chains video from previous scene's mediaId

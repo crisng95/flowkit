@@ -10,9 +10,53 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-def _build_character_profile(char_name: str, char_desc: str | None, story: str, style: str = "3D") -> dict:
-    """Build a rich character profile (description + image_prompt) from the story context."""
+COMPOSITION_GUIDELINES = {
+    "character": (
+        "COMPOSITION: Full body shot from head to toe, standing upright and straight (not tilted or leaning). "
+        "Centered in frame with balanced composition. Front-facing view, looking directly at camera. "
+        "Neutral simple background that doesn't distract from the subject. "
+        "Proper proportions and anatomy. Character perfectly vertical, not skewed or rotated."
+    ),
+    "location": (
+        "COMPOSITION: Establishing shot showing the full environment. "
+        "Balanced level composition with straight horizon. Clear focal point. "
+        "Atmospheric and richly detailed. Show depth and spatial layout."
+    ),
+    "creature": (
+        "COMPOSITION: Full body shot showing the creature's complete form. "
+        "Emphasize natural stance (quadrupedal on all fours, bipedal upright, etc.). "
+        "Centered with clear view of distinctive features. Neutral background. "
+        "Proper scale and proportions relative to body structure."
+    ),
+    "visual_asset": (
+        "COMPOSITION: Clear detailed view showing the asset's complete form. "
+        "Appropriate angle to showcase distinctive features and functional elements. "
+        "Centered with proper scale reference. Neutral background. "
+        "Show key details, materials, and surface textures."
+    ),
+    "generic_troop": (
+        "COMPOSITION: Military/tactical pose showing readiness. "
+        "Full or three-quarter body view. Centered composition. "
+        "Neutral background. Proper perspective and proportions."
+    ),
+    "faction": (
+        "COMPOSITION: Military/tactical pose showing readiness. "
+        "Full or three-quarter body view. Centered composition. "
+        "Neutral background. Proper perspective and proportions."
+    ),
+}
+
+
+def _build_character_profile(char_name: str, char_desc: str | None, story: str,
+                              entity_type: str = "character", style: str = "3D") -> dict:
+    """Build a rich profile (description + image_prompt) for any reference entity.
+
+    The image_prompt generates a reference image used as mediaId for all
+    scene generations. Visual appearance is defined HERE, not in scene prompts.
+    Scene prompts should only describe actions/environment/composition.
+    """
     base_desc = char_desc or char_name
+    composition = COMPOSITION_GUIDELINES.get(entity_type, COMPOSITION_GUIDELINES["character"])
 
     description = (
         f"{char_name}: {base_desc}. "
@@ -20,10 +64,10 @@ def _build_character_profile(char_name: str, char_desc: str | None, story: str, 
     )
 
     image_prompt = (
-        f"Full body character portrait of {base_desc}, "
-        f"{style} animated style, Pixar-quality rendering, "
-        f"detailed character design sheet, clean background, "
-        f"expressive face, dynamic pose, studio lighting"
+        f"Reference image of {base_desc}. "
+        f"{style} animated style, Pixar-quality rendering. "
+        f"{composition} "
+        f"Studio lighting, highly detailed"
     )
 
     return {"description": description, "image_prompt": image_prompt}
@@ -75,21 +119,24 @@ async def create(body: ProjectCreate):
     create_data["user_paygate_tier"] = detected_tier
     project = await crud.create_project(**create_data)
 
-    # Step 3: Create characters with profiles built from story context
+    # Step 3: Create reference entities (characters, locations, assets) with profiles
     if characters_input and body.story:
         for char_input in characters_input:
+            etype = char_input.get("entity_type", "character")
             profile = _build_character_profile(
                 char_input["name"],
                 char_input.get("description"),
                 body.story,
+                entity_type=etype,
             )
             char = await crud.create_character(
                 name=char_input["name"],
+                entity_type=etype,
                 description=profile["description"],
                 image_prompt=profile["image_prompt"],
             )
             await crud.link_character_to_project(flow_project_id, char["id"])
-            logger.info("Character '%s' created and linked: %s", char_input["name"], char["id"])
+            logger.info("%s '%s' created and linked: %s", etype, char_input["name"], char["id"])
 
     return project
 

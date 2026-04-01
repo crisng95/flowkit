@@ -7,20 +7,20 @@ from agent.db.schema import get_db
 
 # Column whitelists per table — prevents SQL injection via kwargs keys
 _COLUMNS = {
-    "character": {"name", "description", "image_prompt", "reference_image_url", "media_gen_id", "updated_at"},
+    "character": {"name", "entity_type", "description", "image_prompt", "reference_image_url", "media_id", "updated_at"},
     "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "updated_at"},
     "video": {"title", "description", "display_order", "status", "vertical_url", "horizontal_url",
               "thumbnail_url", "duration", "resolution", "youtube_id", "privacy", "tags", "updated_at"},
     "scene": {"prompt", "image_prompt", "video_prompt", "character_names", "chain_type",
-              "vertical_image_url", "vertical_image_media_gen_id", "vertical_image_status",
-              "vertical_video_url", "vertical_video_media_gen_id", "vertical_video_status",
-              "vertical_upscale_url", "vertical_upscale_media_gen_id", "vertical_upscale_status",
-              "horizontal_image_url", "horizontal_image_media_gen_id", "horizontal_image_status",
-              "horizontal_video_url", "horizontal_video_media_gen_id", "horizontal_video_status",
-              "horizontal_upscale_url", "horizontal_upscale_media_gen_id", "horizontal_upscale_status",
-              "vertical_end_scene_media_gen_id", "horizontal_end_scene_media_gen_id",
+              "vertical_image_url", "vertical_image_media_id", "vertical_image_status",
+              "vertical_video_url", "vertical_video_media_id", "vertical_video_status",
+              "vertical_upscale_url", "vertical_upscale_media_id", "vertical_upscale_status",
+              "horizontal_image_url", "horizontal_image_media_id", "horizontal_image_status",
+              "horizontal_video_url", "horizontal_video_media_id", "horizontal_video_status",
+              "horizontal_upscale_url", "horizontal_upscale_media_id", "horizontal_upscale_status",
+              "vertical_end_scene_media_id", "horizontal_end_scene_media_id",
               "trim_start", "trim_end", "duration", "display_order", "updated_at"},
-    "request": {"status", "request_id", "media_gen_id", "output_url", "error_message", "retry_count", "updated_at"},
+    "request": {"status", "request_id", "media_id", "output_url", "error_message", "retry_count", "updated_at"},
 }
 
 
@@ -80,13 +80,13 @@ async def _delete(table: str, pk: str, pk_val: str) -> bool:
 
 # ─── Character ──────────────────────────────────────────────
 
-async def create_character(name: str, description: str = None, image_prompt: str = None, reference_image_url: str = None, media_gen_id: str = None) -> dict:
+async def create_character(name: str, entity_type: str = "character", description: str = None, image_prompt: str = None, reference_image_url: str = None, media_id: str = None) -> dict:
     db = await get_db()
     try:
         cid, now = _uuid(), _now()
         await db.execute(
-            "INSERT INTO character (id,name,description,image_prompt,reference_image_url,media_gen_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
-            (cid, name, description, image_prompt, reference_image_url, media_gen_id, now, now))
+            "INSERT INTO character (id,name,entity_type,description,image_prompt,reference_image_url,media_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (cid, name, entity_type, description, image_prompt, reference_image_url, media_id, now, now))
         await db.commit()
         return await _get_with_db(db, "character", "id", cid)
     finally:

@@ -175,14 +175,14 @@ curl -X POST http://127.0.0.1:8100/api/flow/generate-image \
     "prompt": "A cute orange tabby cat at a fish market, 3D style",
     "project_id": "<project_id>",
     "aspect_ratio": "IMAGE_ASPECT_RATIO_PORTRAIT",
-    "character_media_gen_ids": ["<character_media_gen_id>"]
+    "character_media_ids": ["<character_media_id>"]
   }'
 
 # Generate a video from an image
 curl -X POST http://127.0.0.1:8100/api/flow/generate-video \
   -H "Content-Type: application/json" \
   -d '{
-    "start_image_media_id": "<media_gen_id from image>",
+    "start_image_media_id": "<media_id from image>",
     "prompt": "The cat arranges fish at his stall",
     "project_id": "<project_id>",
     "scene_id": "<scene_id>",
@@ -198,7 +198,7 @@ curl -X POST http://127.0.0.1:8100/api/flow/check-status \
 curl -X POST http://127.0.0.1:8100/api/flow/upscale-video \
   -H "Content-Type: application/json" \
   -d '{
-    "media_gen_id": "<video_media_gen_id>",
+    "media_id": "<video_media_id>",
     "scene_id": "<scene_id>"
   }'
 ```
@@ -307,9 +307,9 @@ Video and upscale model keys are stored in `agent/models.json` for easy updates 
 Each scene stores media for **two orientations** (vertical 9:16 + horizontal 16:9):
 
 ```
-vertical_image_url / vertical_image_media_gen_id / vertical_image_status
-vertical_video_url / vertical_video_media_gen_id / vertical_video_status
-vertical_upscale_url / vertical_upscale_media_gen_id / vertical_upscale_status
+vertical_image_url / vertical_image_media_id / vertical_image_status
+vertical_video_url / vertical_video_media_id / vertical_video_status
+vertical_upscale_url / vertical_upscale_media_id / vertical_upscale_status
 (same for horizontal_*)
 ```
 
@@ -401,7 +401,7 @@ All other API calls (check status, get credits, upload image, create project) do
 | Upscale Video | `POST /v1/video:batchAsyncGenerateVideoUpsampleVideo` | Yes |
 | Check Status | `POST /v1/video:batchCheckAsyncVideoGenerationStatus` | No |
 | Get Credits | `GET /v1/credits` | No |
-| Upload Image | `POST /v1:uploadUserImage` | No |
+| Upload Image | `POST /v1:uploadImage` | No |
 
 ## Configuration
 

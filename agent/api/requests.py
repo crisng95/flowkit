@@ -10,7 +10,7 @@ router = APIRouter(prefix="/requests", tags=["requests"])
 
 class RequestUpdate(BaseModel):
     status: Optional[StatusType] = None
-    media_gen_id: Optional[str] = None
+    media_id: Optional[str] = None
     output_url: Optional[str] = None
     error_message: Optional[str] = None
     request_id: Optional[str] = None

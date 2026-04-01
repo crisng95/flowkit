@@ -54,7 +54,11 @@ def add_music(video_path: str, music_path: str, output_path: str,
         ["ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", video_path],
         capture_output=True, text=True,
     )
-    duration = float(probe.stdout.strip())
+    try:
+        duration = float(probe.stdout.strip())
+    except (ValueError, AttributeError):
+        logger.error("ffprobe failed for %s: %s", video_path, probe.stderr[-200:] if probe.stderr else "no output")
+        return False
     fade_start = max(0, duration - fade_out)
 
     cmd = [

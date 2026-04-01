@@ -12,7 +12,7 @@ class GenerateImageRequest(BaseModel):
     project_id: str
     aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT"
     user_paygate_tier: str = "PAYGATE_TIER_TWO"
-    character_media_gen_ids: Optional[list[str]] = None
+    character_media_ids: Optional[list[str]] = None
 
 
 class GenerateVideoRequest(BaseModel):
@@ -35,7 +35,7 @@ class GenerateVideoRefsRequest(BaseModel):
 
 
 class UpscaleVideoRequest(BaseModel):
-    media_gen_id: str
+    media_id: str
     scene_id: str
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
     resolution: str = "VIDEO_RESOLUTION_4K"

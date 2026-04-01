@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
-from agent.models.enums import ProjectStatus, PaygateTier
+from agent.models.enums import ProjectStatus, PaygateTier, EntityType
 
 
 class CharacterInput(BaseModel):
-    """Character stub provided at project creation time."""
+    """Reference entity stub provided at project creation time."""
     name: str
+    entity_type: EntityType = "character"
     description: Optional[str] = None
 
 

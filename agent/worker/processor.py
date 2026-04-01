@@ -13,7 +13,7 @@ import json
 import logging
 from agent.db import crud
 from agent.services.flow_client import get_flow_client
-from agent.config import POLL_INTERVAL, MAX_RETRIES, VIDEO_POLL_TIMEOUT
+from agent.config import POLL_INTERVAL, MAX_RETRIES, VIDEO_POLL_TIMEOUT, API_COOLDOWN
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,13 @@ async def _process_one(client, req: dict):
     logger.info("Processing request %s type=%s", rid[:8], req_type)
     await crud.update_request(rid, status="PROCESSING")
 
+    # Anti-spam: cooldown before API calls (gen image, video, upscale)
+    api_call_types = {"GENERATE_IMAGES", "GENERATE_VIDEO", "GENERATE_VIDEO_REFS",
+                      "UPSCALE_VIDEO", "GENERATE_CHARACTER_IMAGE"}
+    if req_type in api_call_types and API_COOLDOWN > 0:
+        logger.debug("Cooldown %ds before %s", API_COOLDOWN, req_type)
+        await asyncio.sleep(API_COOLDOWN)
+
     try:
         if req_type == "GENERATE_IMAGES":
             result = await _handle_generate_image(client, req, orientation)
@@ -89,11 +96,11 @@ async def _process_one(client, req: dict):
         if _is_error(result):
             await _handle_failure(rid, req, result)
         else:
-            media_gen_id = _extract_media_gen_id(result, req_type)
+            media_id = _extract_media_id(result, req_type)
             output_url = _extract_output_url(result, req_type)
-            await crud.update_request(rid, status="COMPLETED", media_gen_id=media_gen_id, output_url=output_url)
-            await _update_scene_from_result(req, orientation, media_gen_id, output_url)
-            logger.info("Request %s COMPLETED: media=%s", rid[:8], media_gen_id[:20] if media_gen_id else "?")
+            await crud.update_request(rid, status="COMPLETED", media_id=media_id, output_url=output_url)
+            await _update_scene_from_result(req, orientation, media_id, output_url)
+            logger.info("Request %s COMPLETED: media=%s", rid[:8], media_id[:20] if media_id else "?")
 
     except Exception as e:
         logger.exception("Request %s exception: %s", rid[:8], e)
@@ -181,28 +188,77 @@ def _is_error(result: dict) -> bool:
 
 # ─── Response Parsing ────────────────────────────────────────
 
-def _extract_media_gen_id(result: dict, req_type: str) -> str:
+def _is_uuid(value: str) -> bool:
+    """Check if a string looks like a UUID (8-4-4-4-12 hex format)."""
+    import re
+    return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', value, re.I))
+
+
+def _extract_uuid_from_url(url: str) -> str:
+    """Extract UUID from fifeUrl like https://storage.googleapis.com/.../image/{UUID}?..."""
+    import re
+    match = re.search(r'/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', url, re.I)
+    return match.group(1) if match else ""
+
+
+def _extract_media_id(result: dict, req_type: str) -> str:
+    """Extract the UUID-format mediaId from API response.
+
+    IMPORTANT: mediaId is a UUID (e.g. "caad9e1b-a1c9-4aab-a2ee-66ca34f689be").
+    mediaGenerationId is a base64 protobuf string (e.g. "CAMS...") — do NOT use this.
+    Both startImage.mediaId and imageInputs[].name need the UUID format.
+    """
     data = result.get("data", result)
 
     if req_type == "GENERATE_IMAGES":
-        # batchGenerateImages → data.media[].image.generatedImage.mediaGenerationId
+        # batchGenerateImages → media[].name should be UUID
         media = data.get("media", [])
         if media:
-            gen = media[0].get("image", {}).get("generatedImage", {})
-            return gen.get("mediaGenerationId", "")
+            item = media[0]
+            # Try media[].name — should be UUID
+            name = item.get("name", "")
+            if name and _is_uuid(name):
+                return name
+            # Try generatedImage fields
+            gen = item.get("image", {}).get("generatedImage", {})
+            for field in ("mediaId", "mediaGenerationId"):
+                val = gen.get(field, "")
+                if val and _is_uuid(val):
+                    return val
+            # Fallback: extract UUID from fifeUrl/imageUri
+            for url_field in ("fifeUrl", "imageUri"):
+                url = gen.get(url_field, "")
+                if url:
+                    uuid_val = _extract_uuid_from_url(url)
+                    if uuid_val:
+                        logger.info("Extracted mediaId from %s: %s", url_field, uuid_val)
+                        return uuid_val
+            # Last resort: return name even if not UUID (for logging)
+            if name:
+                logger.warning("media[0].name is not UUID format: %s", name[:30])
+                return name
 
     if req_type in ("GENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO"):
-        # batchCheckAsyncVideoGenerationStatus response:
-        # operations[].operation.metadata.video.mediaGenerationId
         ops = data.get("operations", [])
         if ops:
             video_meta = ops[0].get("operation", {}).get("metadata", {}).get("video", {})
-            if video_meta.get("mediaGenerationId"):
-                return video_meta["mediaGenerationId"]
-            # Fallback: direct on operation (submit response, pre-poll)
-            return ops[0].get("mediaGenerationId", "")
+            # Try mediaId first, then extract from fifeUrl
+            for field in ("mediaId",):
+                val = video_meta.get(field, "")
+                if val and _is_uuid(val):
+                    return val
+            fife = video_meta.get("fifeUrl", "")
+            if fife:
+                uuid_val = _extract_uuid_from_url(fife)
+                if uuid_val:
+                    return uuid_val
+            # Fallback
+            for field in ("mediaId", "mediaGenerationId"):
+                val = video_meta.get(field, "")
+                if val:
+                    return val
 
-    return data.get("mediaGenerationId", "")
+    return ""
 
 
 def _extract_output_url(result: dict, req_type: str) -> str:
@@ -264,7 +320,7 @@ async def _poll_operations(client, operations: list[dict], timeout: int = VIDEO_
             "name": "operations/xxx",
             "metadata": {
               "video": {
-                "mediaGenerationId": "...",
+                "mediaId": "...",
                 "fifeUrl": "https://..."
               }
             }
@@ -339,11 +395,9 @@ async def _poll_operations(client, operations: list[dict], timeout: int = VIDEO_
 async def _handle_generate_image(client, req: dict, orientation: str) -> dict:
     """W5: Image generation — synchronous, returns result immediately.
 
-    Response path: data.media[].image.generatedImage = {
-        mediaGenerationId, encodedImage, fifeUrl, imageUri
-    }
+    Response path: data.media[].name = mediaId
 
-    If scene has character_names, looks up their media_gen_ids from project
+    If scene has character_names, looks up their media_ids from project
     and passes them as imageInputs (edit_image flow).
     """
     scene = await crud.get_scene(req["scene_id"]) if req.get("scene_id") else None
@@ -356,11 +410,11 @@ async def _handle_generate_image(client, req: dict, orientation: str) -> dict:
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
     pid = req.get("project_id", "0")
 
-    # Character reference flow:
-    #   1. Character has media_gen_id (from one-time uploadUserImage)
-    #   2. Reuse that media_gen_id for ALL image generations — no re-upload
-    #   3. Only re-upload if media_gen_id becomes invalid (user token/session expired)
-    #   4. Pass valid IDs as imageInputs to batchGenerateImages
+    # Reference image flow:
+    #   1. Each entity (character/location/asset) has media_id from GENERATE_CHARACTER_IMAGE
+    #   2. Trust media_id if present — skip expensive validate calls
+    #   3. If entity has no media_id yet, block (ref image not generated yet)
+    #   4. Pass all media_ids as imageInputs to batchGenerateImages
     char_media_ids = None
     char_names_raw = scene.get("character_names")
     if char_names_raw and req.get("project_id"):
@@ -369,48 +423,40 @@ async def _handle_generate_image(client, req: dict, orientation: str) -> dict:
                 char_names_raw = json.loads(char_names_raw)
             except json.JSONDecodeError:
                 char_names_raw = []
+        if not isinstance(char_names_raw, list):
+            char_names_raw = []
         if char_names_raw:
             project_chars = await crud.get_project_characters(req["project_id"])
             valid_ids = []
+            missing_refs = []
             for c in project_chars:
                 if c["name"] not in char_names_raw:
                     continue
-                mid = c.get("media_gen_id")
+                mid = c.get("media_id")
                 if mid:
-                    # Validate — only re-upload if invalid
-                    is_valid = await client.validate_media_id(mid)
-                    if is_valid:
-                        valid_ids.append(mid)
-                        continue
-                    # Invalid — try re-upload from reference_image_url
-                    logger.warning("Character %s media_gen_id expired, re-uploading", c["name"])
-
-                # Need to upload (first time or re-upload after expiry)
-                ref_url = c.get("reference_image_url")
-                if not ref_url:
-                    logger.warning("Character %s has no reference_image_url, skipping", c["name"])
-                    continue
-
-                new_mid = await _upload_character_image(client, c, aspect)
-                if new_mid:
-                    await crud.update_character(c["id"], media_gen_id=new_mid)
-                    valid_ids.append(new_mid)
-                    logger.info("Character %s re-uploaded, new media_gen_id=%s", c["name"], new_mid[:20])
+                    valid_ids.append(mid)
                 else:
-                    logger.warning("Character %s upload failed, skipping", c["name"])
+                    # No media_id — ref image not generated yet, block
+                    missing_refs.append(c["name"])
+
+            # If ANY referenced entity is missing its ref image, block this request
+            if missing_refs:
+                return {"error": f"Waiting for reference images: {', '.join(missing_refs)}"}
 
             char_media_ids = valid_ids if valid_ids else None
+            if char_media_ids:
+                logger.info("Scene %s: using %d reference images", req.get("scene_id", "?")[:8], len(char_media_ids))
 
     return await client.generate_images(
         prompt=prompt, project_id=pid, aspect_ratio=aspect,
-        user_paygate_tier=tier, character_media_gen_ids=char_media_ids,
+        user_paygate_tier=tier, character_media_ids=char_media_ids,
     )
 
 
-async def _upload_character_image(client, char: dict, aspect_ratio: str) -> str | None:
-    """Download character reference image and upload to Google Flow to get media_gen_id.
+async def _upload_character_image(client, char: dict, project_id: str) -> str | None:
+    """Download character reference image and upload to Google Flow to get media_id.
 
-    Returns media_gen_id string or None on failure.
+    Returns media.name (used as mediaId in video gen) or None on failure.
     """
     import base64
     import aiohttp
@@ -437,24 +483,26 @@ async def _upload_character_image(client, char: dict, aspect_ratio: str) -> str 
         else:
             mime = "image/jpeg"
 
-        # Convert aspect ratio format
-        img_aspect = "IMAGE_ASPECT_RATIO_PORTRAIT" if "PORTRAIT" in aspect_ratio else "IMAGE_ASPECT_RATIO_LANDSCAPE"
+        # Build file name from character name + mime extension
+        ext = mime.split("/")[-1]
+        file_name = f"{char.get('name', 'character')}.{ext}"
 
         # Upload
         encoded = base64.b64encode(image_bytes).decode("utf-8")
-        result = await client.upload_image(encoded, mime_type=mime, aspect_ratio=img_aspect)
+        result = await client.upload_image(
+            encoded, mime_type=mime, project_id=project_id, file_name=file_name,
+        )
 
-        # Extract media_gen_id (nested: {mediaGenerationId: {mediaGenerationId: "actual"}})
-        if result.get("_mediaGenerationId"):
-            return result["_mediaGenerationId"]
+        # Extract media.name (set as _mediaId by upload_image)
+        if result.get("_mediaId"):
+            return result["_mediaId"]
 
+        # Fallback: parse response directly
         data = result.get("data", {})
         if isinstance(data, dict):
-            nested = data.get("mediaGenerationId", {})
-            if isinstance(nested, dict):
-                return nested.get("mediaGenerationId")
-            if isinstance(nested, str):
-                return nested
+            media = data.get("media", {})
+            if isinstance(media, dict) and media.get("name"):
+                return media["name"]
 
         return None
     except Exception as e:
@@ -470,15 +518,15 @@ async def _handle_generate_video(client, req: dict, orientation: str) -> dict:
         return {"error": "Scene not found"}
 
     prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
-    image_media_id = scene.get(f"{prefix}_image_media_gen_id")
+    image_media_id = scene.get(f"{prefix}_image_media_id")
     if not image_media_id:
-        return {"error": f"No {prefix} image media_gen_id for scene"}
+        return {"error": f"No {prefix} image media_id for scene"}
 
     project = await crud.get_project(req["project_id"]) if req.get("project_id") else None
     aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if orientation == "VERTICAL" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
     prompt = scene.get("video_prompt") or scene.get("prompt", "")
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
-    end_id = scene.get(f"{prefix}_end_scene_media_gen_id")
+    end_id = scene.get(f"{prefix}_end_scene_media_id")
 
     # Step 1: Submit video generation
     submit_result = await client.generate_video(
@@ -520,7 +568,7 @@ async def _handle_generate_video_refs(client, req: dict, orientation: str) -> di
     """Generate video from multiple character reference images (r2v).
 
     Instead of startImage (i2v), uses referenceImages — a list of character
-    media_gen_ids. The model composes a video from all references.
+    media_ids. The model composes a video from all references.
     """
     scene = await crud.get_scene(req["scene_id"]) if req.get("scene_id") else None
     if not scene:
@@ -531,7 +579,7 @@ async def _handle_generate_video_refs(client, req: dict, orientation: str) -> di
     prompt = scene.get("video_prompt") or scene.get("prompt", "")
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
 
-    # Get character media_gen_ids
+    # Get character media_ids
     char_names_raw = scene.get("character_names")
     if isinstance(char_names_raw, str):
         try:
@@ -547,21 +595,21 @@ async def _handle_generate_video_refs(client, req: dict, orientation: str) -> di
     for c in project_chars:
         if c["name"] not in char_names_raw:
             continue
-        mid = c.get("media_gen_id")
+        mid = c.get("media_id")
         if mid:
             is_valid = await client.validate_media_id(mid)
             if is_valid:
                 ref_ids.append(mid)
                 continue
             # Re-upload
-            logger.warning("Character %s media_gen_id expired for r2v, re-uploading", c["name"])
-            new_mid = await _upload_character_image(client, c, aspect)
+            logger.warning("Character %s media_id expired for r2v, re-uploading", c["name"])
+            new_mid = await _upload_character_image(client, c, req.get("project_id", ""))
             if new_mid:
-                await crud.update_character(c["id"], media_gen_id=new_mid)
+                await crud.update_character(c["id"], media_id=new_mid)
                 ref_ids.append(new_mid)
 
     if not ref_ids:
-        return {"error": "No valid character media_gen_ids for r2v"}
+        return {"error": "No valid character media_ids for r2v"}
 
     # Submit r2v
     submit_result = await client.generate_video_from_references(
@@ -602,15 +650,15 @@ async def _handle_upscale_video(client, req: dict, orientation: str) -> dict:
         return {"error": "Scene not found"}
 
     prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
-    video_media_id = scene.get(f"{prefix}_video_media_gen_id")
+    video_media_id = scene.get(f"{prefix}_video_media_id")
     if not video_media_id:
-        return {"error": f"No {prefix} video media_gen_id for scene"}
+        return {"error": f"No {prefix} video media_id for scene"}
 
     aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if orientation == "VERTICAL" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
 
     # Step 1: Submit upscale
     submit_result = await client.upscale_video(
-        media_gen_id=video_media_id,
+        media_id=video_media_id,
         scene_id=req.get("scene_id", ""),
         aspect_ratio=aspect,
     )
@@ -637,7 +685,25 @@ async def _handle_upscale_video(client, req: dict, orientation: str) -> dict:
     return await _poll_operations(client, operations, timeout=300)
 
 
-# ─── Character Image (sync, like W5) ────────────────────────
+# ─── Reference Image Aspect Ratio ──────────────────────────
+
+# Entity types that need landscape (wide) reference images
+_LANDSCAPE_ENTITY_TYPES = {"location"}
+# Everything else (character, creature, visual_asset, generic_troop, faction) uses portrait
+
+
+def _reference_aspect_ratio(entity_type: str) -> str:
+    """Pick aspect ratio based on entity type.
+
+    Locations need landscape (16:9) for establishing shots.
+    Characters/creatures/assets need portrait for full-body head-to-toe.
+    """
+    if entity_type in _LANDSCAPE_ENTITY_TYPES:
+        return "IMAGE_ASPECT_RATIO_LANDSCAPE"
+    return "IMAGE_ASPECT_RATIO_PORTRAIT"
+
+
+# ─── Character/Reference Image (sync, like W5) ──────────────
 
 async def _handle_generate_character_image(client, req: dict) -> dict:
     char = await crud.get_character(req["character_id"]) if req.get("character_id") else None
@@ -645,30 +711,57 @@ async def _handle_generate_character_image(client, req: dict) -> dict:
         return {"error": "Character not found"}
 
     pid = req.get("project_id", "0")
+    # Prefer image_prompt (detailed generation prompt) over description
+    prompt = char.get("image_prompt") or f"Character reference: {char['name']}. {char.get('description', '')}"
+
+    project = await crud.get_project(pid) if pid != "0" else None
+    tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
+    entity_type = char.get("entity_type", "character")
+    aspect = _reference_aspect_ratio(entity_type)
+
     result = await client.generate_images(
-        prompt=f"Character reference: {char['name']}. {char.get('description', '')}",
+        prompt=prompt,
         project_id=pid,
-        aspect_ratio="IMAGE_ASPECT_RATIO_PORTRAIT",
+        aspect_ratio=aspect,
+        user_paygate_tier=tier,
     )
 
     if not _is_error(result):
-        media_gen_id = _extract_media_gen_id(result, "GENERATE_IMAGES")
         output_url = _extract_output_url(result, "GENERATE_IMAGES")
-        if media_gen_id:
-            await crud.update_character(char["id"], media_gen_id=media_gen_id, reference_image_url=output_url)
+
+        if output_url:
+            # Step 2: Upload the generated image to get a proper UUID media_id.
+            # batchGenerateImages returns mediaGenerationId (CAMS...) but
+            # imageInputs[].name needs the UUID from uploadImage (media.name).
+            upload_mid = await _upload_character_image(client, {
+                "name": char["name"],
+                "reference_image_url": output_url,
+            }, pid)
+
+            if upload_mid:
+                await crud.update_character(char["id"], media_id=upload_mid, reference_image_url=output_url)
+                logger.info("%s '%s' ref image uploaded (%s): media_id=%s",
+                            entity_type, char["name"], aspect.split("_")[-1].lower(),
+                            upload_mid[:30] if upload_mid else "?")
+            else:
+                # Upload failed — store ref URL but NOT a bad media_id.
+                # This forces retry on next scene image gen (reference blocking will catch it).
+                await crud.update_character(char["id"], reference_image_url=output_url)
+                logger.warning("%s '%s' upload failed, no media_id stored — will retry on next use", entity_type, char["name"])
+                return {"error": f"Upload failed for {char['name']} — image generated but could not get UUID media_id"}
 
     return result
 
 
 # ─── Scene Update ────────────────────────────────────────────
 
-async def _update_scene_from_result(req: dict, orientation: str, media_gen_id: str, output_url: str):
+async def _update_scene_from_result(req: dict, orientation: str, media_id: str, output_url: str):
     """Update scene fields based on completed request.
 
     CRITICAL: When regenerating, must cascade-clear downstream data.
-    Otherwise the system silently uses stale media_gen_ids:
-      - Regen image → old video/upscale media_gen_ids still point to OLD image's derivatives
-      - Regen video → old upscale media_gen_id still points to OLD video
+    Otherwise the system silently uses stale media_ids:
+      - Regen image → old video/upscale media_ids still point to OLD image's derivatives
+      - Regen video → old upscale media_id still points to OLD video
     This causes silent failures where everything looks "complete" but uses wrong assets.
     """
     scene_id = req.get("scene_id")
@@ -681,34 +774,34 @@ async def _update_scene_from_result(req: dict, orientation: str, media_gen_id: s
 
     if req_type == "GENERATE_IMAGES":
         # Set new image data
-        updates[f"{prefix}_image_media_gen_id"] = media_gen_id
+        updates[f"{prefix}_image_media_id"] = media_id
         updates[f"{prefix}_image_url"] = output_url
         updates[f"{prefix}_image_status"] = "COMPLETED"
 
         # CASCADE: Clear downstream video + upscale (they depend on this image)
-        updates[f"{prefix}_video_media_gen_id"] = None
+        updates[f"{prefix}_video_media_id"] = None
         updates[f"{prefix}_video_url"] = None
         updates[f"{prefix}_video_status"] = "PENDING"
-        updates[f"{prefix}_upscale_media_gen_id"] = None
+        updates[f"{prefix}_upscale_media_id"] = None
         updates[f"{prefix}_upscale_url"] = None
         updates[f"{prefix}_upscale_status"] = "PENDING"
         logger.info("Cascade clear: %s video + upscale reset for scene %s (image regen)", prefix, scene_id[:8])
 
     elif req_type in ("GENERATE_VIDEO", "GENERATE_VIDEO_REFS"):
         # Set new video data
-        updates[f"{prefix}_video_media_gen_id"] = media_gen_id
+        updates[f"{prefix}_video_media_id"] = media_id
         updates[f"{prefix}_video_url"] = output_url
         updates[f"{prefix}_video_status"] = "COMPLETED"
 
         # CASCADE: Clear downstream upscale (it depends on this video)
-        updates[f"{prefix}_upscale_media_gen_id"] = None
+        updates[f"{prefix}_upscale_media_id"] = None
         updates[f"{prefix}_upscale_url"] = None
         updates[f"{prefix}_upscale_status"] = "PENDING"
         logger.info("Cascade clear: %s upscale reset for scene %s (video regen)", prefix, scene_id[:8])
 
     elif req_type == "UPSCALE_VIDEO":
         # Terminal — no downstream to clear
-        updates[f"{prefix}_upscale_media_gen_id"] = media_gen_id
+        updates[f"{prefix}_upscale_media_id"] = media_id
         updates[f"{prefix}_upscale_url"] = output_url
         updates[f"{prefix}_upscale_status"] = "COMPLETED"
 

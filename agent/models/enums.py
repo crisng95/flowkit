@@ -17,3 +17,5 @@ ProjectStatus = Literal["ACTIVE", "ARCHIVED", "DELETED"]
 VideoStatus = Literal["DRAFT", "PROCESSING", "COMPLETED", "FAILED"]
 
 PaygateTier = Literal["PAYGATE_TIER_ONE", "PAYGATE_TIER_TWO"]
+
+EntityType = Literal["character", "location", "creature", "visual_asset", "generic_troop", "faction"]

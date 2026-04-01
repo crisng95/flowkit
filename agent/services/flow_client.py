@@ -36,9 +36,10 @@ class FlowClient:
     def clear_extension(self):
         """Called when extension disconnects."""
         self._extension_ws = None
-        # Cancel all pending futures
-        count = len(self._pending)
-        for req_id, future in self._pending.items():
+        # Cancel all pending futures (copy to avoid RuntimeError on concurrent modification)
+        pending_copy = list(self._pending.items())
+        count = len(pending_copy)
+        for req_id, future in pending_copy:
             if not future.done():
                 future.set_exception(ConnectionError("Extension disconnected"))
         self._pending.clear()
@@ -144,20 +145,15 @@ class FlowClient:
     async def generate_images(self, prompt: str, project_id: str,
                                aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
                                user_paygate_tier: str = "PAYGATE_TIER_TWO",
-                               character_media_gen_ids: list[str] = None) -> dict:
+                               character_media_ids: list[str] = None) -> dict:
         """Generate image(s).
 
-        If character_media_gen_ids is provided, uses edit_image flow (batchGenerateImages
+        If character_media_ids is provided, uses edit_image flow (batchGenerateImages
         with imageInputs) — same endpoint, but includes character references.
         Without characters, uses plain generate_images.
 
         Response structure:
-            data.media[].image.generatedImage = {
-                mediaGenerationId: str,   # ← the key ID for video gen
-                encodedImage: str | null,  # base64 (legacy)
-                fifeUrl: str | null,       # public URL (new)
-                imageUri: str | null,      # alias for fifeUrl
-            }
+            data.media[].name = mediaId (used for video gen)
         """
         ts = int(time.time() * 1000)
         ctx = self._client_context(project_id, user_paygate_tier)
@@ -171,10 +167,10 @@ class FlowClient:
         }
 
         # Add character references if provided (edit_image flow)
-        if character_media_gen_ids:
+        if character_media_ids:
             request_item["imageInputs"] = [
-                {"name": mid, "imageInputType": "IMAGE_INPUT_TYPE_BASE_IMAGE"}
-                for mid in character_media_gen_ids
+                {"name": mid, "imageInputType": "IMAGE_INPUT_TYPE_REFERENCE"}
+                for mid in character_media_ids
             ]
 
         body = {
@@ -245,7 +241,7 @@ class FlowClient:
         a video from all provided reference character images.
 
         Args:
-            reference_media_ids: List of character media_gen_ids (from uploadUserImage)
+            reference_media_ids: List of character media_ids (from uploadImage)
         """
         gen_type = "reference_frame_2_video"
         model_key = VIDEO_MODELS.get(user_paygate_tier, {}).get(gen_type, {}).get(aspect_ratio)
@@ -279,7 +275,7 @@ class FlowClient:
             "captchaAction": "VIDEO_GENERATION",
         }, timeout=60)
 
-    async def upscale_video(self, media_gen_id: str, scene_id: str,
+    async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
                              resolution: str = "VIDEO_RESOLUTION_4K") -> dict:
         """Upscale a video."""
@@ -298,7 +294,7 @@ class FlowClient:
                 "resolution": resolution,
                 "seed": int(time.time()) % 100000,
                 "metadata": {"sceneId": scene_id},
-                "videoInput": {"mediaId": media_gen_id},
+                "videoInput": {"mediaId": media_id},
                 "videoModelKey": model_key,
             }],
         }
@@ -333,7 +329,7 @@ class FlowClient:
         }, timeout=15)
 
     async def validate_media_id(self, media_id: str) -> bool:
-        """Check if a mediaGenerationId is still valid.
+        """Check if a mediaId is still valid.
 
         Production calls: GET /v1/media/{mediaId}?key=...&clientContext.tool=PINHOLE
         Returns True on 200, False otherwise.
@@ -349,24 +345,23 @@ class FlowClient:
         return isinstance(status, int) and status == 200
 
     async def upload_image(self, image_base64: str, mime_type: str = "image/jpeg",
-                            aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT") -> dict:
+                            project_id: str = "", file_name: str = "image.jpg") -> dict:
         """Upload an image for use as start/end frame.
 
-        Response: {mediaGenerationId: {mediaGenerationId: "actual_id"}}
-        Note: nested mediaGenerationId — production uses:
-            upload_response.get('mediaGenerationId', {}).get('mediaGenerationId')
+        Uses /v1/flow/uploadImage endpoint.
+        Response: {media: {name: "uuid", ...}, workflow: {...}}
+        We store media.name as the mediaId for video generation.
         """
         body = {
-            "imageInput": {
-                "rawImageBytes": image_base64,
-                "mimeType": mime_type,
-                "isUserUploaded": True,
-                "aspectRatio": aspect_ratio,
-            },
             "clientContext": {
-                "sessionId": f";{int(time.time() * 1000)}",
-                "tool": "ASSET_MANAGER",
+                "projectId": project_id,
+                "tool": "PINHOLE",
             },
+            "fileName": file_name,
+            "imageBytes": image_base64,
+            "isHidden": False,
+            "isUserUploaded": True,
+            "mimeType": mime_type,
         }
 
         url = self._build_url("upload_image")
@@ -377,13 +372,13 @@ class FlowClient:
             "body": body,
         }, timeout=60)
 
-        # Flatten nested mediaGenerationId for convenience
+        # Extract media.name for convenience (used as mediaId in video gen)
         if not _is_ws_error(result):
             data = result.get("data", {})
             if isinstance(data, dict):
-                nested = data.get("mediaGenerationId", {})
-                if isinstance(nested, dict):
-                    result["_mediaGenerationId"] = nested.get("mediaGenerationId", "")
+                media = data.get("media", {})
+                if isinstance(media, dict) and media.get("name"):
+                    result["_mediaId"] = media["name"]
 
         return result
 

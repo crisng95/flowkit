@@ -24,6 +24,7 @@ RECAPTCHA_SITE_KEY = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV"
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "5"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
 VIDEO_POLL_TIMEOUT = int(os.environ.get("VIDEO_POLL_TIMEOUT", "420"))
+API_COOLDOWN = int(os.environ.get("API_COOLDOWN", "10"))  # seconds between API calls (anti-spam)
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
@@ -42,7 +43,7 @@ ENDPOINTS = {
     "generate_video_references": "/v1/video:batchAsyncGenerateVideoReferenceImages",
     "upscale_video": "/v1/video:batchAsyncGenerateVideoUpsampleVideo",
     "upscale_image": "/v1/flow/upsampleImage",
-    "upload_image": "/v1:uploadUserImage",
+    "upload_image": "/v1/flow/uploadImage",
     "check_video_status": "/v1/video:batchCheckAsyncVideoGenerationStatus",
     "get_credits": "/v1/credits",
     "get_media": "/v1/media/{media_id}",
