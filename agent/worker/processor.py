@@ -257,12 +257,11 @@ async def _handle_generate_image(client, req: dict, orientation: str) -> dict:
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
     pid = req.get("project_id", "0")
 
-    # Get character media_gen_ids if scene has characters
-    # Production flow:
-    #   1. Character has reference_image_url + media_gen_id (from uploadUserImage)
-    #   2. Validate media_gen_id is still valid (GET /v1/media/{id})
-    #   3. If invalid, re-upload reference_image_url → new media_gen_id
-    #   4. Pass as imageInputs [{name: media_gen_id, imageInputType: IMAGE_INPUT_TYPE_BASE_IMAGE}]
+    # Character reference flow:
+    #   1. Character has media_gen_id (from one-time uploadUserImage)
+    #   2. Reuse that media_gen_id for ALL image generations — no re-upload
+    #   3. Only re-upload if media_gen_id becomes invalid (user token/session expired)
+    #   4. Pass valid IDs as imageInputs to batchGenerateImages
     char_media_ids = None
     char_names_raw = scene.get("character_names")
     if char_names_raw and req.get("project_id"):
@@ -279,22 +278,89 @@ async def _handle_generate_image(client, req: dict, orientation: str) -> dict:
                     continue
                 mid = c.get("media_gen_id")
                 if mid:
-                    # Validate the media_gen_id is still alive
+                    # Validate — only re-upload if invalid
                     is_valid = await client.validate_media_id(mid)
                     if is_valid:
                         valid_ids.append(mid)
                         continue
-                    logger.warning("Character %s media_gen_id invalid, needs re-upload", c["name"])
-                # No valid media_gen_id — would need to upload character image
-                # (requires reference_image_url to be a downloadable URL + base64 upload)
-                # For now, skip this character
-                logger.warning("Character %s has no valid media_gen_id, skipping", c["name"])
+                    # Invalid — try re-upload from reference_image_url
+                    logger.warning("Character %s media_gen_id expired, re-uploading", c["name"])
+
+                # Need to upload (first time or re-upload after expiry)
+                ref_url = c.get("reference_image_url")
+                if not ref_url:
+                    logger.warning("Character %s has no reference_image_url, skipping", c["name"])
+                    continue
+
+                new_mid = await _upload_character_image(client, c, aspect)
+                if new_mid:
+                    await crud.update_character(c["id"], media_gen_id=new_mid)
+                    valid_ids.append(new_mid)
+                    logger.info("Character %s re-uploaded, new media_gen_id=%s", c["name"], new_mid[:20])
+                else:
+                    logger.warning("Character %s upload failed, skipping", c["name"])
+
             char_media_ids = valid_ids if valid_ids else None
 
     return await client.generate_images(
         prompt=prompt, project_id=pid, aspect_ratio=aspect,
         user_paygate_tier=tier, character_media_gen_ids=char_media_ids,
     )
+
+
+async def _upload_character_image(client, char: dict, aspect_ratio: str) -> str | None:
+    """Download character reference image and upload to Google Flow to get media_gen_id.
+
+    Returns media_gen_id string or None on failure.
+    """
+    import base64
+    import aiohttp
+
+    ref_url = char.get("reference_image_url")
+    if not ref_url:
+        return None
+
+    try:
+        # Download image
+        async with aiohttp.ClientSession() as session:
+            async with session.get(ref_url) as resp:
+                if resp.status != 200:
+                    logger.error("Failed to download character image: HTTP %d", resp.status)
+                    return None
+                image_bytes = await resp.read()
+                content_type = resp.headers.get("content-type", "image/jpeg")
+
+        # Determine mime type
+        if "png" in content_type:
+            mime = "image/png"
+        elif "gif" in content_type:
+            mime = "image/gif"
+        else:
+            mime = "image/jpeg"
+
+        # Convert aspect ratio format
+        img_aspect = "IMAGE_ASPECT_RATIO_PORTRAIT" if "PORTRAIT" in aspect_ratio else "IMAGE_ASPECT_RATIO_LANDSCAPE"
+
+        # Upload
+        encoded = base64.b64encode(image_bytes).decode("utf-8")
+        result = await client.upload_image(encoded, mime_type=mime, aspect_ratio=img_aspect)
+
+        # Extract media_gen_id (nested: {mediaGenerationId: {mediaGenerationId: "actual"}})
+        if result.get("_mediaGenerationId"):
+            return result["_mediaGenerationId"]
+
+        data = result.get("data", {})
+        if isinstance(data, dict):
+            nested = data.get("mediaGenerationId", {})
+            if isinstance(nested, dict):
+                return nested.get("mediaGenerationId")
+            if isinstance(nested, str):
+                return nested
+
+        return None
+    except Exception as e:
+        logger.exception("Failed to upload character image: %s", e)
+        return None
 
 
 # ─── W6/W7: Video Generation (async — needs polling) ────────
