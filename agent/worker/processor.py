@@ -109,7 +109,17 @@ async def _process_one(client, req: dict):
 
 async def _handle_failure(rid: str, req: dict, result: dict):
     """Handle request failure with retry logic."""
-    error_msg = result.get("error") or result.get("data", {}).get("error", {}).get("message", "Unknown error")
+    error_msg = result.get("error")
+    if not error_msg:
+        error_data = result.get("data", {})
+        if isinstance(error_data, dict):
+            error_field = error_data.get("error", "Unknown error")
+            if isinstance(error_field, dict):
+                error_msg = error_field.get("message", json.dumps(error_field)[:200])
+            else:
+                error_msg = str(error_field)
+        else:
+            error_msg = "Unknown error"
     if isinstance(error_msg, dict):
         error_msg = json.dumps(error_msg)[:200]
 
