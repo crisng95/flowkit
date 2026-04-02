@@ -22,6 +22,9 @@ curl -s http://127.0.0.1:8100/health
 5. **Locations use landscape, characters use portrait** — reference image orientation depends on entity type.
 6. **UUID extraction** — if a response gives `CAMS...` instead of UUID, extract UUID from the `fifeUrl` in the response (URL contains it: `/image/{UUID}?...`).
 7. **Cascade on regen** — regenerating an image auto-clears downstream video + upscale. Regenerating video auto-clears upscale.
+8. **Video prompts use sub-clip timing** — structure 8s video as time segments: `"0-3s: Luna walks to bed. 3-5s: Hand turns off lamp. 5-8s: Window view of starry sky."` The scene image is frame 0.
+9. **Voice descriptions on characters** — `voice_description` field (max ~30 words) auto-appended to video prompts. E.g. `"Soft gentle whisper with slight purring undertone"`.
+10. **No background music** — the worker auto-appends "No background music. Keep only natural sound effects." to all video prompts.
 
 ---
 
@@ -40,7 +43,7 @@ curl -X POST http://127.0.0.1:8100/api/projects \
     "story": "Full story context used to build character profiles...",
     "language": "en",
     "characters": [
-      {"name": "Hero", "entity_type": "character", "description": "Visual appearance only..."},
+      {"name": "Hero", "entity_type": "character", "description": "Visual appearance only...", "voice_description": "Deep calm heroic voice, speaks slowly with confidence"},
       {"name": "Castle", "entity_type": "location", "description": "Visual description..."},
       {"name": "Magic Sword", "entity_type": "visual_asset", "description": "Visual description..."}
     ]
@@ -63,12 +66,15 @@ curl -X POST http://127.0.0.1:8100/api/videos \
 
 # Create scenes (chain them)
 # Scene 1: ROOT
+# - prompt: for IMAGE generation (what the still frame looks like)
+# - video_prompt: for VIDEO generation (sub-clip timing within 8s)
 curl -X POST http://127.0.0.1:8100/api/scenes \
   -H "Content-Type: application/json" \
   -d '{
     "video_id": "<VID>",
     "display_order": 0,
     "prompt": "Hero walks into Castle courtyard at dawn. Magic Sword glowing on the wall. Cinematic wide shot.",
+    "video_prompt": "0-3s: Hero pushes open the Castle gate and steps into the courtyard. 3-6s: Hero looks up and sees Magic Sword glowing on the wall. 6-8s: Slow zoom on Magic Sword, golden light pulses.",
     "character_names": ["Hero", "Castle", "Magic Sword"],
     "chain_type": "ROOT"
   }'
@@ -80,13 +86,18 @@ curl -X POST http://127.0.0.1:8100/api/scenes \
     "video_id": "<VID>",
     "display_order": 1,
     "prompt": "Hero reaches for Magic Sword on the Castle wall. Dramatic close-up, glowing light.",
+    "video_prompt": "0-2s: Hero walks toward Magic Sword on the Castle wall. 2-5s: Close-up of Hero hand reaching out, fingers wrapping around the hilt. 5-8s: Hero pulls Magic Sword free, burst of golden light fills the room.",
     "character_names": ["Hero", "Castle", "Magic Sword"],
     "chain_type": "CONTINUATION",
     "parent_scene_id": "<previous_scene_id>"
   }'
 ```
 
-**Scene prompt formula:** `[Character] [action verb] [with/at Asset] [in/at Location]. [Camera/mood/lighting].`
+**Scene has TWO prompts:**
+- `prompt`: describes the **still image** (frame 0) — `[Character] [action] [at Location]. [Camera/mood].`
+- `video_prompt`: describes the **8s video motion** with sub-clip timing — `0-3s: [action]. 3-6s: [action]. 6-8s: [action].`
+
+The worker auto-appends voice context + "no background music" to video_prompt before sending to the API.
 
 **`character_names`:** List ALL reference entities that should appear — characters, locations, assets. Their `media_id`s get passed as `imageInputs` for visual consistency.
 

@@ -134,6 +134,7 @@ async def create(body: ProjectCreate):
                 entity_type=etype,
                 description=profile["description"],
                 image_prompt=profile["image_prompt"],
+                voice_description=char_input.get("voice_description"),
             )
             await crud.link_character_to_project(flow_project_id, char["id"])
             logger.info("%s '%s' created and linked: %s", etype, char_input["name"], char["id"])

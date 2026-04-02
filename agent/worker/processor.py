@@ -520,6 +520,45 @@ async def _upload_character_image(client, char: dict, project_id: str) -> str | 
         return None
 
 
+# ─── Video Prompt Enhancement ──────────────────────────────
+
+async def _build_video_prompt(base_prompt: str, scene: dict, project_id: str | None) -> str:
+    """Enhance video prompt with character voice context and audio instructions.
+
+    Appends:
+    1. Voice descriptions from characters referenced in the scene (max 30 words each)
+    2. No-background-music instruction (keep sound effects only)
+
+    Example output:
+        "0-3s: Luna walks to bed. 3-5s: Hand turns off lamp. 5-8s: Window starry sky.
+        Character voices: Luna: Soft gentle whisper with slight purring.
+        Audio: No background music. Keep natural sound effects only."
+    """
+    parts = [base_prompt.strip()]
+
+    # Collect voice descriptions from referenced characters
+    if project_id:
+        char_names_raw = scene.get("character_names")
+        if isinstance(char_names_raw, str):
+            try:
+                char_names_raw = json.loads(char_names_raw)
+            except json.JSONDecodeError:
+                char_names_raw = []
+        if isinstance(char_names_raw, list) and char_names_raw:
+            project_chars = await crud.get_project_characters(project_id)
+            voices = []
+            for c in project_chars:
+                if c["name"] in char_names_raw and c.get("voice_description"):
+                    voices.append(f"{c['name']}: {c['voice_description']}")
+            if voices:
+                parts.append("Character voices: " + ". ".join(voices) + ".")
+
+    # No background music — sound effects only
+    parts.append("Audio: No background music. Keep only natural sound effects and ambient sounds.")
+
+    return " ".join(parts)
+
+
 # ─── W6/W7: Video Generation (async — needs polling) ────────
 
 async def _handle_generate_video(client, req: dict, orientation: str) -> dict:
@@ -534,9 +573,12 @@ async def _handle_generate_video(client, req: dict, orientation: str) -> dict:
 
     project = await crud.get_project(req["project_id"]) if req.get("project_id") else None
     aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if orientation == "VERTICAL" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
-    prompt = scene.get("video_prompt") or scene.get("prompt", "")
+    base_prompt = scene.get("video_prompt") or scene.get("prompt", "")
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
     end_id = scene.get(f"{prefix}_end_scene_media_id")
+
+    # Build enhanced prompt: base + voice context + no-music instruction
+    prompt = await _build_video_prompt(base_prompt, scene, req.get("project_id"))
 
     # Step 1: Submit video generation
     submit_result = await client.generate_video(
@@ -586,8 +628,11 @@ async def _handle_generate_video_refs(client, req: dict, orientation: str) -> di
 
     project = await crud.get_project(req["project_id"]) if req.get("project_id") else None
     aspect = "VIDEO_ASPECT_RATIO_PORTRAIT" if orientation == "VERTICAL" else "VIDEO_ASPECT_RATIO_LANDSCAPE"
-    prompt = scene.get("video_prompt") or scene.get("prompt", "")
+    base_prompt = scene.get("video_prompt") or scene.get("prompt", "")
     tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
+
+    # Build enhanced prompt with voice context + no-music
+    prompt = await _build_video_prompt(base_prompt, scene, req.get("project_id"))
 
     # Get character media_ids
     char_names_raw = scene.get("character_names")

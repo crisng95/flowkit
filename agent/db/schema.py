@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS character (
     entity_type TEXT NOT NULL DEFAULT 'character' CHECK(entity_type IN ('character','location','creature','visual_asset','generic_troop','faction')),
     description TEXT,
     image_prompt TEXT,
+    voice_description TEXT,  -- max ~30 words, e.g. "Deep gravelly voice with a warm laugh"
     reference_image_url TEXT,
     media_id TEXT,
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),

@@ -8,6 +8,7 @@ class CharacterInput(BaseModel):
     name: str
     entity_type: EntityType = "character"
     description: Optional[str] = None
+    voice_description: Optional[str] = None  # max ~30 words, characters/creatures only
 
 
 class ProjectCreate(BaseModel):
