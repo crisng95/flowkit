@@ -267,6 +267,22 @@ async def _handle_failure(rid: str, req: dict, result: dict):
             await crud.update_request(rid, status="PENDING", error_message=f"recovered: {error_msg}")
             return
 
+    error_lower = str(error_msg).lower()
+
+    # reCAPTCHA errors: retry up to 10 times with 10s fixed delay
+    if "captcha" in error_lower or "recaptcha" in error_lower:
+        retry = req.get("retry_count", 0) + 1
+        if retry < 10:
+            await asyncio.sleep(10)
+            await crud.update_request(rid, status="PENDING", retry_count=retry, error_message=str(error_msg))
+            logger.warning("Request %s reCAPTCHA failed (retry %d/10), retrying in 10s", rid[:8], retry)
+            return
+        else:
+            await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
+            await _mark_scene_failed(req)
+            logger.error("Request %s FAILED after 10 reCAPTCHA retries: %s", rid[:8], error_msg)
+            return
+
     retry = req.get("retry_count", 0) + 1
     if retry < MAX_RETRIES:
         _, retry_after = _retry_state.get(rid, (0, 0.0))
