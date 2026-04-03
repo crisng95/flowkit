@@ -5,3 +5,4 @@ websockets>=12.0
 pydantic>=2.5.0
 aiohttp>=3.9.0
 httpx>=0.25.0
+anthropic>=0.40.0

@@ -50,6 +50,13 @@ ENDPOINTS = {
     "get_media": "/v1/media/{media_id}",
 }
 
+# ─── Review / Claude Vision ──────────────────────────────────
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "claude-haiku-4-5-20251001")
+REVIEW_FPS_LIGHT = float(os.environ.get("REVIEW_FPS_LIGHT", "4"))
+REVIEW_FPS_DEEP = float(os.environ.get("REVIEW_FPS_DEEP", "8"))
+REVIEW_MAX_FRAMES = int(os.environ.get("REVIEW_MAX_FRAMES", "64"))
+
 # ─── Header Randomization Pools ─────────────────────────────
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
