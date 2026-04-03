@@ -295,7 +295,8 @@ async function handleTrpcRequest(msg) {
   metrics.requestCount++;
 
   const logId = id;
-  addRequestLog({ id: logId, type: 'trpc', time: new Date().toISOString(), status: 'processing', error: null, outputUrl: null });
+  const logType = url.includes('createProject') ? 'CREATE_PROJECT' : 'TRPC';
+  addRequestLog({ id: logId, type: logType, time: new Date().toISOString(), status: 'processing', error: null, outputUrl: null });
 
   const fetchHeaders = { 'Content-Type': 'application/json', ...headers };
   if (flowKey) {
@@ -344,7 +345,8 @@ async function handleApiRequest(msg) {
   metrics.requestCount++;
 
   const logId = id;
-  addRequestLog({ id: logId, type: 'api', time: new Date().toISOString(), status: 'processing', error: null, outputUrl: null });
+  const logType = captchaAction || (url.includes('/uploadImage') ? 'UPLOAD' : url.includes('/media/') ? 'MEDIA' : 'API');
+  addRequestLog({ id: logId, type: logType, time: new Date().toISOString(), status: 'processing', error: null, outputUrl: null });
 
   try {
     // Step 1: Solve captcha if needed

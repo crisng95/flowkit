@@ -15,9 +15,13 @@ const TYPE_LABELS = {
   GENERATE_VIDEO:           'VID',
   GENERATE_VIDEO_REFS:      'RVID',
   UPSCALE_VIDEO:            'UPS',
-  api_request:              'API',
-  trpc_request:             'TRPC',
-  solve_captcha:            'CAP',
+  IMAGE_GENERATION:         'IMG',
+  VIDEO_GENERATION:         'VID',
+  CREATE_PROJECT:           'PROJ',
+  UPLOAD:                   'UPL',
+  MEDIA:                    'MED',
+  TRPC:                     'TRPC',
+  API:                      'API',
 };
 
 function formatType(type) {
@@ -151,7 +155,7 @@ function fetchStatus() {
 function fetchLog() {
   chrome.runtime.sendMessage({ type: 'REQUEST_LOG' }, (data) => {
     if (chrome.runtime.lastError) return;
-    if (data && data.entries) updateRequestLog(data.entries);
+    if (data && data.log) updateRequestLog(data.log);
   });
 }
 
@@ -162,7 +166,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     fetchStatus();
   }
   if (msg.type === 'REQUEST_LOG_UPDATE') {
-    if (msg.entries) updateRequestLog(msg.entries);
+    if (msg.log) updateRequestLog(msg.log);
   }
 });
 
