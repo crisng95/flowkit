@@ -47,40 +47,57 @@ COMPOSITION_GUIDELINES = {
 }
 
 
-def _build_character_profile(char_name: str, char_desc: str | None, story: str,
-                              entity_type: str = "character", style: str = "3D") -> dict:
+_STYLE_COMPAT_MAP = {
+    "3d": "3d_pixar",
+    "3D": "3d_pixar",
+    "photorealistic": "realistic",
+}
+
+
+def _resolve_material_id(value: str) -> str:
+    """Map legacy style strings to material IDs. Returns value unchanged if no mapping."""
+    return _STYLE_COMPAT_MAP.get(value, value)
+
+
+def _build_character_profile(char_name: str, char_desc: str | None, story: str | None,
+                              entity_type: str = "character", material_id: str = "3d_pixar") -> dict:
     """Build a rich profile (description + image_prompt) for any reference entity.
 
     The image_prompt generates a reference image used as mediaId for all
     scene generations. Visual appearance is defined HERE, not in scene prompts.
     Scene prompts should only describe actions/environment/composition.
+
+    story may be None — in that case the description omits story context and
+    the image_prompt uses a simpler prefix.
     """
+    from agent.materials import get_material
+    material = get_material(material_id)
+    if not material:
+        raise ValueError(f"Unknown material: {material_id}")
+
     base_desc = char_desc or char_name
     composition = COMPOSITION_GUIDELINES.get(entity_type, COMPOSITION_GUIDELINES["character"])
 
-    description = (
-        f"{char_name}: {base_desc}. "
-        f"Story context: {story}"
-    )
-
-    # Build style instruction based on style parameter
-    if style.lower() == "photorealistic":
-        style_instruction = (
-            "Photorealistic RAW photograph, shot on Canon EOS R5, 35mm lens, "
-            "natural available light. NOT 3D render, NOT CGI, NOT digital art, "
-            "NOT illustration, NOT anime, NOT painting."
-        )
-    elif style.lower() == "3d":
-        style_instruction = "3D animated style, Pixar-quality rendering."
+    if story:
+        description = f"{char_name}: {base_desc}. Story context: {story}"
+        image_prefix = f"Single reference image of {base_desc}. "
+        single_image_note = "ONE single image only, NOT a multi-panel grid or multiple views. "
     else:
-        style_instruction = f"{style} style."
+        description = base_desc
+        image_prefix = f"Reference image of {base_desc}. "
+        single_image_note = ""
+
+    style_instruction = material["style_instruction"]
+    if material.get("negative_prompt"):
+        style_instruction += f" {material['negative_prompt']}"
+    lighting = material.get("lighting", "Studio lighting, highly detailed")
 
     image_prompt = (
-        f"Single reference image of {base_desc}. "
+        f"{image_prefix}"
         f"{style_instruction} "
         f"{composition} "
-        f"ONE single image only, NOT a multi-panel grid or multiple views. "
-        f"Studio lighting, highly detailed"
+        f"{single_image_note}"
+        f"{lighting}"
     )
 
     return {"description": description, "image_prompt": image_prompt}
@@ -105,10 +122,18 @@ def _get_repo() -> SQLiteRepository:
 
 @router.post("", response_model=Project)
 async def create(body: ProjectCreate):
+    from agent.materials import get_material
+
     # Step 1: Create project on Google Flow to get the real projectId
     client = get_flow_client()
     if not client.connected:
         raise HTTPException(503, "Extension not connected — cannot create project on Google Flow")
+
+    # Resolve material (support legacy style field + material field)
+    material_id = _resolve_material_id(body.material)
+    material = get_material(material_id)
+    if not material:
+        raise HTTPException(400, f"Unknown material: '{material_id}'. Use GET /api/materials to list available materials.")
 
     # Validate characters before any API calls to avoid orphan projects
     characters_input_raw = body.model_dump(exclude_none=True).get("characters")
@@ -149,41 +174,22 @@ async def create(body: ProjectCreate):
         story=create_data.get("story"),
         language=create_data.get("language", "en"),
         user_paygate_tier=detected_tier,
+        material=material_id,
     )
 
     # Step 3: Create reference entities (characters, locations, assets) with profiles
     if characters_input:
         for char_input in characters_input:
             etype = char_input.get("entity_type", "character")
-            if body.story:
-                profile = _build_character_profile(
-                    char_input["name"],
-                    char_input.get("description"),
-                    body.story,
-                    entity_type=etype,
-                    style=body.style,
-                )
-                description = profile["description"]
-                image_prompt = profile["image_prompt"]
-            else:
-                description = char_input.get("description") or char_input["name"]
-                composition = COMPOSITION_GUIDELINES.get(etype, COMPOSITION_GUIDELINES["character"])
-                if body.style.lower() == "photorealistic":
-                    style_inst = (
-                        "Photorealistic RAW photograph, shot on Canon EOS R5, 35mm lens, "
-                        "natural available light. NOT 3D render, NOT CGI, NOT digital art, "
-                        "NOT illustration, NOT anime, NOT painting."
-                    )
-                elif body.style.lower() == "3d":
-                    style_inst = "3D animated style, Pixar-quality rendering."
-                else:
-                    style_inst = f"{body.style} style."
-                image_prompt = (
-                    f"Reference image of {description}. "
-                    f"{style_inst} "
-                    f"{composition} "
-                    f"Studio lighting, highly detailed"
-                )
+            profile = _build_character_profile(
+                char_input["name"],
+                char_input.get("description"),
+                body.story,
+                entity_type=etype,
+                material_id=material_id,
+            )
+            description = profile["description"]
+            image_prompt = profile["image_prompt"]
             char = await repo.create_character(
                 name=char_input["name"],
                 entity_type=etype,

@@ -18,6 +18,7 @@ from agent.api.requests import router as requests_router
 from agent.api.flow import router as flow_router
 from agent.api.reviews import router as reviews_router
 from agent.api.tts import router as tts_router
+from agent.api.materials import router as materials_router
 from agent.worker.processor import process_pending_requests
 from agent.services.flow_client import get_flow_client
 from agent.sdk import init_sdk
@@ -62,6 +63,19 @@ async def run_ws_server():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+
+    # Load custom materials from DB into in-memory registry
+    from agent.db.crud import list_materials as db_list_materials
+    from agent.materials import register_material, _BUILTIN_IDS
+    try:
+        custom_materials = await db_list_materials()
+        for m in custom_materials:
+            if m["id"] not in _BUILTIN_IDS:
+                register_material(m)
+                logger.info("Loaded custom material from DB: %s", m["id"])
+    except Exception as e:
+        logger.warning("Failed to load custom materials: %s", e)
+
     ops = init_sdk(get_flow_client())
     logger.info("SDK initialized (OperationService ready)")
     logger.info("Google Flow Agent starting on %s:%d", API_HOST, API_PORT)
@@ -96,6 +110,7 @@ app.include_router(requests_router, prefix="/api")
 app.include_router(flow_router, prefix="/api")
 app.include_router(reviews_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
+app.include_router(materials_router, prefix="/api")
 
 
 @app.get("/health")

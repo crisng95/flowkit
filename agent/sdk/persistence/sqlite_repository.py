@@ -31,6 +31,7 @@ class SQLiteRepository(Repository):
             language=row.get("language", "en"),
             status=row.get("status", "ACTIVE"),
             user_paygate_tier=row.get("user_paygate_tier", "PAYGATE_TIER_ONE"),
+            material=row.get("material"),
             narrator_voice=row.get("narrator_voice"),
             narrator_ref_audio=row.get("narrator_ref_audio"),
             created_at=row.get("created_at"),
@@ -192,6 +193,7 @@ class SQLiteRepository(Repository):
         language: str = "en",
         user_paygate_tier: str = "PAYGATE_TIER_ONE",
         id: Optional[str] = None,
+        material: Optional[str] = None,
     ) -> Project:
         row = await crud.create_project(
             name=name,
@@ -200,6 +202,7 @@ class SQLiteRepository(Repository):
             language=language,
             user_paygate_tier=user_paygate_tier,
             id=id,
+            material=material,
         )
         return self._row_to_project(row)
 

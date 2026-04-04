@@ -1,10 +1,11 @@
 Create a new Google Flow video project. Ask the user for:
 
 1. **Project name** and **story** (brief plot summary)
-2. **Characters** — name + visual description of their **base default look in ONE outfit only**. No scene-specific variants (e.g. "glamorous in studio, sporty in gym"). The reference image must be a single clean image, not a multi-panel grid. Different outfits per scene come from the scene prompts, not the character description.
-3. **Locations** — name + visual description of key places
-4. **Visual assets** — name + visual description of key props/objects
-5. **Number of scenes** and **orientation** (VERTICAL or HORIZONTAL)
+2. **Material** — the visual style for all images. Choose one of the 6 built-in styles or a custom material. Run `GET /api/materials` to show available options. Built-ins: `realistic`, `3d_pixar`, `anime`, `stop_motion`, `minecraft`, `oil_painting`. **Required.**
+3. **Characters** — name + visual description of their **base default look in ONE outfit only**. No scene-specific variants (e.g. "glamorous in studio, sporty in gym"). The reference image must be a single clean image, not a multi-panel grid. Different outfits per scene come from the scene prompts, not the character description.
+4. **Locations** — name + visual description of key places
+5. **Visual assets** — name + visual description of key props/objects
+6. **Number of scenes** and **orientation** (VERTICAL or HORIZONTAL)
 
 Then execute:
 
@@ -13,7 +14,7 @@ Then execute:
 ```bash
 curl -X POST http://127.0.0.1:8100/api/projects \
   -H "Content-Type: application/json" \
-  -d '{"name": "...", "description": "...", "story": "...", "characters": [
+  -d '{"name": "...", "description": "...", "story": "...", "material": "3d_pixar", "characters": [
     {"name": "...", "entity_type": "character", "description": "..."},
     {"name": "...", "entity_type": "location", "description": "..."},
     {"name": "...", "entity_type": "visual_asset", "description": "..."}

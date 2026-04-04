@@ -26,6 +26,20 @@ def _scene_to_flat(sdk_scene) -> dict:
 
 @router.post("", response_model=Scene)
 async def create(body: SceneCreate):
+    # Auto-prepend material scene_prefix if project has a material set
+    if body.video_id and body.prompt:
+        video = await _repo.get_video(body.video_id)
+        if video:
+            from agent.db.crud import get_project
+            project_row = await get_project(video.project_id)
+            if project_row and project_row.get("material"):
+                from agent.materials import get_material
+                mat = get_material(project_row["material"])
+                if mat and mat.get("scene_prefix"):
+                    prefix = mat["scene_prefix"]
+                    if not body.prompt.startswith(prefix):
+                        body.prompt = f"{prefix} {body.prompt}"
+
     data = body.model_dump(exclude_none=True)
 
     # Auto-shift subsequent scenes when inserting

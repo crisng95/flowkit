@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from agent.models.enums import ProjectStatus, PaygateTier, EntityType
 
@@ -18,8 +18,20 @@ class ProjectCreate(BaseModel):
     language: str = "en"
     user_paygate_tier: PaygateTier = "PAYGATE_TIER_ONE"
     tool_name: str = "PINHOLE"
-    style: str = "3D"  # "3D", "photorealistic", "anime", "watercolor", etc.
+    material: str = Field("3d_pixar", pattern=r"^[a-z0-9][a-z0-9_]{1,63}$")  # material ID from GET /api/materials
+    style: Optional[str] = None  # deprecated: use material instead; "3D"→"3d_pixar", "photorealistic"→"realistic"
     characters: Optional[list[CharacterInput]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_style_to_material(cls, data):
+        if isinstance(data, dict):
+            style = data.get("style")
+            # Only map if style is provided AND material is not explicitly set
+            if style and "material" not in data:
+                compat_map = {"3D": "3d_pixar", "3d": "3d_pixar", "photorealistic": "realistic"}
+                data["material"] = compat_map.get(style, style.lower().replace(" ", "_"))
+        return data
 
 
 class ProjectUpdate(BaseModel):
@@ -32,6 +44,7 @@ class ProjectUpdate(BaseModel):
     user_paygate_tier: Optional[PaygateTier] = None
     narrator_voice: Optional[str] = None
     narrator_ref_audio: Optional[str] = None
+    material: Optional[str] = None
 
 
 class Project(BaseModel):
@@ -43,6 +56,7 @@ class Project(BaseModel):
     language: str = "en"
     status: str = "ACTIVE"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
+    material: Optional[str] = None
     narrator_voice: Optional[str] = None
     narrator_ref_audio: Optional[str] = None
     created_at: Optional[str] = None

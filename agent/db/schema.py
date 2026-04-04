@@ -34,8 +34,19 @@ CREATE TABLE IF NOT EXISTS project (
     user_paygate_tier TEXT NOT NULL DEFAULT 'PAYGATE_TIER_ONE',
     narrator_voice TEXT,
     narrator_ref_audio TEXT,
+    material TEXT DEFAULT '3d_pixar',
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS material (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    style_instruction TEXT NOT NULL,
+    negative_prompt TEXT,
+    scene_prefix TEXT,
+    lighting    TEXT DEFAULT 'Studio lighting, highly detailed',
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 CREATE TABLE IF NOT EXISTS project_character (
@@ -223,6 +234,17 @@ CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
         if "narrator_ref_audio" not in project_columns:
             await db.execute("ALTER TABLE project ADD COLUMN narrator_ref_audio TEXT")
             logger.info("Migrated: added narrator_ref_audio column to project table")
+        if "material" not in project_columns:
+            await db.execute("ALTER TABLE project ADD COLUMN material TEXT DEFAULT '3d_pixar'")
+            logger.info("Migrated: added material column to project table")
+        # Migration: create material table if missing
+        cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='material'")
+        if not await cursor.fetchone():
+            await db.execute("""CREATE TABLE material (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, style_instruction TEXT NOT NULL,
+    negative_prompt TEXT, scene_prefix TEXT, lighting TEXT DEFAULT 'Studio lighting, highly detailed',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))""")
+            logger.info("Migrated: created material table")
         await db.commit()
     logger.info("Database initialized at %s", DB_PATH)
 
