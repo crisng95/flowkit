@@ -117,19 +117,9 @@ Ask user: "Review OK? Type 'yes' to generate TTS, or 'edit N' to modify scene N'
 
 ## Step 6: Generate TTS for all scenes
 
-```bash
-curl -X POST "http://127.0.0.1:8100/api/videos/<VID>/narrate" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "<PID>",
-    "ref_audio": "<voice_template_path>",
-    "orientation": "HORIZONTAL",
-    "speed": 1.1,
-    "mix": false
-  }'
-```
+**CRITICAL: Always use a registered template** (not raw `ref_audio`).
+The template stores `ref_text` — without it, voice cloning produces inconsistent voices across scenes.
 
-Or if using a registered template:
 ```bash
 curl -X POST "http://127.0.0.1:8100/api/videos/<VID>/narrate" \
   -H "Content-Type: application/json" \
@@ -140,6 +130,24 @@ curl -X POST "http://127.0.0.1:8100/api/videos/<VID>/narrate" \
     "mix": false
   }'
 ```
+
+The `template` parameter resolves both `ref_audio` (voice WAV) AND `ref_text` (transcript) from `templates.json`.
+
+If user insists on raw `ref_audio`, always pass `ref_text` too:
+```bash
+curl -X POST "http://127.0.0.1:8100/api/videos/<VID>/narrate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "<PID>",
+    "ref_audio": "<voice_template_path>",
+    "ref_text": "<transcript of the voice template>",
+    "speed": 1.1,
+    "mix": false
+  }'
+```
+
+**Why ref_text matters:** OmniVoice uses `ref_audio` + `ref_text` together for voice cloning.
+Without `ref_text`, it falls back to generic voice design → each scene sounds different.
 
 **mix: false** — we don't mix here. Mixing happens in `/gla:concat-fit-narrator`.
 
