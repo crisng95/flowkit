@@ -232,7 +232,10 @@ Format:
 
 ## Step 8: Output all metadata
 
-Present in copy-paste format:
+**CRITICAL: Print ALL metadata directly to terminal as plain text.**
+The user needs to copy-paste from the terminal into YouTube Studio.
+Do NOT just save to file — the user should NOT need to open any file.
+Print each section with clear separators so they can copy individual parts.
 
 ```
 ═══════════════════════════════════════════
@@ -276,19 +279,18 @@ Present in copy-paste format:
   Estimated niche: {niche_name}
 ```
 
-## Step 9: Save metadata
+## Step 9: Save backup (optional)
 
-Save to project output directory:
+Also save a backup copy to project directory for reference:
 
 ```bash
 mkdir -p output/${PROJECT_NAME}
-# Save as markdown for easy editing
 cat > output/${PROJECT_NAME}/youtube_seo.md << 'EOF'
 {all_metadata_formatted}
 EOF
 ```
 
-Ask user: "Copy the title/description you want to use. Edit timestamps if needed. Ready to upload?"
+The primary output is the terminal print in Step 8 — the file is just a backup.
 
 ## SEO Best Practices Reference
 

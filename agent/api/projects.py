@@ -357,7 +357,8 @@ async def generate_thumbnail(pid: str, body: ThumbnailRequest):
 
     if gen_result.url and gen_result.url.startswith("http"):
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(gen_result.url) as resp:
                     if resp.status == 200:
                         output_path.write_bytes(await resp.read())
