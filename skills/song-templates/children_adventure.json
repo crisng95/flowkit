@@ -1,0 +1,40 @@
+{
+  "template_id": "children_adventure",
+  "genre": "Children's",
+  "subgenre": "Adventure Song",
+  "description": "Upbeat exploration song for young adventurers with catchy march-like rhythm",
+  "target_audience": "children 3-7",
+  "suno_tags": "upbeat children's pop, cheerful female vocals, ukulele, claps, playful, bright, 110 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "2:00-2:30",
+  "bpm_range": "105-115",
+  "vocal_style": "Warm cheerful adult female voice, bright and encouraging, clear enunciation",
+  "lyrics_guidelines": {
+    "words_per_line": "4-8",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "simple",
+    "tips": [
+      "Use action verbs kids love: jump, climb, splash, run, fly",
+      "Include sensory details: colors, sounds, textures",
+      "Repeat the chorus hook exactly each time for singalong",
+      "Name real places or imaginary lands to spark imagination",
+      "Keep syllable count consistent within each section"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nPut your boots on, tie them tight\nGrab your backpack, hold on tight\nThrough the garden, past the gate\nCome on, hurry, we can't wait!\n\n[Chorus]\nWe're going on an adventure today\nOver the hills and far away\nWe're going on an adventure, let's go\nThrough the rain and through the snow!\n\n[Verse 2]\nSplash the puddles, climb the trees\nChase the butterflies and bees\nFind a river, skip a stone\nEvery path leads somewhere new to roam\n\n[Chorus]\nWe're going on an adventure today\nOver the hills and far away\nWe're going on an adventure, let's go\nThrough the rain and through the snow!\n\n[Bridge]\nAre you brave enough?\nAre you strong enough?\nTake my hand, we'll find the way\nEvery day's a brand new day!\n\n[Chorus]\nWe're going on an adventure today\nOver the hills and far away\nWe're going on an adventure, let's go\nThrough the rain and through the snow!\n\n[Outro]\nAdventure, adventure, away we go!\n[End]",
+  "do": [
+    "Use repetitive chorus that kids can memorize after one listen",
+    "Include movement words that encourage dancing or marching",
+    "Build excitement gradually from verse to chorus",
+    "Use call-and-response patterns where possible",
+    "Keep the melody implied by consistent syllable patterns"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid complex vocabulary or abstract concepts",
+    "Don't include scary elements like monsters or danger",
+    "Avoid lines longer than 10 words",
+    "Don't use metaphors kids won't understand"
+  ]
+}

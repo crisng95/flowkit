@@ -1,0 +1,40 @@
+{
+  "template_id": "educational_counting",
+  "genre": "Children's",
+  "subgenre": "Counting Song",
+  "description": "Fun counting and numbers learning song with repetitive structure for memorization",
+  "target_audience": "children 2-5",
+  "suno_tags": "cheerful children's pop, bright female vocals, piano, hand claps, xylophone, bouncy, 95 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Verse 3", "Chorus", "Outro"],
+  "duration": "2:00-2:30",
+  "bpm_range": "90-100",
+  "vocal_style": "Clear bright adult female voice, enthusiastic and encouraging, with deliberate pacing on numbers for learning",
+  "lyrics_guidelines": {
+    "words_per_line": "4-7",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "very simple",
+    "tips": [
+      "Count clearly — numbers should fall on strong beats",
+      "Each verse covers a set of numbers (1-3, 4-6, 7-10)",
+      "Pair each number with a concrete object kids can picture",
+      "Use fingers and body parts for physical engagement",
+      "Chorus reinforces the joy of counting, not the numbers themselves"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nOne little sun up in the sky\nTwo little birds that fly so high\nThree little fish swim in the sea\nCount along now, one two three!\n\n[Chorus]\nLet's count together, me and you\nCounting's fun, there's so much to do\nOne two three four five and more\nLet's see what numbers have in store!\n\n[Verse 2]\nFour little flowers in a row\nFive little seeds we plant and grow\nSix little bees buzz all around\nSeven little worms beneath the ground\n\n[Chorus]\nLet's count together, me and you\nCounting's fun, there's so much to do\nOne two three four five and more\nLet's see what numbers have in store!\n\n[Verse 3]\nEight little stars that shine at night\nNine little candles burning bright\nTen little fingers, wave them high\nWe counted to ten — oh my oh my!\n\n[Chorus]\nLet's count together, me and you\nCounting's fun, there's so much to do\nOne two three four five and more\nWe counted to ten — let's count once more!\n\n[Outro]\nOne, two, three, four, five, six, seven, eight, nine, ten!\n[End]",
+  "do": [
+    "Place numbers on strong beats so they stand out clearly",
+    "Use concrete nouns kids can visualize with each number",
+    "Progress numbers logically across verses",
+    "Make the final chorus slightly different to mark completion",
+    "Include a counting recap in the outro"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Don't skip numbers or count out of order (confuses learners)",
+    "Avoid abstract concepts — keep everything concrete and visual",
+    "Don't go beyond 10 for this age group",
+    "Avoid rushing through numbers — pacing matters for learning"
+  ]
+}

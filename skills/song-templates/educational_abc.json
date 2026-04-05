@@ -1,0 +1,40 @@
+{
+  "template_id": "educational_abc",
+  "genre": "Children's",
+  "subgenre": "Alphabet Song",
+  "description": "Catchy alphabet learning song that pairs letters with fun words and actions",
+  "target_audience": "children 2-6",
+  "suno_tags": "catchy children's pop, warm female vocals, ukulele, glockenspiel, claps, cheerful, bright, 100 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Verse 3", "Chorus", "Outro"],
+  "duration": "2:00-2:30",
+  "bpm_range": "95-105",
+  "vocal_style": "Warm enthusiastic adult female voice, clear articulation on letter sounds, upbeat and encouraging",
+  "lyrics_guidelines": {
+    "words_per_line": "4-8",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "very simple",
+    "tips": [
+      "Group letters in natural clusters (A-F, G-L, M-R, S-Z) or by theme",
+      "Pair each letter with a fun word and action if possible",
+      "Don't try to fit all 26 letters — focus on making groups memorable",
+      "Use alliteration for fun: 'B is for bouncing ball'",
+      "Chorus celebrates the alphabet as a whole, not specific letters"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nA is for apple, red and sweet\nB is for bouncing to the beat\nC is for cat who loves to play\nD is for dancing every day\n\n[Chorus]\nA B C D E F G\nSing the letters now with me\nEvery letter has a sound\nLetters, letters, all around!\n\n[Verse 2]\nE is for elephant, big and grey\nF is for frog that hops away\nG is for garden where flowers grow\nH is for hello and saying hi, hello!\n\n[Chorus]\nH I J K L M N\nSing them over once again\nEvery letter has a name\nLearning letters is a game!\n\n[Verse 3]\nS is for sunshine, warm and bright\nT is for twinkle in the night\nW is for water, splash and play\nZ is for zigzag all the way\n\n[Chorus]\nA to Z, we know them all\nBig and little, short and tall\nEvery letter has a sound\nLetters, letters, all around!\n\n[Outro]\nA B C D E F G, H I J K L M N O P, Q R S, T U V, W X, Y and Z!\n[End]",
+  "do": [
+    "Make each letter pairing vivid and concrete",
+    "Use alliteration to reinforce letter sounds",
+    "Vary the chorus slightly to cover different letter groups",
+    "Include the full alphabet recitation in the outro",
+    "Keep a consistent bouncy rhythm throughout"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Don't cram all 26 letters into the verses — select highlights",
+    "Avoid abstract words for letter examples (use things kids know)",
+    "Don't make verses too fast — clear articulation is essential",
+    "Avoid letters that sound similar in sequence without differentiation"
+  ]
+}

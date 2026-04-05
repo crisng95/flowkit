@@ -1,0 +1,40 @@
+{
+  "template_id": "lullaby_dreamy",
+  "genre": "Children's",
+  "subgenre": "Dreamy Lullaby",
+  "description": "Magical fantasy lullaby with ethereal sounds and whimsical dream imagery",
+  "target_audience": "children 2-6",
+  "suno_tags": "dreamy lullaby, ethereal female vocals, harp, celesta, ambient pads, whimsical, magical, 70 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "2:30-3:00",
+  "bpm_range": "65-75",
+  "vocal_style": "Ethereal soft adult female voice, airy and floating, with gentle reverb, like singing from within a dream",
+  "lyrics_guidelines": {
+    "words_per_line": "4-8",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABAB",
+    "vocabulary_level": "simple with magical words",
+    "tips": [
+      "Use fantasy imagery: flying, floating, magical creatures, enchanted places",
+      "Include gentle magical elements: fairy dust, rainbow bridges, cloud castles",
+      "Blend dreaming and imagination as the central theme",
+      "Use flowing vowel-heavy words for a melodic feel",
+      "Create a journey narrative through dreamland"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n[Atmosphere: Dreamy]\n\n[Verse 1]\n[Soft]\nClose your eyes and take my hand\nWe'll fly away to Dreamland\nOn a cloud of silver light\nSailing gently through the night\n\n[Chorus]\nDream, dream, little star\nYou can travel oh so far\nTo a land where wishes glow\nWhere the magic rivers flow\n\n[Verse 2]\n[Soft]\nFairies dance on moonbeam stairs\nUnicorns with silver hair\nRainbow bridges cross the sky\nDream, my darling, dream and fly\n\n[Chorus]\nDream, dream, little star\nYou can travel oh so far\nTo a land where wishes glow\nWhere the magic rivers flow\n\n[Bridge]\n[Whispered]\nEvery star up in the sky\nIs a dream just floating by\nCatch one gently, hold it near\nKeep it safe till morning's here\n\n[Chorus]\n[Soft]\nDream, dream, little star\nYou can travel oh so far\nTo a land where wishes glow\nWhere the magic rivers flow\n\n[Outro]\n[Whispered]\nFloat away... drift away...\n[End]",
+  "do": [
+    "Create a vivid but gentle fantasy world in the lyrics",
+    "Use [Atmosphere: Dreamy] tag in the intro",
+    "Layer soft ambient sounds with melodic instruments like harp or celesta",
+    "Make the bridge the most magical moment with whispered delivery",
+    "Use imagery of floating, flying, and gentle motion"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid dark or scary fantasy elements (no witches, dragons, darkness)",
+    "Don't use percussion-heavy arrangements",
+    "Avoid complex fantasy vocabulary children can't picture",
+    "Don't break the dreamy atmosphere with sudden changes"
+  ]
+}

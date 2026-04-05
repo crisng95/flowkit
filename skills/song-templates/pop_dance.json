@@ -1,0 +1,40 @@
+{
+  "template_id": "pop_dance",
+  "genre": "Pop",
+  "subgenre": "Dance Pop",
+  "description": "High-energy dance pop radio hit with infectious hooks, pulsing synths, and four-on-the-floor beats",
+  "target_audience": "teens, young adults, general",
+  "suno_tags": "dance pop, catchy hooks, pulsing synths, four-on-the-floor, energetic, female vocals, radio-ready, 124 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Post-Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:00-3:30",
+  "bpm_range": "118-130",
+  "vocal_style": "Confident and commanding with a modern pop edge. Verses are rhythmic and cool, pre-chorus lifts with urgency, chorus explodes with full power. Clean tone with subtle electronic polish.",
+  "lyrics_guidelines": {
+    "words_per_line": "4-8",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "simple, punchy, rhythmic, party-ready",
+    "tips": [
+      "Chorus must be singable after one listen — think 5-word hook max",
+      "Use short, punchy lines that match the beat pulse",
+      "Pre-chorus should create a lift — ascending energy in the words",
+      "Post-chorus can be a wordless hook or single repeated phrase",
+      "Write for the dance floor — body-movement words: move, feel, spin, light"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nMidnight and the floor is calling\nNeon dripping down the wall\nFeel the bass beneath my heartbeat\nTonight I'm giving it my all\n\n[Pre-Chorus]\nLights flash, hands up\nDon't you dare stop\nFeel it rising, feel it climbing\nThree, two, one\n\n[Chorus]\nWe're electric, we're alive\nBurn so bright we light the sky\nMove your body, lose your mind\nWe're electric tonight\n\n[Post-Chorus]\nTo-night, to-night, to-night\nWe're electric tonight\n\n[Verse 2]\nStrangers turning into family\nSweat and glitter, shared delight\nEvery song becomes a memory\nWe're writing with the light\n\n[Pre-Chorus]\nLights flash, hands up\nDon't you dare stop\nFeel it rising, feel it climbing\nThree, two, one\n\n[Chorus]\nWe're electric, we're alive\nBurn so bright we light the sky\nMove your body, lose your mind\nWe're electric tonight\n\n[Bridge]\n[Break]\nShut it down, strip it back\nJust the beat and the black\n[Build]\nNow bring it, bring it, bring it back\n\n[Chorus]\n[Powerful]\nWe're electric, we're alive\nBurn so bright we light the sky\nMove your body, lose your mind\nWe're electric tonight\n\n[Outro]\nWe're electric tonight\n[Effect: Fade Out]\n[End]",
+  "do": [
+    "Front-load the hook — first line of chorus IS the song title",
+    "Use a post-chorus for an infectious earworm moment",
+    "Strip the bridge down before bringing the final chorus back bigger",
+    "Keep total word count low — repetition is your friend",
+    "Write lines that feel good to shout in a crowd"
+  ],
+  "dont": [
+    "Don't write complex metaphors — dance pop is about feel, not poetry",
+    "Don't slow the tempo for the bridge — strip instruments but keep the pulse",
+    "Don't exceed 4 lines per section — brevity is king",
+    "Don't use sad or introspective language — this is pure energy",
+    "Don't forget the post-chorus — it's where the hook lives in dance pop"
+  ]
+}

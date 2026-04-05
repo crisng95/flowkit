@@ -1,0 +1,40 @@
+{
+  "template_id": "nursery_rhyme",
+  "genre": "Children's",
+  "subgenre": "Nursery Rhyme",
+  "description": "Classic nursery rhyme style with simple repetitive melody and traditional sing-song rhythm",
+  "target_audience": "children 1-5",
+  "suno_tags": "nursery rhyme, gentle female vocals, acoustic guitar, tambourine, simple melody, warm, singalong, 90 BPM",
+  "structure": ["Verse 1", "Verse 2", "Chorus", "Verse 3", "Verse 4", "Chorus", "Outro"],
+  "duration": "1:30-2:00",
+  "bpm_range": "85-95",
+  "vocal_style": "Warm gentle adult female voice, clear and lilting, traditional sing-song phrasing with natural rhythm",
+  "lyrics_guidelines": {
+    "words_per_line": "4-7",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "very simple",
+    "tips": [
+      "Use the classic nursery rhyme sing-song cadence",
+      "Strong AABB couplet rhymes — every two lines rhyme",
+      "Strophic form works well — same melody, new words each verse",
+      "Include repetition and predictable patterns",
+      "Use character names and simple story arcs"
+    ]
+  },
+  "example_lyrics": "[Verse 1]\nLittle Rosie had a hat\nRed and round and fancy that\nShe wore it to the park one day\nAnd all her friends came out to play\n\n[Verse 2]\nThey played with balls and jumped the rope\nSlid down the slide on the grassy slope\nLittle Rosie laughed with glee\nHappy as a child can be\n\n[Chorus]\nRound and round the garden go\nSinging high and singing low\nClap your hands and stomp your feet\nNursery rhymes are oh so sweet!\n\n[Verse 3]\nWhen the sun began to set\nRosie said, \"Don't leave me yet!\"\nOne more game before we're done\nOne more song, just one more one\n\n[Verse 4]\nSo they sang beneath the tree\nAll together, you and me\nWhen the moon came up so bright\nRosie whispered, \"What a night!\"\n\n[Chorus]\nRound and round the garden go\nSinging high and singing low\nClap your hands and stomp your feet\nNursery rhymes are oh so sweet!\n\n[Outro]\nGoodnight, Rosie, goodnight all!\n[End]",
+  "do": [
+    "Use classic couplet rhyme (AABB) for that traditional feel",
+    "Create a simple character or scenario in the opening verse",
+    "Include physical actions kids can mimic (clap, stomp, jump)",
+    "Keep the melody implied through consistent syllable patterns",
+    "Tell a tiny complete story across the verses"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid complex story arcs — keep the narrative simple and linear",
+    "Don't use modern slang or references",
+    "Avoid dark or violent traditional nursery rhyme themes",
+    "Don't make it longer than 2 minutes — short and sweet"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "template_id": "cinematic_emotional",
+  "genre": "Cinematic",
+  "subgenre": "Emotional Cinematic",
+  "description": "Tender, moving cinematic piece with delicate piano, swelling strings, and vocals that ache with beauty",
+  "target_audience": "general, film/game fans, content creators",
+  "suno_tags": "emotional cinematic, piano, swelling strings, tender vocals, orchestral, moving, intimate, 68 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Interlude", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:30",
+  "bpm_range": "60-75",
+  "vocal_style": "Delicate and crystalline in the verses, like light through stained glass. Swells with controlled emotion in the chorus — never shouting, but deeply felt. Think of a voice that could make silence beautiful. Pure tone, minimal vibrato, achingly sincere.",
+  "lyrics_guidelines": {
+    "words_per_line": "5-10",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABCB or free",
+    "vocabulary_level": "poetic, tender, luminous imagery, emotionally precise",
+    "tips": [
+      "Write about universal human moments — loss, hope, connection, farewell",
+      "Use light imagery: dawn, candles, stars, first snow",
+      "Less is more — every word should earn its place",
+      "Chorus should be a single beautiful truth, not a complex message",
+      "The spaces between words matter as much as the words themselves"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Grand Piano]\n\n[Verse 1]\n[Soft]\nThe house is quiet now\nYour chair still faces the window\nWhere morning used to find you\nReading with the light\n\n[Chorus]\nAnd all the love we never said\nLives in the halls like candlelight\nSoft and golden, never fading\nBurning long after the night\n\n[Interlude]\n[Instrumental]\n[Violin]\n\n[Verse 2]\n[Soft]\nI found your garden gloves today\nDirt still pressed into the fingers\nThe roses you planted last spring\nAre blooming like you promised\n\n[Chorus]\n[Powerful]\nAnd all the love we never said\nLives in the halls like candlelight\nSoft and golden, never fading\nBurning long after the night\n\n[Bridge]\n[Whispered]\nYou are the warmth in empty rooms\nThe song inside the silence\nI hear you in the rain\n\n[Chorus]\nAnd all the love we never said\nLives in the halls like candlelight\nSoft and golden, never fading\nBurning long after the night\n\n[Outro]\n[Grand Piano]\n[Violin]\n[Effect: Fade Out]\n[End]",
+  "do": [
+    "Start with piano alone and add strings gradually",
+    "Use concrete objects to carry emotional weight (chair, gloves, roses)",
+    "Keep the vocal delivery restrained — power through stillness",
+    "Include a violin or cello interlude for breathing room",
+    "Let the outro be instrumental — the music carries the final emotion"
+  ],
+  "dont": [
+    "Don't be melodramatic — restraint is more powerful than excess",
+    "Don't add percussion or heavy drums — this is about delicacy",
+    "Don't rush — give every phrase time to land",
+    "Don't use action words or intensity language — this is tender, not epic",
+    "Don't resolve the grief completely — beautiful sadness should linger"
+  ]
+}

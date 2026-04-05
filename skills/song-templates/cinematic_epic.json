@@ -1,0 +1,40 @@
+{
+  "template_id": "cinematic_epic",
+  "genre": "Cinematic",
+  "subgenre": "Epic Cinematic / Trailer",
+  "description": "Massive orchestral epic with soaring choir, thundering percussion, and heroic triumph — perfect for trailers and climactic moments",
+  "target_audience": "general, film/game fans, content creators",
+  "suno_tags": "epic cinematic, orchestral, dramatic choir, thundering percussion, soaring strings, powerful, heroic, 80 BPM",
+  "structure": ["Intro", "Verse 1", "Build", "Chorus", "Interlude", "Verse 2", "Build", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:30",
+  "bpm_range": "70-90",
+  "vocal_style": "Operatic and commanding for chorus sections. Solo voice in verses — powerful but restrained, building anticipation. Full choir erupts in choruses with layered harmonies. The voice should feel ancient, timeless, larger than human.",
+  "lyrics_guidelines": {
+    "words_per_line": "4-10",
+    "lines_per_section": "4-6",
+    "rhyme_scheme": "ABAB or ABCB",
+    "vocabulary_level": "mythic, grand, archetypal, timeless imagery",
+    "tips": [
+      "Write in the language of myth — rise, fall, kingdoms, fire, dawn",
+      "Chorus should feel like a declaration carved in stone",
+      "Use contrasts: darkness/light, fall/rise, silence/thunder",
+      "Verses set the scene, choruses declare the truth",
+      "Bridge should be the darkest moment before the triumphant final chorus"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Timpani]\n[Instrumental]\n\n[Verse 1]\n[Soft]\nFrom the ashes of forgotten thrones\nWhere silence kept its watch alone\nA ember stirred beneath the stone\nA voice the darkness should have known\n\n[Pre-Chorus]\n[Energy: Building]\nThe ground begins to shake and crack\nThere is no turning back\n\n[Chorus]\n[Choir: Gospel]\n[Powerful]\nRise, rise from the ruin\nLet the heavens hear your name\nBorn of fire, forged in thunder\nNothing holds us down again\n\n[Interlude]\n[Instrumental]\n[Cello]\n\n[Verse 2]\nAcross the fields of broken swords\nWhere heroes fell without a word\nThe banner flies against the storm\nA thousand voices, one accord\n\n[Pre-Chorus]\n[Energy: Building]\nThe walls of night begin to fall\nWe answer the call\n\n[Chorus]\n[Choir: Gospel]\n[Belted]\nRise, rise from the ruin\nLet the heavens hear your name\nBorn of fire, forged in thunder\nNothing holds us down again\n\n[Bridge]\n[Whispered]\nEven stars must fall to darkness\nBefore they learn to burn\n[Timpani]\n[Energy: Building]\nAnd from the deepest night\nWe return\n\n[Chorus]\n[Powerful]\nRise, rise from the ruin\nLet the heavens hear your name\nBorn of fire, forged in thunder\nNothing holds us down again\n\n[Outro]\n[Choir: Gospel]\n[Instrumental]\n[End]",
+  "do": [
+    "Build from minimal to massive — the arc IS the experience",
+    "Use timpani, strings, and choir as the three pillars of sound",
+    "Write lyrics that feel timeless — they could be from any era",
+    "Include an instrumental interlude to let the orchestration breathe",
+    "Make the bridge a whispered moment of doubt before the triumphant finale"
+  ],
+  "dont": [
+    "Don't use modern slang or casual language — this is mythic territory",
+    "Don't keep the dynamics flat — cinematic music lives on contrast",
+    "Don't write more than 4 lines per verse — space lets the orchestra fill",
+    "Don't skip the choir in the chorus — it's the genre's defining element",
+    "Don't end quietly — epic cinematic songs finish with full orchestral power"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "template_id": "love_upbeat",
+  "genre": "Pop",
+  "subgenre": "Upbeat Love Song",
+  "description": "Happy, bright love song with infectious energy and feel-good chorus perfect for sunny days",
+  "target_audience": "young adults, teens, general",
+  "suno_tags": "upbeat pop, bright synths, acoustic guitar, happy love song, catchy melody, female vocals, 118 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:00-3:30",
+  "bpm_range": "110-125",
+  "vocal_style": "Bright, cheerful, and playful with natural warmth. Light and bouncy in verses, joyfully powerful in choruses. Think sunshine in vocal form — smiling while singing.",
+  "lyrics_guidelines": {
+    "words_per_line": "5-10",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB or ABAB",
+    "vocabulary_level": "conversational, joyful, lighthearted, everyday imagery",
+    "tips": [
+      "Write like you're telling your best friend about falling in love",
+      "Use everyday moments — grocery store, morning coffee, car rides",
+      "Chorus should make people want to dance and sing along",
+      "Keep the language bright and colorful — sunshine, golden, sparkling",
+      "Pre-chorus should feel like building excitement before a surprise"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nYou showed up like a Saturday\nNo plans, just tangled in the sun\nYou laughed and spilled your lemonade\nAnd that's when all the good begun\n\n[Pre-Chorus]\nOh, I didn't see it coming\nBut I'm glad I didn't run\n\n[Chorus]\nYou're my favorite kind of trouble\nDancing barefoot on the lawn\nEvery day's a little brighter\nSince the day you came along\n\n[Verse 2]\nYou sing off-key in the kitchen\nBurn the toast but make it right\nSteal my fries and all my sweaters\nAnd I wouldn't trade a night\n\n[Pre-Chorus]\nOh, it's messy and it's perfect\nAnd it's everything I want\n\n[Chorus]\nYou're my favorite kind of trouble\nDancing barefoot on the lawn\nEvery day's a little brighter\nSince the day you came along\n\n[Bridge]\nI used to think that love was quiet\nBut you're a firework parade\nLoud and colorful and certain\nThe best choice I ever made\n\n[Chorus]\nYou're my favorite kind of trouble\nDancing barefoot on the lawn\nEvery day's a little brighter\nSince the day you came along\n\n[Outro]\nSince the day you came along\n[End]",
+  "do": [
+    "Use specific, playful details that feel real and relatable",
+    "Keep the energy consistently uplifting throughout",
+    "Make the chorus short, catchy, and instantly singable",
+    "Include hand-clap or finger-snap friendly rhythms",
+    "Let the bridge add emotional depth without losing the joy"
+  ],
+  "dont": [
+    "Don't add melancholy or doubt — this is pure happy",
+    "Don't use heavy or dark instrumentation",
+    "Don't write overly poetic or complex metaphors — keep it breezy",
+    "Don't make verses longer than 4 lines — keep the pace moving",
+    "Don't forget a strong melodic hook in the chorus first line"
+  ]
+}

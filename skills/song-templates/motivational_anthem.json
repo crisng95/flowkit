@@ -1,0 +1,40 @@
+{
+  "template_id": "motivational_anthem",
+  "genre": "Pop Rock",
+  "subgenre": "Motivational Anthem",
+  "description": "Uplifting, powerful anthem about overcoming obstacles and rising stronger, perfect for montages and personal empowerment",
+  "target_audience": "general, athletes, students, anyone needing inspiration",
+  "suno_tags": "inspirational anthem, uplifting pop rock, powerful vocals, driving drums, piano and guitar, triumphant, 120 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:00",
+  "bpm_range": "112-128",
+  "vocal_style": "Starts grounded and determined in the verses, rises with conviction in the pre-chorus, and explodes into full-powered, arms-wide-open delivery in the chorus. The voice carries both struggle and triumph — you hear the journey in the tone.",
+  "lyrics_guidelines": {
+    "words_per_line": "5-10",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABAB or AABB",
+    "vocabulary_level": "empowering, resilient, action-oriented, universal",
+    "tips": [
+      "Verse = the struggle (falling, doubt, darkness). Chorus = the triumph (rising, strength, light)",
+      "Use physical action words: stand, rise, run, fight, climb, break through",
+      "Chorus should work as a standalone affirmation — tattoo-worthy lines",
+      "Bridge is the quiet moment of resolve before the final powerful chorus",
+      "Write for someone who needs to hear this on their hardest day"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Grand Piano]\n\n[Verse 1]\nI've been down on the ground\nTasting dirt between my teeth\nEvery voice said stay down\nBut something stirred beneath\n\n[Pre-Chorus]\nI'm not done, I'm not broken\nI'm just getting to my feet\n\n[Chorus]\n[Powerful]\nI will rise above the wreckage\nI will carry every scar\nEvery fall just built the fire\nLook how far I've come, look how far\n\n[Verse 2]\nRain came down and washed the road\nBlurred the lines I used to see\nBut I found my way through flooded miles\nAnd the strongest version of me\n\n[Pre-Chorus]\nI'm not lost, I'm not shattered\nI'm becoming who I need to be\n\n[Chorus]\n[Belted]\nI will rise above the wreckage\nI will carry every scar\nEvery fall just built the fire\nLook how far I've come, look how far\n\n[Bridge]\n[Soft]\nThere will be nights you can't see morning\nAnd the silence feels like weight\nBut the dawn has never failed to come\nAnd neither will your strength\n\n[Chorus]\n[Powerful]\nI will rise above the wreckage\nI will carry every scar\nEvery fall just built the fire\nLook how far I've come, look how far\n\n[Outro]\nLook how far\n[Instrumental]\n[End]",
+  "do": [
+    "Contrast struggle (verses) with triumph (chorus) — the arc is everything",
+    "Use 'I' in verses for personal journey, shift to 'we'/'you' in bridge for universality",
+    "Build dynamics from piano intro to full band finale",
+    "Make the chorus a complete statement of empowerment in 4 lines",
+    "Bridge should speak directly to the listener — 'you' language"
+  ],
+  "dont": [
+    "Don't be preachy or lecture — inspire through story, not instruction",
+    "Don't use vague platitudes like 'believe in yourself' — be specific",
+    "Don't keep the energy flat — motivational songs need a clear arc upward",
+    "Don't skip the struggle — triumph means nothing without the valley",
+    "Don't end on doubt — the final chorus must be the most powerful delivery"
+  ]
+}

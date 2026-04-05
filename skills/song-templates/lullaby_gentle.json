@@ -1,0 +1,40 @@
+{
+  "template_id": "lullaby_gentle",
+  "genre": "Children's",
+  "subgenre": "Gentle Lullaby",
+  "description": "Soft soothing bedtime lullaby with minimal arrangement to help children fall asleep",
+  "target_audience": "children 0-5",
+  "suno_tags": "gentle lullaby, soft female vocals, music box, acoustic guitar, soothing, dreamy, minimal, 65 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Verse 3", "Chorus", "Outro"],
+  "duration": "2:30-3:00",
+  "bpm_range": "60-70",
+  "vocal_style": "Soft gentle adult female voice, hushed and warm, like a mother singing at bedside, breathy and tender",
+  "lyrics_guidelines": {
+    "words_per_line": "4-7",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABAB",
+    "vocabulary_level": "very simple",
+    "tips": [
+      "Use soft imagery: stars, moon, clouds, blankets, warmth",
+      "Slow pacing with gentle rhythm — no sudden energy shifts",
+      "Repetition is key — repeat the chorus exactly for calming effect",
+      "Use lulling vowel sounds: oo, ah, oh, ee",
+      "End lines with soft consonants, avoid hard stops"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\n[Soft]\nClose your eyes, my little one\nThe day is done, the stars have come\nThe moon is bright, the world is still\nRest your head upon the hill\n\n[Chorus]\nSleep now, sleep now, safe and sound\nLove is here all around\nDream away till morning light\nSleep now, sleep now, goodnight\n\n[Verse 2]\n[Soft]\nBlankets warm and pillows deep\nGentle winds will rock your sleep\nOwls are singing lullabies\nUnderneath the velvet skies\n\n[Chorus]\nSleep now, sleep now, safe and sound\nLove is here all around\nDream away till morning light\nSleep now, sleep now, goodnight\n\n[Verse 3]\n[Whispered]\nI'll be here when you wake up\nWith a smile and a loving cup\nBut for now just close your eyes\nAnd let the night sing lullabies\n\n[Chorus]\n[Soft]\nSleep now, sleep now, safe and sound\nLove is here all around\nDream away till morning light\nSleep now, sleep now, goodnight\n\n[Outro]\n[Whispered]\nGoodnight... goodnight...\n[End]",
+  "do": [
+    "Keep energy flat and low throughout — no builds or climaxes",
+    "Use [Soft] and [Whispered] vocal delivery tags",
+    "Repeat the chorus identically for hypnotic calming effect",
+    "Use nature imagery that evokes safety and warmth",
+    "End with a whispered outro that trails off"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid any upbeat or energetic moments",
+    "Don't use loud instruments like drums or electric guitar",
+    "Avoid themes of separation, loneliness, or fear",
+    "Don't change tempo or dynamics suddenly"
+  ]
+}

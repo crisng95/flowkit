@@ -1,0 +1,40 @@
+{
+  "template_id": "edm_drop",
+  "genre": "Electronic",
+  "subgenre": "EDM / Progressive House",
+  "description": "High-energy EDM track with euphoric builds, massive drops, and minimal but impactful vocals",
+  "target_audience": "young adults, EDM fans, festival-goers",
+  "suno_tags": "progressive house, euphoric EDM, big drop, synth leads, four-on-the-floor, festival energy, 128 BPM",
+  "structure": ["Intro", "Verse", "Build", "Drop", "Breakdown", "Verse 2", "Build", "Drop", "Outro"],
+  "duration": "3:00-4:00",
+  "bpm_range": "126-132",
+  "vocal_style": "Ethereal and atmospheric in verses — like a voice floating above the beat. Minimal words, maximum emotion. Breathy, reverb-drenched, gender-neutral. Vocals disappear during drops to let the synths take over.",
+  "lyrics_guidelines": {
+    "words_per_line": "3-8",
+    "lines_per_section": "2-4",
+    "rhyme_scheme": "free or AABB",
+    "vocabulary_level": "abstract, ethereal, minimal, emotional fragments",
+    "tips": [
+      "Less is more — EDM vocals are texture, not storytelling",
+      "Use short, atmospheric phrases that create a feeling, not a narrative",
+      "Build sections should have ascending energy in the words",
+      "Drop sections are instrumental — mark them clearly with [Drop] tag",
+      "Breakdown is the emotional breathing room between drops"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n[Analog Synth]\n\n[Verse]\n[Breathy]\nClose your eyes and let go\nWe're floating in the afterglow\n\n[Pre-Chorus]\n[Energy: Building]\nHigher, higher\nTake me to the light\nHigher, higher\nInto the night\n\n[Drop]\n[Instrumental]\n\n[Break]\n[Soft]\nBreathe\n\n[Verse]\n[Breathy]\nFeel the pulse beneath your skin\nLet the waves pull you in\n\n[Pre-Chorus]\n[Energy: Building]\nHigher, higher\nTake me to the light\nHigher, higher\nWe're alive tonight\n\n[Drop]\n[Instrumental]\n\n[Outro]\n[Soft]\nWe're alive tonight\n[Effect: Fade Out]\n[End]",
+  "do": [
+    "Use [Build] and [Drop] tags — they're essential for EDM structure",
+    "Keep total lyrics under 20 lines — the production carries the song",
+    "Make build sections feel like ascending stairs — each line higher energy",
+    "Include a breakdown section with minimal sound for contrast",
+    "Use breathy, reverb-heavy vocal delivery tags"
+  ],
+  "dont": [
+    "Don't write long verses — 2-4 lines maximum per vocal section",
+    "Don't add lyrics during the drop — it's purely instrumental energy",
+    "Don't tell a complex story — EDM is about sensation, not narrative",
+    "Don't use acoustic instrument tags — this is electronic territory",
+    "Don't forget the build-drop dynamic — it's the entire point of the genre"
+  ]
+}

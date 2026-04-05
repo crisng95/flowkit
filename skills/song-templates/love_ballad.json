@@ -1,0 +1,40 @@
+{
+  "template_id": "love_ballad",
+  "genre": "Ballad",
+  "subgenre": "Love Ballad",
+  "description": "Slow emotional love ballad with piano and strings, building from intimate whisper to powerful declaration",
+  "target_audience": "young adults, general",
+  "suno_tags": "pop ballad, emotional piano, string orchestra, female vocals, slow tempo, heartfelt, 72 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:30",
+  "bpm_range": "60-78",
+  "vocal_style": "Warm and intimate in verses, building to powerful belted delivery in choruses. Slight vibrato, emotionally raw, capable of both whispered vulnerability and soaring high notes.",
+  "lyrics_guidelines": {
+    "words_per_line": "6-12",
+    "lines_per_section": "4-6",
+    "rhyme_scheme": "ABAB or ABCB",
+    "vocabulary_level": "poetic, emotionally vulnerable, sensory imagery",
+    "tips": [
+      "Start verses with quiet, intimate imagery — a touch, a glance, a memory",
+      "Chorus should be a direct emotional declaration — say what the heart feels",
+      "Use sensory details: warmth of skin, sound of breath, taste of tears",
+      "Bridge should reveal the deepest vulnerability or a turning point",
+      "Keep chorus under 4 lines for maximum singalong impact"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Grand Piano]\n\n[Verse 1]\n[Soft]\nYour fingerprints are on my soul\nTraced in lines I can't erase\nEvery silence tells the story\nOf the world inside your face\n\n[Pre-Chorus]\nAnd I've been holding back this flood\nBut darling, here it comes\n\n[Chorus]\n[Belted]\nI would cross a thousand midnights\nJust to hear you say my name\nEvery heartbeat writes your letters\nI will never be the same\n\n[Verse 2]\nThe coffee's cold, the morning's grey\nBut golden where you lay your head\nI memorize the way you breathe\nLike prayers I've left unsaid\n\n[Pre-Chorus]\nAnd all the walls I built so high\nYou walked right through the door\n\n[Chorus]\n[Belted]\nI would cross a thousand midnights\nJust to hear you say my name\nEvery heartbeat writes your letters\nI will never be the same\n\n[Bridge]\n[Whispered]\nMaybe love was always this\nA slow unraveling\nOf everything I thought I was\nBecoming everything\n\n[Chorus]\n[Powerful]\nI would cross a thousand midnights\nJust to hear you say my name\nEvery heartbeat writes your letters\nI will never be the same\n\n[Outro]\n[Soft]\nI will never be the same\n[Grand Piano]\n[End]",
+  "do": [
+    "Build dynamics from whisper to full power across the song",
+    "Use piano as the anchor instrument throughout",
+    "Write from genuine emotional experience — specificity creates universality",
+    "Let the bridge be the emotional peak before the final chorus",
+    "Use strings to swell during chorus sections"
+  ],
+  "dont": [
+    "Don't use cliches like 'baby' or 'babe' without purpose",
+    "Don't make every line rhyme — let some breathe naturally",
+    "Don't rush the tempo — trust the slow build",
+    "Don't overload verses with more than 4-6 lines",
+    "Don't describe love abstractly — show it through specific moments"
+  ]
+}

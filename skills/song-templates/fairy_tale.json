@@ -1,0 +1,40 @@
+{
+  "template_id": "fairy_tale",
+  "genre": "Children's",
+  "subgenre": "Fairy Tale Song",
+  "description": "Narrative adventure song that tells a fairy tale story with magical elements and a happy ending",
+  "target_audience": "children 4-8",
+  "suno_tags": "whimsical folk pop, warm female vocals, acoustic guitar, flute, strings, storytelling, magical, 95 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Verse 3", "Chorus", "Outro"],
+  "duration": "2:30-3:00",
+  "bpm_range": "90-100",
+  "vocal_style": "Warm expressive adult female voice, storyteller quality, shifts between narrative and singing, gentle and enchanting",
+  "lyrics_guidelines": {
+    "words_per_line": "5-9",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABAB",
+    "vocabulary_level": "simple with storytelling words",
+    "tips": [
+      "Structure as a mini story: setup (V1), journey (V2), challenge (Bridge), resolution (V3)",
+      "Use 'once upon a time' or fairy tale language to set the tone",
+      "Include a clear hero, a quest, and a happy resolution",
+      "The chorus should be the story's emotional theme, not plot",
+      "Bridge is the dramatic moment — the challenge or turning point"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nOnce upon a time so long ago\nA little bear set out through the snow\nWith a scarf of red and boots of blue\nSearching for a friend, brave and true\n\n[Chorus]\nEvery story needs a heart that's brave\nEvery journey finds the ones we save\nThrough the woods and over the stream\nEvery fairy tale begins with a dream\n\n[Verse 2]\nThrough the forest dark, past the wishing well\nPast the singing frogs and the magic bell\nLittle bear kept walking, step by step\nFollowing a path where the fireflies slept\n\n[Chorus]\nEvery story needs a heart that's brave\nEvery journey finds the ones we save\nThrough the woods and over the stream\nEvery fairy tale begins with a dream\n\n[Bridge]\nThen the wind blew cold and the path was gone\nLittle bear felt lost, all alone at dawn\nBut a tiny light said, \"Follow me!\"\nA firefly friend, shining wild and free\n\n[Verse 3]\nSide by side they walked to the mountain top\nHand in hand, they knew they'd never stop\nAnd when the sun rose golden in the sky\nLittle bear smiled and said, \"That's why\"\n\n[Chorus]\nEvery story needs a heart that's brave\nEvery journey finds the ones we save\nThrough the woods and over the stream\nEvery fairy tale begins with a dream\n\n[Outro]\n[Soft]\nAnd they lived happily... ever after.\n[End]",
+  "do": [
+    "Tell a complete story with beginning, middle, and end",
+    "Use a clear hero character that kids can root for",
+    "Include sensory-rich scene descriptions",
+    "Make the bridge the dramatic turning point of the story",
+    "End with resolution and a happy, satisfying conclusion"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid truly scary villains or threatening situations",
+    "Don't leave the story unresolved — kids need closure",
+    "Avoid overly complex plots with multiple subplots",
+    "Don't use archaic fairy tale language kids won't understand"
+  ]
+}

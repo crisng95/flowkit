@@ -1,0 +1,40 @@
+{
+  "template_id": "children_animal",
+  "genre": "Children's",
+  "subgenre": "Animal Song",
+  "description": "Fun animal-themed song with sound effects and playful rhythms",
+  "target_audience": "children 3-7",
+  "suno_tags": "playful children's pop, warm female vocals, acoustic guitar, xylophone, bouncy, fun, 100 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "1:45-2:15",
+  "bpm_range": "95-105",
+  "vocal_style": "Friendly warm adult female voice, animated and expressive, playful tone shifts for animal sounds",
+  "lyrics_guidelines": {
+    "words_per_line": "4-7",
+    "lines_per_section": "4",
+    "rhyme_scheme": "AABB",
+    "vocabulary_level": "simple",
+    "tips": [
+      "Include animal sounds as part of the lyrics (moo, quack, roar)",
+      "Use onomatopoeia freely for fun and engagement",
+      "Each verse can feature a different animal",
+      "Chorus should be the unifying theme about all animals",
+      "Add counting or listing for educational value"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Instrumental]\n\n[Verse 1]\nThe cow says moo in the morning sun\nThe rooster crows when the day's begun\nThe little duck goes quack quack quack\nWaddling down the muddy track\n\n[Chorus]\nAll the animals, big and small\nWe love every single one of all\nFurry, feathered, short and tall\nAll the animals, hear them call!\n\n[Verse 2]\nThe kitty purrs upon my lap\nThe puppy barks and does a tap\nThe bunny hops across the floor\nThe parrot squawks and asks for more\n\n[Chorus]\nAll the animals, big and small\nWe love every single one of all\nFurry, feathered, short and tall\nAll the animals, hear them call!\n\n[Bridge]\nCan you moo? Can you quack?\nCan you roar and then roar back?\nEvery sound is music too\nAnimals are just like me and you!\n\n[Chorus]\nAll the animals, big and small\nWe love every single one of all\nFurry, feathered, short and tall\nAll the animals, hear them call!\n\n[Outro]\nMoo! Quack! Roar! Meow!\n[End]",
+  "do": [
+    "Include at least 4-6 different animals across verses",
+    "Use animal sounds as singalong moments",
+    "Make the bridge interactive with questions kids can answer",
+    "Pair each animal with a simple action verb",
+    "Keep a bouncy, marching rhythm throughout"
+  ],
+  "dont": [
+    "Never use children's choir or kids singing in suno_tags",
+    "Avoid predator-prey dynamics or anything scary",
+    "Don't use scientific animal names",
+    "Avoid sad themes like animals in cages",
+    "Don't overcrowd verses with too many animals at once"
+  ]
+}

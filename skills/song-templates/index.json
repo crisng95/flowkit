@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "total_templates": 20,
+  "categories": [
+    {
+      "category": "Children & Family",
+      "templates": [
+        {"id": "children_adventure", "genre": "Children's", "subgenre": "Adventure Song", "description": "Upbeat exploration song for young adventurers with catchy march-like rhythm"},
+        {"id": "children_animal", "genre": "Children's", "subgenre": "Animal Song", "description": "Fun animal-themed song with sound effects and playful rhythms"},
+        {"id": "lullaby_gentle", "genre": "Children's", "subgenre": "Gentle Lullaby", "description": "Soft soothing bedtime lullaby with minimal arrangement to help children fall asleep"},
+        {"id": "lullaby_dreamy", "genre": "Children's", "subgenre": "Dreamy Lullaby", "description": "Magical fantasy lullaby with ethereal sounds and whimsical dream imagery"},
+        {"id": "educational_counting", "genre": "Children's", "subgenre": "Counting Song", "description": "Fun counting and numbers learning song with repetitive structure for memorization"},
+        {"id": "educational_abc", "genre": "Children's", "subgenre": "Alphabet Song", "description": "Catchy alphabet learning song that pairs letters with fun words and actions"},
+        {"id": "nursery_rhyme", "genre": "Children's", "subgenre": "Nursery Rhyme", "description": "Classic nursery rhyme style with simple repetitive melody and traditional sing-song rhythm"},
+        {"id": "fairy_tale", "genre": "Children's", "subgenre": "Fairy Tale Song", "description": "Narrative adventure song that tells a fairy tale story with magical elements and a happy ending"}
+      ]
+    },
+    {
+      "category": "Love & Romance",
+      "templates": [
+        {"id": "love_ballad", "genre": "Ballad", "subgenre": "Love Ballad", "description": "Slow emotional love ballad with piano and strings, building from intimate whisper to powerful declaration"},
+        {"id": "love_upbeat", "genre": "Pop", "subgenre": "Upbeat Love Song", "description": "Happy, bright love song with infectious energy and feel-good chorus perfect for sunny days"},
+        {"id": "love_heartbreak", "genre": "Pop", "subgenre": "Heartbreak Ballad", "description": "Raw, emotional breakup song that moves from devastation to quiet strength"}
+      ]
+    },
+    {
+      "category": "Pop",
+      "templates": [
+        {"id": "pop_dance", "genre": "Pop", "subgenre": "Dance Pop", "description": "High-energy dance pop radio hit with infectious hooks, pulsing synths, and four-on-the-floor beats"},
+        {"id": "pop_indie", "genre": "Indie Pop", "subgenre": "Chill Indie", "description": "Dreamy, lo-fi indie pop with warm textures, mellow vibes, and introspective lyrics"}
+      ]
+    },
+    {
+      "category": "Rock",
+      "templates": [
+        {"id": "rock_anthem", "genre": "Rock", "subgenre": "Power Rock Anthem", "description": "High-energy power rock anthem with driving guitars, thundering drums, and a stadium-sized chorus"}
+      ]
+    },
+    {
+      "category": "Hip-Hop",
+      "templates": [
+        {"id": "hiphop_storytelling", "genre": "Hip-Hop", "subgenre": "Storytelling Hip-Hop", "description": "Narrative-driven hip-hop with vivid storytelling, strong flow, and soulful beats"}
+      ]
+    },
+    {
+      "category": "Electronic",
+      "templates": [
+        {"id": "edm_drop", "genre": "Electronic", "subgenre": "EDM / Progressive House", "description": "High-energy EDM track with euphoric builds, massive drops, and minimal but impactful vocals"}
+      ]
+    },
+    {
+      "category": "Country & Folk",
+      "templates": [
+        {"id": "country_storytelling", "genre": "Country", "subgenre": "Country Storytelling", "description": "Heartfelt country song with acoustic warmth, narrative lyrics, and honest vocal delivery"}
+      ]
+    },
+    {
+      "category": "Cinematic",
+      "templates": [
+        {"id": "cinematic_epic", "genre": "Cinematic", "subgenre": "Epic Cinematic / Trailer", "description": "Massive orchestral epic with soaring choir, thundering percussion, and heroic triumph"},
+        {"id": "cinematic_emotional", "genre": "Cinematic", "subgenre": "Emotional Cinematic", "description": "Tender, moving cinematic piece with delicate piano, swelling strings, and vocals that ache with beauty"}
+      ]
+    },
+    {
+      "category": "Motivational",
+      "templates": [
+        {"id": "motivational_anthem", "genre": "Pop Rock", "subgenre": "Motivational Anthem", "description": "Uplifting, powerful anthem about overcoming obstacles and rising stronger"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "template_id": "hiphop_storytelling",
+  "genre": "Hip-Hop",
+  "subgenre": "Storytelling Hip-Hop",
+  "description": "Narrative-driven hip-hop with vivid storytelling, strong flow, and soulful beats",
+  "target_audience": "young adults, hip-hop fans",
+  "suno_tags": "boom bap hip-hop, storytelling rap, soulful samples, male vocals, jazzy piano, raw, 90 BPM",
+  "structure": ["Intro", "Verse 1", "Hook", "Verse 2", "Hook", "Bridge", "Verse 3", "Hook", "Outro"],
+  "duration": "3:30-4:30",
+  "bpm_range": "85-95",
+  "vocal_style": "Confident, rhythmic flow with natural cadence. Conversational delivery that pulls listeners into the story. Shifts between laid-back storytelling and intense emphasis on key bars. Authentic, not performative.",
+  "lyrics_guidelines": {
+    "words_per_line": "8-14",
+    "lines_per_section": "8-16",
+    "rhyme_scheme": "AABB with internal rhymes",
+    "vocabulary_level": "street-smart, vivid imagery, narrative-driven, wordplay",
+    "tips": [
+      "Each verse should advance the story — beginning, middle, end across 3 verses",
+      "Use specific details: street names, times of day, weather, sounds",
+      "Internal rhymes and multisyllabic rhymes elevate the flow",
+      "Hook should capture the story's theme in 4 catchy lines",
+      "Bridge can be a reflective moment or spoken-word interlude"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Spoken Word]\nLet me take you back to where it started\nCorner of Fifth and Main, summer of '09\n\n[Verse 1]\nFifteen years old with a notebook and a dream\nMama working doubles, nothing's what it seemed\nStreetlights flickering, beats inside my skull\nWriting rhymes on napkins till the pages were full\nOld man at the corner store would let me freestyle\nSaid \"Kid, you got something, stick around a while\"\nFirst open mic night, knees shaking on the stage\nBut the crowd went quiet and I turned the page\n\n[Hook]\nThis is more than music, this is how I breathe\nEvery bar I write is everything I need\nFrom the block to the booth, pen to the beat\nThis is my story, laid out on the street\n\n[Verse 2]\nGot a little older, city got a little colder\nFriends went left, I kept the chip on my shoulder\nStudio sessions running on borrowed time\nTrading sleep for verses, trading doubt for rhymes\nLabel man came through, suit pressed and clean\nSaid \"Sign right here, we'll make you a machine\"\nBut I remembered what the old man told me\n\"Own your voice, kid, that's the only thing that's holy\"\n\n[Hook]\nThis is more than music, this is how I breathe\nEvery bar I write is everything I need\nFrom the block to the booth, pen to the beat\nThis is my story, laid out on the street\n\n[Bridge]\n[Soft]\nSometimes I still drive past Fifth and Main\nThe corner store is gone but the lessons remain\n\n[Verse 3]\nNow I'm standing where I never thought I'd be\nSame kid, same dream, just a wider scene\nI record the truth, let the people decide\nNo ghost writers, just the voice inside\nFor every kid with a notebook in the dark\nThis verse is yours, this is where you start\nThe old man passed last winter, quiet and cold\nBut his words still echo in everything I hold\n\n[Hook]\nThis is more than music, this is how I breathe\nEvery bar I write is everything I need\nFrom the block to the booth, pen to the beat\nThis is my story, laid out on the street\n\n[Outro]\n[Spoken Word]\nFifth and Main. Always.\n[End]",
+  "do": [
+    "Tell a complete story with a clear arc across three verses",
+    "Use AABB rhyme scheme with internal rhymes for flow",
+    "Include specific sensory details — sights, sounds, smells of the setting",
+    "Let the hook be the moral or theme that ties the story together",
+    "Use spoken word for intro and outro to frame the narrative"
+  ],
+  "dont": [
+    "Don't write generic braggadocio — this is about storytelling",
+    "Don't break the narrative to add filler bars",
+    "Don't use complex words just to impress — clarity serves the story",
+    "Don't make the hook longer than 4 lines — it needs to be memorable",
+    "Don't lose the emotional thread — every verse should serve the arc"
+  ]
+}

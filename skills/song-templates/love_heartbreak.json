@@ -1,0 +1,40 @@
+{
+  "template_id": "love_heartbreak",
+  "genre": "Pop",
+  "subgenre": "Heartbreak Ballad",
+  "description": "Raw, emotional breakup song that moves from devastation to quiet strength",
+  "target_audience": "young adults, general",
+  "suno_tags": "emotional pop, heartbreak, raw vocals, piano and strings, melancholic, female vocals, 80 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:00",
+  "bpm_range": "72-88",
+  "vocal_style": "Emotionally raw and exposed. Cracking vulnerability in verses, restrained power in the first chorus, building to full cathartic release by the final chorus. Slight rasp from emotion, not forced.",
+  "lyrics_guidelines": {
+    "words_per_line": "6-12",
+    "lines_per_section": "4-6",
+    "rhyme_scheme": "ABCB or ABAB",
+    "vocabulary_level": "emotionally direct, visceral imagery, honest and raw",
+    "tips": [
+      "Write from the gut — this is the 3 AM version of the truth",
+      "Use physical sensations to describe emotional pain (chest tight, hands shaking)",
+      "Chorus should be the one thing you wish you could say to their face",
+      "Bridge is the moment of clarity or acceptance — the turning point",
+      "Contrast past happiness with present emptiness for maximum impact"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Grand Piano]\n\n[Verse 1]\n[Soft]\nYour jacket's still behind the door\nI haven't moved it yet\nThe coffee mug with your lipstick stain\nIs something I can't forget\n\n[Pre-Chorus]\nThey say that time will fix it all\nBut the clock just stares at me\n\n[Chorus]\nHow do you unlove somebody\nWhen they're sewn into your skin\nI keep reaching for the phone at night\nForgetting where we've been\n\n[Verse 2]\nI drove past our restaurant\nThey gave away our booth\nA stranger's sitting where you sat\nAnd laughing like we used to\n\n[Pre-Chorus]\n[Raspy]\nI told myself I'm fine today\nAlmost believed it too\n\n[Chorus]\n[Powerful]\nHow do you unlove somebody\nWhen they're sewn into your skin\nI keep reaching for the phone at night\nForgetting where we've been\n\n[Bridge]\n[Whispered]\nMaybe one day I'll stop counting\nThe months since you walked out\nMaybe one day your name won't taste\nLike everything I lost\n\n[Chorus]\n[Belted]\nHow do you unlove somebody\nWhen they're sewn into your skin\nI keep reaching for the phone at night\nForgetting where we've been\n\n[Outro]\n[Soft]\nForgetting where we've been\n[Grand Piano]\n[End]",
+  "do": [
+    "Ground the pain in specific, concrete details — objects, places, habits",
+    "Build emotional intensity across the three choruses",
+    "Let silence and space carry weight — don't fill every moment",
+    "Use past tense in verses (memories) and present tense in chorus (ongoing pain)",
+    "Allow the bridge to shift perspective — from loss toward acceptance"
+  ],
+  "dont": [
+    "Don't be vengeful or angry — this is grief, not revenge",
+    "Don't use generic breakup phrases like 'you broke my heart'",
+    "Don't resolve everything neatly — real heartbreak lingers",
+    "Don't overdo vocal dramatics in the verses — save power for choruses",
+    "Don't make it so specific it becomes unrelatable — find universal in personal"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "template_id": "country_storytelling",
+  "genre": "Country",
+  "subgenre": "Country Storytelling",
+  "description": "Heartfelt country song with acoustic warmth, narrative lyrics, and honest vocal delivery",
+  "target_audience": "general, country music fans",
+  "suno_tags": "modern country, acoustic guitar, storytelling, male vocals, steel guitar, heartfelt, Americana, 108 BPM",
+  "structure": ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"],
+  "duration": "3:30-4:00",
+  "bpm_range": "100-118",
+  "vocal_style": "Warm, honest, and conversational with a natural twang. Like telling a story on a porch swing — unhurried and genuine. Slight gravel in the voice adds character. Builds warmth and intensity into the chorus without losing the intimate feel.",
+  "lyrics_guidelines": {
+    "words_per_line": "6-12",
+    "lines_per_section": "4-6",
+    "rhyme_scheme": "ABAB",
+    "vocabulary_level": "conversational, down-to-earth, specific imagery, storytelling",
+    "tips": [
+      "Paint pictures with specific details — makes, models, road names, seasons",
+      "Write like you're telling a true story over a beer",
+      "Chorus should capture the universal feeling behind the specific story",
+      "Use the landscape as emotional mirror — weather reflects mood",
+      "Bridge reveals the deeper meaning or the lesson learned"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Acoustic Guitar]\n[Instrumental]\n\n[Verse 1]\nDaddy's truck still sits out back\nRusted fender, tires flat\nHe taught me how to drive on Miller Road\nLeft hand on the wheel, right hand on the dial\nFound a station, made him smile\nSaid \"Son, that's Merle, now that's pure gold\"\n\n[Chorus]\nSome things rust but they never fade\nLike the lessons a good man made\nIn a two-tone truck on a dirt road ride\nI carry him with me, mile by mile\n\n[Verse 2]\nMama kept his flannel shirt\nHung it where his jacket worked\nSaid the house still smells like him in May\nI drive past the old ball field\nWhere he taught me how to deal\nWith striking out and getting back to play\n\n[Chorus]\nSome things rust but they never fade\nLike the lessons a good man made\nIn a two-tone truck on a dirt road ride\nI carry him with me, mile by mile\n\n[Bridge]\nNow I've got a kid of my own\nSame stubborn chin, same grin he's shown\nAnd when we drive those backroads slow\nI hear my daddy's voice, and he knows\n\n[Chorus]\n[Powerful]\nSome things rust but they never fade\nLike the lessons a good man made\nIn a two-tone truck on a dirt road ride\nI carry him with me, mile by mile\n\n[Outro]\nMile by mile\n[Acoustic Guitar]\n[End]",
+  "do": [
+    "Root the story in specific, tangible details — not abstract feelings",
+    "Use acoustic guitar and steel guitar as signature sounds",
+    "Let the chorus be the emotional takeaway — what the story means",
+    "Write in a conversational, natural speaking rhythm",
+    "Connect generations — family stories resonate deeply in country"
+  ],
+  "dont": [
+    "Don't use every country cliche at once — pick specific details over tropes",
+    "Don't lose the story in the chorus — keep the narrative thread",
+    "Don't over-produce — acoustic authenticity is the genre's strength",
+    "Don't write in overly poetic language — country is plain-spoken",
+    "Don't forget the emotional arc — verses set up, chorus pays off"
+  ]
+}

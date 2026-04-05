@@ -1,0 +1,40 @@
+{
+  "template_id": "rock_anthem",
+  "genre": "Rock",
+  "subgenre": "Power Rock Anthem",
+  "description": "High-energy power rock anthem with driving guitars, thundering drums, and a stadium-sized chorus",
+  "target_audience": "general, rock fans, sports events",
+  "suno_tags": "power rock, electric guitar, driving drums, anthemic chorus, male vocals, stadium rock, energetic, 130 BPM",
+  "structure": ["Intro", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge", "Guitar Solo", "Chorus", "Chorus", "Outro"],
+  "duration": "3:30-4:30",
+  "bpm_range": "120-140",
+  "vocal_style": "Gritty and powerful with raspy edge. Verses are restrained and building, pre-chorus pushes upward with urgency, chorus is full-throated and soaring. Think fist-in-the-air delivery that fills an arena.",
+  "lyrics_guidelines": {
+    "words_per_line": "5-10",
+    "lines_per_section": "4",
+    "rhyme_scheme": "ABAB or AABB",
+    "vocabulary_level": "bold, defiant, empowering, visceral imagery",
+    "tips": [
+      "Write for 50,000 people to scream back at you — simple, powerful words",
+      "Chorus should work as a chant — short words, strong consonants",
+      "Verses tell the struggle, chorus is the battle cry",
+      "Use fire, storm, lightning, fight imagery — primal and elemental",
+      "Bridge should drop energy before the guitar solo builds it back"
+    ]
+  },
+  "example_lyrics": "[Intro]\n[Electric Guitar]\n[Instrumental]\n\n[Verse 1]\nThey said the fire was dying\nThat we were running out of road\nBut I've got thunder in my chest\nAnd a story left to be told\n\n[Pre-Chorus]\nSo light the match and watch it burn\nWe've got nothing left to lose\n\n[Chorus]\n[Powerful]\nWe are the ones who never break\nStanding tall through the earthquake\nScream it loud, let the world shake\nWe are the ones who never break\n\n[Verse 2]\nScars like medals on my skin\nEvery wound a lesson learned\nThey tried to build a cage around us\nBut we set the walls to burn\n\n[Pre-Chorus]\nSo raise your voice and hold the line\nThis is our moment, this is our time\n\n[Chorus]\n[Powerful]\nWe are the ones who never break\nStanding tall through the earthquake\nScream it loud, let the world shake\nWe are the ones who never break\n\n[Bridge]\n[Soft]\nIn the silence before the storm\nWhen the doubt creeps in at night\nRemember every scar you carry\nIs proof you survived the fight\n\n[Guitar Solo]\n[Electric Guitar]\n[Instrumental]\n\n[Chorus]\n[Belted]\nWe are the ones who never break\nStanding tall through the earthquake\nScream it loud, let the world shake\nWe are the ones who never break\n\n[Chorus]\nWe are the ones who never break\n\n[Outro]\n[Instrumental]\n[End]",
+  "do": [
+    "Double the final chorus for maximum anthemic impact",
+    "Include a guitar solo section — it's essential for rock anthems",
+    "Drop the energy in the bridge to create contrast before the final explosion",
+    "Use 'we' and 'us' language — anthems are communal, not individual",
+    "Front-load the chorus with the strongest, most chantable line"
+  ],
+  "dont": [
+    "Don't write quiet or introspective lyrics for the chorus",
+    "Don't skip the guitar solo — rock fans expect it",
+    "Don't use electronic or synth-heavy production cues",
+    "Don't make verses too long — 4 lines, then move",
+    "Don't end softly — rock anthems finish with full power or a final hit"
+  ]
+}
