@@ -6,8 +6,55 @@ Create a reusable voice template for consistent narration across all scenes.
 
 ## Prerequisites
 
-- OmniVoice installed: `pip install omnivoice` (Python 3.10)
-- Server running: `curl http://127.0.0.1:8100/health`
+- GLA server running: `curl http://127.0.0.1:8100/health`
+- OmniVoice installed in the Python environment used by the agent (see below)
+
+### Installing OmniVoice
+
+OmniVoice is a multilingual zero-shot TTS model (600+ languages) with voice cloning.
+Source: https://github.com/tuannguyenhoangit-droid/OmniVoice
+
+**Step 1 — Install PyTorch** (in a fresh venv recommended):
+
+```bash
+# Apple Silicon (CPU — recommended for GLA, MPS produces gibberish)
+pip install torch==2.8.0 torchaudio==2.8.0
+
+# NVIDIA GPU
+pip install torch==2.8.0+cu128 torchaudio==2.8.0+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+```
+
+**Step 2 — Install OmniVoice** (choose one):
+
+```bash
+# From PyPI (stable)
+pip install omnivoice
+
+# From source
+pip install git+https://github.com/k2-fsa/OmniVoice.git
+
+# Dev install
+git clone https://github.com/k2-fsa/OmniVoice.git && cd OmniVoice && pip install -e .
+```
+
+**Step 3 — Point GLA to the right Python** (if OmniVoice is in a separate venv):
+
+```bash
+# Set TTS_PYTHON_BIN to the venv's python3 before starting the agent
+export TTS_PYTHON_BIN=/path/to/omnivoice-venv/bin/python3
+```
+
+If OmniVoice is installed in the same env as the agent, no extra config needed.
+
+**Verify installation:**
+```bash
+python3 -c "from omnivoice import OmniVoice; print('OK')"
+```
+
+**HuggingFace mirror** (if model download is slow):
+```bash
+export HF_ENDPOINT="https://hf-mirror.com"
+```
 
 ## Workflow
 
