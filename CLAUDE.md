@@ -38,6 +38,7 @@ curl -s http://127.0.0.1:8100/health
 18. **Statusline** — GLA statusline auto-shows at bottom of Claude Code. Configured by `setup.sh`. Shows: extension status, auth, tier, project, scene counts, img/vid/4K progress, queue. Reads Claude session stats from stdin for model/ctx%/rate limits.
 19. **Token auto-refresh** — Extension refreshes token every 45 min. Auto-opens Flow tab if none exists. Side panel warns when token stale (>60 min). Resends cached token on WS reconnect.
 20. **No throwaway scripts** — NEVER write a Python script, shell script, or any file to loop over API requests. All operations must be done inline with `curl` calls. To submit N requests, use `POST /api/requests/batch`. The server throttles automatically — no loops needed.
+21. **Scenes are mutable** — use `PATCH /api/scenes/{sid}` to update `prompt`, `video_prompt`, `narrator_text`, `character_names` after creation. Don't delete and recreate — patch instead.
 
 **Complete video_prompt example:**
 ```

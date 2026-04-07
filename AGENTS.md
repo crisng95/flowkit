@@ -25,6 +25,7 @@ curl -s http://127.0.0.1:8100/health
 10. **Server handles throttling** — worker enforces max 5 concurrent requests + 10s cooldown. Submit ALL requests via `/batch`; do NOT manually stagger or loop.
 11. **Video prompts use sub-clip timing** — structure 8s video as time segments: `0-3s: [action]. 3-6s: [action]. 6-8s: [action].`
 12. **Character dialogue in sub-clips** — embed speech in quotes: `Luna says "Goodnight."` Max 10-15 words per character per 2-3s segment.
+13. **Scenes are mutable** — use `PATCH /api/scenes/{sid}` to update `prompt`, `video_prompt`, `narrator_text`, `character_names` after creation. Don't delete and recreate — patch instead.
 
 ## Pipeline Order
 
