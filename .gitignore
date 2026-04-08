@@ -3,6 +3,7 @@ __pycache__/
 *.db
 .env
 youtube
+agent/active_project.json
 
 # Generated AI tool configs (run: python setup.py)
 .claude/commands/gla:*

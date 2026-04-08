@@ -44,7 +44,24 @@ Display in a readable table:
 | 4K | `veo_3_1_upsampler_4k` |
 | 1080p | `veo_3_1_upsampler_1080p` |
 
-## Step 2: Change a Model
+## Step 2: Quick Select (Interactive)
+
+If no specific model key was provided as argument, present an `AskUserQuestion` selector with presets:
+
+**For video model:**
+Use `AskUserQuestion` with options:
+- label: "VEO 3.1 Ultra (Recommended)", description: "Default high quality · fast queue · current default"
+- label: "VEO 3.1 Lite", description: "Lower quality · fastest · no r2v support"
+- label: "VEO 3.1 Low Priority", description: "Same ultra quality · slower queue · saves credits"
+
+After user picks, apply the matching preset from the Quick Switch Presets section below.
+
+**For image model:**
+Use `AskUserQuestion` with options:
+- label: "GEM_PIX_2 (Recommended)", description: "Gemini Pix 2 · current default"
+- label: "NARWHAL", description: "Alternative image model"
+
+## Step 3: Change a Model (Manual)
 
 ### Change video model (all orientations for a tier + gen type)
 
@@ -105,7 +122,7 @@ curl -s -X PATCH http://127.0.0.1:8100/api/models \
   }'
 ```
 
-## Step 3: Verify
+## Step 4: Verify
 
 After changing, verify the update took effect:
 

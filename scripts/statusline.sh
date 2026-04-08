@@ -33,6 +33,7 @@ trap 'rm -rf "$TMP"' EXIT
 curl -s --max-time 1 "$BASE/health" >"$TMP/health" 2>/dev/null &
 curl -s --max-time 1 "$BASE/api/flow/status" >"$TMP/flow" 2>/dev/null &
 curl -s --max-time 1 "$BASE/api/flow/credits" >"$TMP/credits" 2>/dev/null &
+curl -s --max-time 1 "$BASE/api/active-project" >"$TMP/active_project" 2>/dev/null &
 curl -s --max-time 1 "$BASE/api/projects" >"$TMP/projects" 2>/dev/null &
 curl -s --max-time 1 "$BASE/api/requests/pending" >"$TMP/pending" 2>/dev/null &
 curl -s --max-time 1 "$BASE/api/requests?status=PROCESSING" >"$TMP/processing" 2>/dev/null &
@@ -73,17 +74,22 @@ case "$tier" in
   *) credits_info="$tier" ;;
 esac
 
-# Project — single jq call for name + id
-project=$(cat "$TMP/projects")
-if [ -z "$project" ] || [ "$project" = "[]" ]; then
-  echo -e "${CLAUDE:+$CLAUDE | }GLA: ${ext_icon}"
-  exit 0
+# Project — use active-project endpoint (falls back to most recent)
+ap=$(cat "$TMP/active_project" 2>/dev/null)
+proj_id=$(echo "$ap" | jq -r '.project_id // empty' 2>/dev/null)
+proj_name=$(echo "$ap" | jq -r '.project_name // empty' 2>/dev/null)
+vid_id=$(echo "$ap" | jq -r '.video_id // empty' 2>/dev/null)
+
+# Fallback to projects list if active-project endpoint unavailable
+if [ -z "$proj_id" ]; then
+  project=$(cat "$TMP/projects")
+  if [ -z "$project" ] || [ "$project" = "[]" ]; then
+    echo -e "${CLAUDE:+$CLAUDE | }GLA: ${ext_icon}"
+    exit 0
+  fi
+  IFS='|' read -r proj_name proj_id <<< "$(echo "$project" | jq -r '.[-1] | [(.name // "?"), (.id // "")] | join("|")' 2>/dev/null)"
+  vid_id=$(curl -s --max-time 1 "$BASE/api/videos?project_id=$proj_id" 2>/dev/null | jq -r '.[-1].id // ""' 2>/dev/null)
 fi
-
-IFS='|' read -r proj_name proj_id <<< "$(echo "$project" | jq -r '.[-1] | [(.name // "?"), (.id // "")] | join("|")' 2>/dev/null)"
-
-# Video (depends on proj_id)
-vid_id=$(curl -s --max-time 1 "$BASE/api/videos?project_id=$proj_id" 2>/dev/null | jq -r '.[-1].id // ""' 2>/dev/null)
 
 if [ -z "$vid_id" ]; then
   echo -e "${CLAUDE:+$CLAUDE | }GLA: ${ext_icon} $(echo "$proj_name" | cut -c1-15)"
