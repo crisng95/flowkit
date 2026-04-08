@@ -686,7 +686,15 @@ async def _build_video_prompt(base_prompt: str, scene: dict, project_id: str | N
             if voices:
                 parts.append("Character voices: " + ". ".join(voices) + ".")
 
-    parts.append("Audio: No background music. No narration. No voiceover. No storytelling voice. Keep only natural sound effects and ambient sounds.")
+    # Check project-level allow_music flag
+    allow_music = False
+    if project_id:
+        project = await crud.get_project(project_id)
+        if project and project.get("allow_music"):
+            allow_music = True
+
+    if not allow_music:
+        parts.append("Audio: No background music. No narration. No voiceover. No storytelling voice. Keep only natural sound effects and ambient sounds.")
     return " ".join(parts)
 
 

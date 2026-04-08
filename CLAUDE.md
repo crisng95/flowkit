@@ -39,7 +39,8 @@ curl -s http://127.0.0.1:8100/health
 19. **Token auto-refresh** — Extension refreshes token every 45 min. Auto-opens Flow tab if none exists. Side panel warns when token stale (>60 min). Resends cached token on WS reconnect.
 20. **No throwaway scripts** — NEVER write a Python script, shell script, or any file to loop over API requests. All operations must be done inline with `curl` calls. To submit N requests, use `POST /api/requests/batch`. The server throttles automatically — no loops needed.
 21. **Scenes are mutable** — use `PATCH /api/scenes/{sid}` to update `prompt`, `video_prompt`, `narrator_text`, `character_names` after creation. Don't delete and recreate — patch instead.
-22. **Fact-check before scripting** — ALWAYS research events via web search before writing project stories, scene prompts, or narrator text. Facts (events, dates, names, operations, outcomes) MUST match real sources. Editorial opinion and analysis are allowed but must be framed as such. Never invent events, operation names, or statistics. See `content_policy` in channel rules for full guidelines.
+22. **Fact-check before scripting** — ALWAYS research events via web search before writing project stories, scene prompts, or narrator text.
+23. **Review before upscale** — ALWAYS run `/gla:review-video` (light mode) after video generation and before upscaling. Scenes scoring < 7.5 get their `video_prompt` updated based on review errors/fix_guide, then regen video. Max 2 review-regen cycles per scene. See `skills/gla:review-video.md` for error catalog and scoring. Facts (events, dates, names, operations, outcomes) MUST match real sources. Editorial opinion and analysis are allowed but must be framed as such. Never invent events, operation names, or statistics. See `content_policy` in channel rules for full guidelines.
 
 **Complete video_prompt example:**
 ```
@@ -287,6 +288,9 @@ Returns slug + path + meta. Auto-creates directory structure + meta.json on firs
 7.  Gen videos            POST /api/requests/batch (all scenes)
     ↳ Poll every 30s: GET /api/requests/batch-status?video_id=<VID>&type=GENERATE_VIDEO
     ↳ Wait for done=true (videos take 2-5 min each)
+7.5 Review videos         POST /api/videos/{vid}/review?project_id=<PID>&mode=light
+    ↳ Scores each scene (0-10) on 6 dimensions via Claude Vision
+    ↳ Pass: score >= 7.5 | Fail: update video_prompt from errors → regen → re-review (max 2 cycles)
 8.  (Optional) Upscale    POST /api/requests/batch (TIER_TWO only)
     ↳ Poll: GET /api/requests/batch-status?video_id=<VID>&type=UPSCALE_VIDEO
 9.  (Optional) TTS        Create voice template → POST /api/videos/{vid}/narrate

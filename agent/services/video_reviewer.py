@@ -421,7 +421,7 @@ async def review_scene_video(
         errors=errors,
         usable_segments=usable_segments,
         fix_guide=_fix_guide(dims_dict, errors),
-        frames_analyzed=len(frames),
+        frames_analyzed=n_frames,
         fps_used=fps,
         has_critical_errors=has_critical,
     )

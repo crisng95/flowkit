@@ -27,6 +27,7 @@ curl -s http://127.0.0.1:8100/health
 12. **Character dialogue in sub-clips** — embed speech in quotes: `Luna says "Goodnight."` Max 10-15 words per character per 2-3s segment.
 13. **Scenes are mutable** — use `PATCH /api/scenes/{sid}` to update `prompt`, `video_prompt`, `narrator_text`, `character_names` after creation. Don't delete and recreate — patch instead.
 14. **Fact-check before scripting** — ALWAYS research events via web search before writing project stories, scene prompts, or narrator text. Facts (events, dates, names, operations, outcomes) MUST match real sources. Editorial opinion and analysis are allowed but must be framed as such. Never invent events, operation names, or statistics.
+15. **Review before upscale** — ALWAYS run `/gla:review-video` (light mode) after video generation, before upscaling. Scenes scoring < 7.5 get `video_prompt` updated from review errors, then regen video. Max 2 review-regen cycles.
 
 ## Pipeline Order
 
@@ -42,6 +43,8 @@ curl -s http://127.0.0.1:8100/health
                      Wait for done=true, verify image_media_id = UUID
 7. Gen videos        POST /api/requests/batch → poll /batch-status?video_id=<VID>
                      Wait for done=true (videos take 2-5 min each)
+7.5 Review videos    POST /api/videos/{vid}/review?mode=light (Claude Vision quality check)
+                     Pass: score >= 7.5 | Fail: update video_prompt → regen → re-review (max 2 cycles)
 8. (Optional) 4K     POST /api/requests/batch (TIER_TWO only)
 9. (Optional) TTS    Create voice template → POST /api/videos/{vid}/narrate
 10. Concat           ffmpeg normalize + concat

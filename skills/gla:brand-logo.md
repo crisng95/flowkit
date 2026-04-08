@@ -2,7 +2,7 @@
 
 Overlay a channel brand logo on final video and thumbnails to cover the Veo watermark.
 
-Usage: `/gla:brand-logo <channel_name> <video_path> [--size 200] [--thumbnails]`
+Usage: `/gla:brand-logo <channel_name> <video_path> [--size 220] [--thumbnails]`
 
 ## Step 1: Locate channel icon
 
@@ -27,25 +27,25 @@ The icon must cover the **Veo watermark** ("V" text) at the bottom-right corner 
 
 | Resolution | Icon Size | Position | Notes |
 |-----------|-----------|----------|-------|
-| 3840x2160 (4K) | 200x200 | `overlay=W-w-16:H-h-16` | Covers Veo "V" watermark fully |
-| 1920x1080 (1080p) | 120x120 | `overlay=W-w-12:H-h-12` | Scaled proportionally |
-| 1280x720 (origin) | 100x100 | `overlay=W-w-8:H-h-8` | Veo origin video — watermark ~40px, 100px icon covers it |
+| 3840x2160 (4K) | 220x220 | `overlay=W-w-40:H-h-40` | Covers Veo "V" watermark fully |
+| 1920x1080 (1080p) | 130x130 | `overlay=W-w-24:H-h-24` | Scaled proportionally |
+| 1280x720 (origin) | 110x110 | `overlay=W-w-16:H-h-16` | Veo origin video — watermark ~40px, 110px icon covers it |
 
 User can override with `--size N` (NxN pixels).
 
 **Auto-detect resolution** from input video:
 ```bash
 RES=$(ffprobe -v quiet -show_entries stream=width -of csv=p=0 "$VIDEO")
-if [ "$RES" -ge 3840 ]; then SIZE=200
-elif [ "$RES" -ge 1920 ]; then SIZE=120
-else SIZE=100; fi
+if [ "$RES" -ge 3840 ]; then SIZE=220; PAD=40
+elif [ "$RES" -ge 1920 ]; then SIZE=130; PAD=24
+else SIZE=110; PAD=16; fi
 ```
 
 ## Step 3: Apply to video
 
 ```bash
 ffmpeg -y -i "$VIDEO" -i "$ICON" \
-  -filter_complex "[1:v]scale=${SIZE}:${SIZE},format=rgba[icon];[0:v][icon]overlay=W-w-16:H-h-16" \
+  -filter_complex "[1:v]scale=${SIZE}:${SIZE},format=rgba[icon];[0:v][icon]overlay=W-w-${PAD}:H-h-${PAD}" \
   -c:v libx264 -preset fast -crf 18 -r 24 -pix_fmt yuv420p \
   -c:a copy -movflags +faststart \
   "${VIDEO%.mp4}_branded.mp4"
@@ -101,4 +101,4 @@ youtube/
 
 - Directory `youtube/channels/` is **gitignored** — local only per machine
 - Icon should be **square PNG** with transparent background for best overlay
-- Minimum 200x200 source resolution (scaled down for smaller videos)
+- Minimum 220x220 source resolution (scaled down for smaller videos)

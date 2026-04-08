@@ -85,6 +85,9 @@ state = {
     'videos_done':    sum(1 for s in scenes if s.get(f'{PREFIX}_video_status') == 'COMPLETED'),
     'videos_pending': [s['id'] for s in scenes if s.get(f'{PREFIX}_video_status') != 'COMPLETED'],
 
+    # Stage 2.5: review
+    'review_done':    False,  # set True after review passes or max cycles
+
     # Stage 3: upscale
     'upscale_total':   N,
     'upscale_done':    sum(1 for s in scenes if s.get(f'{PREFIX}_upscale_status') == 'COMPLETED'),
@@ -110,6 +113,7 @@ Detected state for <project_name> [HORIZONTAL]:
   Refs:      5/5  ✓
   Images:    50/50 ✓
   Videos:    50/50 ✓
+  Review:    passed (48/50 good, 2 fixed after regen)
   Upscale:   39/50  ← in progress
   TTS:       50/50 ✓
   Downloads: 39/50  ← behind upscale
@@ -138,8 +142,12 @@ elif state['images_done'] < state['images_total']:
 elif state['videos_done'] < state['videos_total']:
     stages_to_run.append('VIDEOS')
 
-# Upscale (after videos done, or already in progress)
-if upscale_flag and state['videos_done'] == state['videos_total']:
+# Review (after videos done, before upscale)
+if state['videos_done'] == state['videos_total'] and not state['review_done']:
+    stages_to_run.append('REVIEW')
+
+# Upscale (after review passes)
+if upscale_flag and state['videos_done'] == state['videos_total'] and state['review_done']:
     if state['upscale_done'] < state['upscale_total']:
         stages_to_run.append('UPSCALE')
 
@@ -157,7 +165,7 @@ if concat_flag:
 ```
 
 **Parallelism rules:**
-- `REFS` → `IMAGES` → `VIDEOS` are **sequential** (each requires previous)
+- `REFS` → `IMAGES` → `VIDEOS` → `REVIEW` are **sequential** (each requires previous)
 - `UPSCALE` + `TTS` can run **simultaneously** (spawn 2 agents)
 - `DOWNLOAD` runs **rolling** alongside UPSCALE (check each poll cycle)
 - `CONCAT` runs **after** UPSCALE + DOWNLOAD + TTS all complete
@@ -216,9 +224,56 @@ Batch 5. Poll 15s. Each video takes 2-5 min.
 
 ---
 
+### Stage 2.5 — Review Videos
+
+Only run after all videos COMPLETED. Uses `/gla:review-video` to catch AI generation errors before upscaling.
+
+```bash
+# Run light review on all completed videos
+curl -X POST "http://127.0.0.1:8100/api/videos/<VID>/review?project_id=<PID>&mode=light&orientation=<ORIENTATION>"
+# Poll until complete
+```
+
+**Interpret results:**
+- Scenes scoring **7.5+** (good/excellent) → pass, move to upscale
+- Scenes scoring **4.0–7.4** (acceptable/poor) → update `video_prompt` based on `fix_guide` + `errors`, then regen video
+- Scenes scoring **0–3.9** (unusable) → update `video_prompt` based on errors, regen image first (`REGENERATE_IMAGE`), then regen video
+
+**Fix-and-regen loop (max 2 cycles per scene):**
+
+```python
+for cycle in range(2):
+    review = run_review(VID, mode='light')
+    bad_scenes = [s for s in review if s['total_score'] < 7.5]
+    if not bad_scenes:
+        break  # all pass
+
+    for scene in bad_scenes:
+        # Update video_prompt based on review errors + fix_guide
+        # e.g. add "static camera" for camera drift, "no brand logos" for logo errors
+        new_prompt = improve_prompt(scene['video_prompt'], scene['errors'], scene['fix_guide'])
+        curl_patch(f"/api/scenes/{scene['scene_id']}", {"video_prompt": new_prompt})
+
+        if scene['total_score'] < 4.0:
+            # Unusable — regen image first (cascades video)
+            submit_request("REGENERATE_IMAGE", scene['scene_id'])
+        else:
+            # Poor/acceptable — regen video only
+            submit_request("GENERATE_VIDEO", scene['scene_id'])
+
+    # Poll until all regens complete, then re-review
+```
+
+**After review passes (or max cycles exhausted):**
+- Log scenes that still fail with their scores and errors
+- Proceed to upscale with all scenes that scored 7.5+
+- Report skipped scenes at end
+
+---
+
 ### Stage 3 — Upscale (4K)
 
-Only run after all videos COMPLETED. TIER_TWO only.
+Only run after review passes (or max review cycles exhausted). TIER_TWO only.
 
 ```bash
 curl -X POST http://127.0.0.1:8100/api/requests \
@@ -342,6 +397,8 @@ while stages_to_run:
 | Ref image FAILED | `media_id` missing after request COMPLETED | Resubmit `GENERATE_CHARACTER_IMAGE` once |
 | Scene image FAILED | `horizontal_image_status == FAILED` | Resubmit `REGENERATE_IMAGE` once |
 | Video FAILED | `horizontal_video_status == FAILED` | Resubmit `GENERATE_VIDEO` once |
+| Review FAILED (score < 7.5) | `total_score < 7.5` in review results | Update `video_prompt` from `fix_guide` + `errors`, regen video (max 2 cycles) |
+| Review UNUSABLE (score < 4.0) | `total_score < 4.0` in review results | Update `video_prompt`, regen image first (`REGENERATE_IMAGE`), then video |
 | Upscale FAILED | `horizontal_upscale_status == FAILED` | Resubmit `UPSCALE_VIDEO` once |
 | Download 4KB (XML error) | `ffprobe` returns 0s or non-numeric | Re-download (URL still valid for ~8h) |
 | Worker stalled | pending > 0, processing = 0 for 2+ min | Print warning; suggest server restart |
@@ -358,6 +415,7 @@ Pipeline complete for <project_name>
   Refs:      5/5
   Images:    50/50
   Videos:    50/50
+  Review:    passed (48 good, 2 fixed after regen)
   Upscale:   50/50  (1 retry)
   Downloads: 50/50
   TTS:       50/50
