@@ -21,6 +21,7 @@ from agent.api.reviews import router as reviews_router
 from agent.api.tts import router as tts_router
 from agent.api.materials import router as materials_router
 from agent.api.music import router as music_router
+from agent.api.models import router as models_router
 from agent.worker.processor import get_worker_controller
 from agent.services.flow_client import get_flow_client
 from agent.services.event_bus import event_bus
@@ -126,6 +127,7 @@ app.include_router(reviews_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(materials_router, prefix="/api")
 app.include_router(music_router, prefix="/api")
+app.include_router(models_router)
 
 
 import secrets as _secrets
