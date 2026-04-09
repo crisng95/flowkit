@@ -8,6 +8,7 @@ class VideoCreate(BaseModel):
     title: str
     description: Optional[str] = None
     display_order: int = 0
+    orientation: Optional[str] = None
 
 
 class VideoUpdate(BaseModel):
@@ -15,6 +16,7 @@ class VideoUpdate(BaseModel):
     description: Optional[str] = None
     display_order: Optional[int] = None
     status: Optional[VideoStatus] = None
+    orientation: Optional[str] = None
     vertical_url: Optional[str] = None
     horizontal_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
@@ -32,6 +34,7 @@ class Video(BaseModel):
     description: Optional[str] = None
     display_order: int = 0
     status: str = "DRAFT"
+    orientation: Optional[str] = None
     vertical_url: Optional[str] = None
     horizontal_url: Optional[str] = None
     thumbnail_url: Optional[str] = None

@@ -5,7 +5,7 @@ Poll project pipeline status every N seconds, detect state changes across all st
 Usage: `/gla:monitor [project_id] [orientation] [--download] [--interval N]`
 
 - `project_id` — omit to use most recently active project
-- `orientation` — `HORIZONTAL` (default) or `VERTICAL`
+- `orientation` — `HORIZONTAL` or `VERTICAL` (auto-detected from video.orientation if omitted)
 - `--download` — auto-download new upscales to `output/{slug}/4k/`
 - `--interval N` — poll interval in seconds (default: 30)
 
@@ -121,7 +121,7 @@ wait
 
 ### 5b. Compute snapshot
 
-Substitute `PREFIX` = `horizontal` or `vertical` based on orientation.
+Detect orientation: if not passed as argument, read from `GET /api/videos/{vid}` → `orientation` field. Fall back to `HORIZONTAL` only if API returns null. Set `PREFIX` = detected orientation lowercase.
 
 ```python
 import json, os, glob, time
@@ -132,7 +132,7 @@ pending = json.load(open('/tmp/gla_pending.json'))
 processing = json.load(open('/tmp/gla_processing.json'))
 failed  = json.load(open('/tmp/gla_failed.json'))
 
-PREFIX = 'horizontal'  # or 'vertical'
+PREFIX = video_orientation.lower()  # from GET /api/videos/{vid} → orientation field; fall back to 'horizontal'
 OUTDIR = 'output/<slug>'
 TOTAL  = len(scenes)
 TOTAL_CHARS = len(chars)

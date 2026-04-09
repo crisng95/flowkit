@@ -31,21 +31,29 @@ Print table:
 | Entity | Type | media_id | ref_url | Ready? |
 |--------|------|----------|---------|--------|
 
-### 4. Videos
+### 4. Videos + Orientation Detection
 ```bash
 curl -s "http://127.0.0.1:8100/api/videos?project_id=<PID>"
 ```
+
+**CRITICAL:** Read the `orientation` field from the video response. This determines which scene fields to read:
+- `HORIZONTAL` → use `horizontal_image_status`, `horizontal_video_status`, `horizontal_upscale_status`
+- `VERTICAL` → use `vertical_image_status`, `vertical_video_status`, `vertical_upscale_status`
+- `null` → auto-detect: check first scene's fields, prefer whichever has a non-PENDING status
+
+Set `ORI` = the detected orientation (lowercase: `horizontal` or `vertical`). Display it in the header.
 
 ### 5. For each video — scenes
 ```bash
 curl -s "http://127.0.0.1:8100/api/scenes?video_id=<VID>"
 ```
 
-Print table (sorted by display_order):
-| # | Prompt (50 chars) | Refs | Image | Video | Upscale |
-|---|-------------------|------|-------|-------|---------|
+Print table (sorted by display_order), using `${ORI}_*` prefix fields:
+| # | Prompt (50 chars) | Refs | Image (${ORI}) | Video (${ORI}) | Upscale (${ORI}) |
+|---|-------------------|------|----------------|----------------|------------------|
 
 Where Image/Video/Upscale show: `OK`, `PENDING`, `PROCESSING`, `FAILED`
+Read from: `${ORI}_image_status`, `${ORI}_video_status`, `${ORI}_upscale_status`
 
 ### 6. Pending/processing requests
 ```bash
@@ -54,7 +62,8 @@ curl -s http://127.0.0.1:8100/api/requests/pending
 
 ### 7. Summary
 
-Print counts: X/Y refs ready, X/Y images done, X/Y videos done, X/Y upscaled.
+Print orientation and counts: `Orientation: ${ORI}` then X/Y refs ready, X/Y images done, X/Y videos done, X/Y upscaled.
+Use `${ORI}_image_status`, `${ORI}_video_status`, `${ORI}_upscale_status` for counting.
 
 Suggest next action:
 - If refs missing → "Run /gla:gen-refs <PID>"

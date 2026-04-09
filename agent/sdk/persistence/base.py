@@ -142,6 +142,7 @@ class Repository(ABC):
         title: str,
         description: Optional[str] = None,
         display_order: int = 0,
+        orientation: Optional[str] = None,
     ) -> Video:
         """Insert a new video row and return the Video."""
 

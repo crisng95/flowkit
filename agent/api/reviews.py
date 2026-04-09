@@ -29,9 +29,12 @@ async def review_video_endpoint(
     if not video:
         raise HTTPException(404, "Video not found")
 
-    # Auto-detect orientation from scene data if not provided
+    # Use video-level orientation first, then fall back to scene auto-detect
     if not orientation:
-        orientation = await _detect_orientation(vid)
+        if video.get("orientation"):
+            orientation = video["orientation"]
+        else:
+            orientation = await _detect_orientation(vid)
     else:
         orientation = orientation.upper()
 
@@ -65,9 +68,13 @@ async def review_scene_endpoint(
     if scene.get("video_id") != vid:
         raise HTTPException(404, "Scene does not belong to this video")
 
-    # Auto-detect orientation from scene data if not provided
+    # Use video-level orientation first, then fall back to scene auto-detect
     if not orientation:
-        orientation = await _detect_orientation(vid)
+        video = await get_video(vid)
+        if video and video.get("orientation"):
+            orientation = video["orientation"]
+        else:
+            orientation = await _detect_orientation(vid)
     else:
         orientation = orientation.upper()
 
@@ -75,7 +82,7 @@ async def review_scene_endpoint(
 
     logger.info("Starting %s review for scene %s (%s)", mode, sid, orientation)
     try:
-        result = await review_scene_video(scene, characters, mode=mode, orientation=orientation)
+        result = await review_scene_video(scene, characters, mode=mode, orientation=orientation, project_id=project_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:

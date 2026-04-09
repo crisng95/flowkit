@@ -19,7 +19,7 @@ def _validate_table(table: str) -> None:
 _COLUMNS = {
     "character": {"name", "entity_type", "description", "image_prompt", "voice_description", "reference_image_url", "media_id", "updated_at"},
     "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "narrator_voice", "narrator_ref_audio", "material", "updated_at"},
-    "video": {"title", "description", "display_order", "status", "vertical_url", "horizontal_url",
+    "video": {"title", "description", "display_order", "status", "orientation", "vertical_url", "horizontal_url",
               "thumbnail_url", "duration", "resolution", "youtube_id", "privacy", "tags", "updated_at"},
     "scene": {"prompt", "image_prompt", "video_prompt", "character_names", "chain_type",
               "vertical_image_url", "vertical_image_media_id", "vertical_image_status",
@@ -159,13 +159,13 @@ async def get_project_characters(project_id: str) -> list[dict]:
 
 # ─── Video ──────────────────────────────────────────────────
 
-async def create_video(project_id: str, title: str, description: str = None, display_order: int = 0) -> dict:
+async def create_video(project_id: str, title: str, description: str = None, display_order: int = 0, orientation: str = None) -> dict:
     db = await get_db()
     vid, now = _uuid(), _now()
     async with _db_lock:
         await db.execute(
-            "INSERT INTO video (id,project_id,title,description,display_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
-            (vid, project_id, title, description, display_order, now, now))
+            "INSERT INTO video (id,project_id,title,description,display_order,orientation,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+            (vid, project_id, title, description, display_order, orientation, now, now))
         await db.commit()
     return await _get_with_db(db, "video", "id", vid)
 

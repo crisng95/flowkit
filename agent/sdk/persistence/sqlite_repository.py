@@ -62,6 +62,7 @@ class SQLiteRepository(Repository):
             description=row.get("description"),
             display_order=row.get("display_order", 0),
             status=row.get("status", "DRAFT"),
+            orientation=row.get("orientation"),
             vertical_url=row.get("vertical_url"),
             horizontal_url=row.get("horizontal_url"),
             thumbnail_url=row.get("thumbnail_url"),
@@ -280,6 +281,7 @@ class SQLiteRepository(Repository):
             description=video.description,
             display_order=video.display_order,
             status=video.status,
+            orientation=video.orientation,
             vertical_url=video.vertical_url,
             horizontal_url=video.horizontal_url,
             thumbnail_url=video.thumbnail_url,
@@ -297,12 +299,14 @@ class SQLiteRepository(Repository):
         title: str,
         description: Optional[str] = None,
         display_order: int = 0,
+        orientation: Optional[str] = None,
     ) -> Video:
         row = await crud.create_video(
             project_id=project_id,
             title=title,
             description=description,
             display_order=display_order,
+            orientation=orientation,
         )
         return self._row_to_video(row)
 

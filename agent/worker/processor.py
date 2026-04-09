@@ -213,13 +213,46 @@ async def _prerequisites_met(req: dict, orientation: str) -> bool:
     return True
 
 
+async def _resolve_orientation(req: dict) -> str:
+    """Resolve orientation from request, falling back to video table, then VERTICAL."""
+    orient = req.get("orientation")
+    if orient:
+        return orient
+    vid = req.get("video_id")
+    if vid:
+        video = await crud.get_video(vid)
+        if video and video.get("orientation"):
+            return video["orientation"]
+    return "VERTICAL"
+
+
 async def _process_one(req: dict, deferred: dict = None, retry_after: dict = None):
     rid, req_type = req["id"], req["type"]
-    orientation = req.get("orientation", "VERTICAL")
+    orientation = await _resolve_orientation(req)
 
     if await _is_already_completed(req, orientation):
         logger.info("Request %s skipped — already COMPLETED", rid[:8])
-        await crud.update_request(rid, status="COMPLETED", error_message="skipped: already completed")
+        # Copy existing result data from scene/character onto the request record
+        skip_kwargs = {"status": "COMPLETED", "error_message": "skipped: already completed"}
+        prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
+        if req_type in ("GENERATE_CHARACTER_IMAGE", "REGENERATE_CHARACTER_IMAGE", "EDIT_CHARACTER_IMAGE"):
+            char = await crud.get_character(req.get("character_id"))
+            if char:
+                skip_kwargs["media_id"] = char.get("media_id")
+                skip_kwargs["output_url"] = char.get("image_url")
+        else:
+            scene = await crud.get_scene(req.get("scene_id"))
+            if scene:
+                if req_type == "GENERATE_IMAGE":
+                    skip_kwargs["media_id"] = scene.get(f"{prefix}_image_media_id")
+                    skip_kwargs["output_url"] = scene.get(f"{prefix}_image_url")
+                elif req_type in ("GENERATE_VIDEO", "GENERATE_VIDEO_REFS"):
+                    skip_kwargs["media_id"] = scene.get(f"{prefix}_video_media_id")
+                    skip_kwargs["output_url"] = scene.get(f"{prefix}_video_url")
+                elif req_type == "UPSCALE_VIDEO":
+                    skip_kwargs["media_id"] = scene.get(f"{prefix}_upscale_media_id")
+                    skip_kwargs["output_url"] = scene.get(f"{prefix}_upscale_url")
+        await crud.update_request(rid, **skip_kwargs)
         return
 
     # Check prerequisites before dispatching — don't burn retries on missing deps
@@ -341,7 +374,7 @@ async def _recover_entity_not_found(req: dict) -> bool:
     """When Google returns 'entity not found', re-upload the image to get a fresh media_id."""
     req_type = req.get("type", "")
     pid = req.get("project_id", "")
-    orientation = req.get("orientation", "VERTICAL")
+    orientation = await _resolve_orientation(req)
     prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
 
     # Scene-based requests: re-upload scene image
@@ -438,7 +471,8 @@ async def _mark_scene_failed(req: dict):
     scene_id = req.get("scene_id")
     if not scene_id:
         return
-    prefix = "vertical" if req.get("orientation", "VERTICAL") == "VERTICAL" else "horizontal"
+    orientation = await _resolve_orientation(req)
+    prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
     req_type = req["type"]
     updates = {}
     if req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE"):

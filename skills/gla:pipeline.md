@@ -11,7 +11,7 @@ Options:
 - `--concat` — run concat after all stages done
 - `--notify` — send Telegram notifications at milestones
 - `--interval N` — poll interval in seconds (default: 15)
-- `--orientation H|V` — HORIZONTAL or VERTICAL (default: VERTICAL)
+- `--orientation H|V` — HORIZONTAL or VERTICAL (auto-detected from video.orientation if omitted)
 
 Examples:
 - `/gla:pipeline` — detect state and continue most recent project
@@ -63,7 +63,7 @@ import json, glob as globmod, os
 
 scenes = json.load(open('/tmp/gla_scenes.json'))
 chars  = json.load(open('/tmp/gla_chars.json'))
-PREFIX = 'horizontal'  # or 'vertical'
+PREFIX = video_orientation.lower()  # from GET /api/videos/{vid} → orientation field; 'horizontal' or 'vertical'
 N      = len(scenes)
 
 def pct(done, total):

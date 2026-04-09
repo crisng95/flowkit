@@ -96,6 +96,9 @@ if [ -z "$vid_id" ]; then
   exit 0
 fi
 
+# Fetch video for orientation
+video=$(curl -s --max-time 1 "$BASE/api/videos/$vid_id" 2>/dev/null)
+
 # Scenes — single jq call extracts all stats at once
 scenes=$(curl -s --max-time 1 "$BASE/api/scenes?video_id=$vid_id" 2>/dev/null)
 IFS='|' read -r total h_img h_vid h_up v_img v_vid v_up <<< "$(echo "$scenes" | jq -r '[
@@ -108,11 +111,16 @@ IFS='|' read -r total h_img h_vid h_up v_img v_vid v_up <<< "$(echo "$scenes" | 
   ([.[] | select(.vertical_upscale_status == "COMPLETED")] | length)
 ] | map(tostring) | join("|")' 2>/dev/null)"
 
-# Horizontal first, fallback vertical
-if [ "$h_img" != "0" ] || [ "$h_vid" != "0" ]; then
-  img_done=$h_img; vid_done=$h_vid; up_done=$h_up
+# Use video.orientation from API, fallback to heuristic
+vid_orient=$(echo "$video" | jq -r '.orientation // empty' 2>/dev/null)
+if [ "$vid_orient" = "HORIZONTAL" ]; then
+  img_done=$h_img; vid_done=$h_vid; up_done=$h_up; ori_label="H"
+elif [ "$vid_orient" = "VERTICAL" ]; then
+  img_done=$v_img; vid_done=$v_vid; up_done=$v_up; ori_label="V"
+elif [ "$h_img" != "0" ] || [ "$h_vid" != "0" ]; then
+  img_done=$h_img; vid_done=$h_vid; up_done=$h_up; ori_label="H"
 else
-  img_done=$v_img; vid_done=$v_vid; up_done=$v_up
+  img_done=$v_img; vid_done=$v_vid; up_done=$v_up; ori_label="V"
 fi
 
 # Queue
@@ -143,4 +151,4 @@ flow_str=""
 # Queue: pending→processing/max
 queue="${V}${pending}${R}→${V}${processing}${R}/5"
 
-echo -e "${CLAUDE:+$CLAUDE | }GLA: ${ext_icon}${flow_str} ${short_name} ${total}sc img:${V}${img_done}${R} vid:${V}${vid_done}${R} 4K:${V}${up_done}${R}↓${V}${dl_count}${R} TTS:${V}${tts_count}${R} Q:${queue}"
+echo -e "${CLAUDE:+$CLAUDE | }GLA: ${ext_icon}${flow_str} ${short_name} ${ori_label} ${total}sc img:${V}${img_done}${R} vid:${V}${vid_done}${R} 4K:${V}${up_done}${R}↓${V}${dl_count}${R} TTS:${V}${tts_count}${R} Q:${queue}"

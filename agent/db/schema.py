@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS video (
     thumbnail_url TEXT,
     duration      REAL,
     resolution    TEXT,
+    orientation   TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL')),
     youtube_id    TEXT,
     privacy       TEXT NOT NULL DEFAULT 'unlisted',
     tags          TEXT,
@@ -249,6 +250,24 @@ CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
         if "material" not in project_columns:
             await db.execute("ALTER TABLE project ADD COLUMN material TEXT DEFAULT '3d_pixar'")
             logger.info("Migrated: added material column to project table")
+        # Migration: add orientation to video table + backfill from scene data
+        cursor = await db.execute("PRAGMA table_info(video)")
+        video_columns = {row[1] for row in await cursor.fetchall()}
+        if "orientation" not in video_columns:
+            await db.execute("ALTER TABLE video ADD COLUMN orientation TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL'))")
+            # Backfill: detect orientation from completed scene fields
+            cursor = await db.execute("SELECT id FROM video")
+            video_ids = [row[0] for row in await cursor.fetchall()]
+            for vid in video_ids:
+                cursor2 = await db.execute(
+                    "SELECT horizontal_image_status, vertical_image_status FROM scene WHERE video_id = ? LIMIT 1", (vid,))
+                scene = await cursor2.fetchone()
+                if scene:
+                    if scene[0] == "COMPLETED":
+                        await db.execute("UPDATE video SET orientation = 'HORIZONTAL' WHERE id = ?", (vid,))
+                    elif scene[1] == "COMPLETED":
+                        await db.execute("UPDATE video SET orientation = 'VERTICAL' WHERE id = ?", (vid,))
+            logger.info("Migrated: added orientation column to video table with backfill")
         # Migration: create material table if missing
         cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='material'")
         if not await cursor.fetchone():

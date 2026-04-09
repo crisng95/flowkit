@@ -22,6 +22,7 @@ class Video(DomainModel):
     description: Optional[str] = None
     display_order: int = 0
     status: str = "DRAFT"
+    orientation: Optional[str] = None
     vertical_url: Optional[str] = None
     horizontal_url: Optional[str] = None
     thumbnail_url: Optional[str] = None

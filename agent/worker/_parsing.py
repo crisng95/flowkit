@@ -40,7 +40,7 @@ def _extract_media_id(result: dict, req_type: str) -> str:
     """
     data = result.get("data", result)
 
-    if req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE", "GENERATE_CHARACTER_IMAGE", "REGENERATE_CHARACTER_IMAGE"):
+    if req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE", "GENERATE_CHARACTER_IMAGE", "REGENERATE_CHARACTER_IMAGE", "EDIT_CHARACTER_IMAGE"):
         media = data.get("media", [])
         if media:
             item = media[0]
@@ -91,7 +91,7 @@ def _extract_media_id(result: dict, req_type: str) -> str:
 def _extract_output_url(result: dict, req_type: str) -> str:
     data = result.get("data", result)
 
-    if req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE", "GENERATE_CHARACTER_IMAGE", "REGENERATE_CHARACTER_IMAGE"):
+    if req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE", "GENERATE_CHARACTER_IMAGE", "REGENERATE_CHARACTER_IMAGE", "EDIT_CHARACTER_IMAGE"):
         media = data.get("media", [])
         if media:
             gen = media[0].get("image", {}).get("generatedImage", {})

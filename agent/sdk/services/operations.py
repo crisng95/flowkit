@@ -560,9 +560,19 @@ class OperationService:
     # Queue-based wrappers (create request in DB for processor pickup)
     # ------------------------------------------------------------------
 
+    async def _resolve_queue_orientation(self, video_id: str, orientation: str | None) -> str:
+        """Resolve orientation for queue methods: explicit > video table > VERTICAL."""
+        if orientation:
+            return orientation
+        video = await crud.get_video(video_id)
+        if video and video.get("orientation"):
+            return video["orientation"]
+        return "VERTICAL"
+
     async def queue_scene_image(self, scene_id: str, project_id: str,
-                                video_id: str, orientation: str = "VERTICAL") -> str:
+                                video_id: str, orientation: str | None = None) -> str:
         """Queue a GENERATE_IMAGE request. Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="GENERATE_IMAGE", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
@@ -570,10 +580,11 @@ class OperationService:
         return row["id"]
 
     async def queue_edit_scene_image(self, scene_id: str, project_id: str,
-                                     video_id: str, orientation: str = "VERTICAL",
+                                     video_id: str, orientation: str | None = None,
                                      edit_prompt: str | None = None,
                                      source_media_id: str | None = None) -> str:
         """Queue an EDIT_IMAGE request. Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="EDIT_IMAGE", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
@@ -582,8 +593,9 @@ class OperationService:
         return row["id"]
 
     async def queue_scene_video(self, scene_id: str, project_id: str,
-                                video_id: str, orientation: str = "VERTICAL") -> str:
+                                video_id: str, orientation: str | None = None) -> str:
         """Queue a GENERATE_VIDEO request. Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="GENERATE_VIDEO", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
@@ -591,8 +603,9 @@ class OperationService:
         return row["id"]
 
     async def queue_scene_video_refs(self, scene_id: str, project_id: str,
-                                     video_id: str, orientation: str = "VERTICAL") -> str:
+                                     video_id: str, orientation: str | None = None) -> str:
         """Queue a GENERATE_VIDEO_REFS request. Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="GENERATE_VIDEO_REFS", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
@@ -600,8 +613,9 @@ class OperationService:
         return row["id"]
 
     async def queue_upscale_video(self, scene_id: str, project_id: str,
-                                  video_id: str, orientation: str = "VERTICAL") -> str:
+                                  video_id: str, orientation: str | None = None) -> str:
         """Queue an UPSCALE_VIDEO request. Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="UPSCALE_VIDEO", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
@@ -617,8 +631,9 @@ class OperationService:
         return row["id"]
 
     async def queue_regenerate_scene_image(self, scene_id: str, project_id: str,
-                                           video_id: str, orientation: str = "VERTICAL") -> str:
+                                           video_id: str, orientation: str | None = None) -> str:
         """Queue a REGENERATE_IMAGE request (bypasses skip check). Returns request id."""
+        orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
             req_type="REGENERATE_IMAGE", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,

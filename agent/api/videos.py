@@ -17,6 +17,7 @@ def _video_to_flat(sdk_video) -> dict:
         "description": sdk_video.description,
         "display_order": sdk_video.display_order,
         "status": sdk_video.status,
+        "orientation": sdk_video.orientation,
         "vertical_url": sdk_video.vertical_url,
         "horizontal_url": sdk_video.horizontal_url,
         "thumbnail_url": sdk_video.thumbnail_url,
