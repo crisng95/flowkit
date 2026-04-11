@@ -17,6 +17,23 @@ curl -s "http://127.0.0.1:8100/api/scenes?video_id=<VID>"
 Note: project name, language, story context.
 Sort scenes by `display_order`.
 
+### Classify scenes: cinematic vs interview
+
+Detect interview scenes by checking if the scene's `prompt` contains "interview" (case-insensitive) or if `character_names` includes "Documentary Interview Studio" or similar interview-setting entities.
+
+- **Cinematic scenes** → generate narrator TTS (voiceover describing action/context)
+- **Interview scenes** → **SKIP narrator entirely** — these scenes keep their original video audio (the character "speaks" naturally). No narrator_text, no TTS file.
+
+Print classification:
+```
+Scene 00 [INTERVIEW] The Surgeon — skip narrator
+Scene 01 [CINEMATIC] JSA Checkpoint — will narrate
+Scene 02 [CINEMATIC] North Korean Barracks — will narrate
+...
+Interview scenes (skipped): N
+Cinematic scenes (will narrate): M
+```
+
 ## Step 2: Check voice template
 
 ```bash
@@ -47,7 +64,8 @@ User can specify a template name OR a ref_audio path directly.
 
 For each scene (sorted by display_order):
 
-### Skip logic (unless --force):
+### Skip logic:
+- If scene is classified as **INTERVIEW** → always skip (no narrator for interview scenes)
 - If scene already has `narrator_text` AND not --force → skip
 
 ### Read the scene's `video_prompt` and `prompt`
@@ -211,7 +229,8 @@ done
 Print:
 ```
 Narrator generation complete: <project_name>
-  Scenes narrated: N/M
+  Cinematic scenes narrated: N/M
+  Interview scenes (skipped): K
   Language: Vietnamese
   Voice: <template_name or ref_audio>
   Speed: 1.1x
@@ -219,6 +238,7 @@ Narrator generation complete: <project_name>
   Output: ${OUTDIR}/tts/
 
   Next step: /gla:concat-fit-narrator <video_id>
+  Note: Interview scenes keep original video audio (no narrator overlay).
 ```
 
 ## Narrative Arc Guide
