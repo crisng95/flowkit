@@ -95,6 +95,14 @@ Each project goes through: **story → entities → reference images → scene i
 
 ---
 
+### Chrome Extension — Live Dashboard
+
+<p align="center">
+  <img src="docs/images/extension_screenshot.jpg" width="800" alt="Chrome extension showing request log, video generation progress, and Google Flow interface" />
+</p>
+
+<sub>The Chrome extension runs alongside Google Flow — showing real-time request log (614 total, 328 success), video generation progress, and token status. The Python agent communicates with the extension via WebSocket to automate all API calls.</sub>
+
 ## Architecture
 
 ```
