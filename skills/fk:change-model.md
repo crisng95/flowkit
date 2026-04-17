@@ -1,13 +1,13 @@
-# gla:change-model — View & Change Video/Image Model Keys
+# fk:change-model — View & Change Video/Image Model Keys
 
 View or switch the AI models used for video generation, image generation, and upscaling.
 
 Usage:
-- `/gla:change-model` — show current model config
-- `/gla:change-model list` — show current model config
-- `/gla:change-model video <model_key>` — change video model for current tier
-- `/gla:change-model image <model_key>` — change image model
-- `/gla:change-model upscale <model_key>` — change upscale model
+- `/fk:change-model` — show current model config
+- `/fk:change-model list` — show current model config
+- `/fk:change-model video <model_key>` — change video model for current tier
+- `/fk:change-model image <model_key>` — change image model
+- `/fk:change-model upscale <model_key>` — change upscale model
 
 ---
 

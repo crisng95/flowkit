@@ -1,4 +1,4 @@
-# Google Flow Agent
+# Flow Kit
 
 Base URL: `http://127.0.0.1:8100`
 
@@ -11,7 +11,7 @@ curl -s http://127.0.0.1:8100/health
 
 ## How to work
 
-- Always use `/gla:*` skills — all rules and workflows live inside each skill
+- Always use `/fk:*` skills — all rules and workflows live inside each skill
 - Never write scripts to loop API calls — use `POST /api/requests/batch`
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...` strings
 
@@ -19,36 +19,36 @@ curl -s http://127.0.0.1:8100/health
 
 | Skill | When to use |
 |-------|-------------|
-| `/gla:create-project` | New project with entities + scenes |
-| `/gla:research` | Fact-check before scripting |
-| `/gla:gen-refs` | Generate reference images for entities |
-| `/gla:gen-images` | Generate scene images |
-| `/gla:gen-videos` | Generate scene videos |
-| `/gla:gen-chain-videos` | Videos with scene chaining transitions |
-| `/gla:review-video` | Review video quality before upscale |
-| `/gla:review-board` | Visual scene review board for feedback |
-| `/gla:concat` | Download + concat final video |
-| `/gla:concat-fit-narrator` | Concat trimmed to narrator duration |
-| `/gla:gen-narrator` | Generate narrator text + TTS |
-| `/gla:gen-text-overlays` | Generate text overlays from narrator text |
-| `/gla:gen-tts-template` | Create voice template for narration |
-| `/gla:gen-music` | Generate music via Suno |
-| `/gla:creative-mix` | Creative video mixing techniques |
-| `/gla:pipeline` | Full pipeline orchestration |
-| `/gla:monitor` | Monitor running pipeline |
-| `/gla:status` | Project status dashboard |
-| `/gla:switch-project` | Switch active project |
-| `/gla:fix-uuids` | Fix non-UUID media_ids |
-| `/gla:refresh-urls` | Refresh expired GCS URLs |
-| `/gla:add-material` | Set image material style |
-| `/gla:change-model` | Change video/image model |
-| `/gla:insert-scene` | Insert scenes into chain |
-| `/gla:upload-image` | Upload local image to get media_id |
-| `/gla:thumbnail` | Generate YouTube thumbnails |
-| `/gla:brand-logo` | Apply channel logo watermark |
-| `/gla:youtube-seo` | Generate YouTube metadata |
-| `/gla:youtube-upload` | Upload to YouTube |
-| `/gla:camera-guide` | Cinematic camera reference |
-| `/gla:thumbnail-guide` | Thumbnail design reference |
-| `/gla:import-voice` | Import existing voice template |
-| `/gla:dashboard` | Live statusline setup |
+| `/fk:create-project` | New project with entities + scenes |
+| `/fk:research` | Fact-check before scripting |
+| `/fk:gen-refs` | Generate reference images for entities |
+| `/fk:gen-images` | Generate scene images |
+| `/fk:gen-videos` | Generate scene videos |
+| `/fk:gen-chain-videos` | Videos with scene chaining transitions |
+| `/fk:review-video` | Review video quality before upscale |
+| `/fk:review-board` | Visual scene review board for feedback |
+| `/fk:concat` | Download + concat final video |
+| `/fk:concat-fit-narrator` | Concat trimmed to narrator duration |
+| `/fk:gen-narrator` | Generate narrator text + TTS |
+| `/fk:gen-text-overlays` | Generate text overlays from narrator text |
+| `/fk:gen-tts-template` | Create voice template for narration |
+| `/fk:gen-music` | Generate music via Suno |
+| `/fk:creative-mix` | Creative video mixing techniques |
+| `/fk:pipeline` | Full pipeline orchestration |
+| `/fk:monitor` | Monitor running pipeline |
+| `/fk:status` | Project status dashboard |
+| `/fk:switch-project` | Switch active project |
+| `/fk:fix-uuids` | Fix non-UUID media_ids |
+| `/fk:refresh-urls` | Refresh expired GCS URLs |
+| `/fk:add-material` | Set image material style |
+| `/fk:change-model` | Change video/image model |
+| `/fk:insert-scene` | Insert scenes into chain |
+| `/fk:upload-image` | Upload local image to get media_id |
+| `/fk:thumbnail` | Generate YouTube thumbnails |
+| `/fk:brand-logo` | Apply channel logo watermark |
+| `/fk:youtube-seo` | Generate YouTube metadata |
+| `/fk:youtube-upload` | Upload to YouTube |
+| `/fk:camera-guide` | Cinematic camera reference |
+| `/fk:thumbnail-guide` | Thumbnail design reference |
+| `/fk:import-voice` | Import existing voice template |
+| `/fk:dashboard` | Live statusline setup |

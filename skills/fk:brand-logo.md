@@ -1,8 +1,8 @@
-# gla:brand-logo — Apply Channel Branding (Intro + Outro + Logo + 4K Badge)
+# fk:brand-logo — Apply Channel Branding (Intro + Outro + Logo + 4K Badge)
 
 Full channel branding: prepend intro, append outro, overlay brand logo, and add 4K badge to final video.
 
-Usage: `/gla:brand-logo <channel_name> <video_path> [--size 220] [--thumbnails] [--no-intro] [--no-outro]`
+Usage: `/fk:brand-logo <channel_name> <video_path> [--size 220] [--thumbnails] [--no-intro] [--no-outro]`
 
 - `channel_name` — matches directory under `youtube/channels/<channel_name>/`
 - `video_path` — the final video to brand (e.g., `output/.../slug_narrator_cut.mp4`)

@@ -1,5 +1,5 @@
 /**
- * Google Flow Agent — Chrome Extension Background Service Worker
+ * Flow Kit — Chrome Extension Background Service Worker
  *
  * Connects to local Python agent via WebSocket (agent runs WS server).
  * Captures bearer token, solves reCAPTCHA, proxies API calls through browser.

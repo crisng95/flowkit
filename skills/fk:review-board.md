@@ -1,6 +1,6 @@
 Start the Scene Review Board web app for visual feedback on scene chains.
 
-Usage: `/gla:review-board`
+Usage: `/fk:review-board`
 
 ## What it does
 
@@ -44,4 +44,4 @@ When the user shares feedback JSON (via copy or file), parse it and execute:
 - `regen-vid` → submit REGENERATE_VIDEO requests  
 - `edit` → ask user for edit prompt, submit EDIT_IMAGE requests
 
-Use `/gla:gen-images` or `/gla:gen-videos` skills for the actual regeneration.
+Use `/fk:gen-images` or `/fk:gen-videos` skills for the actual regeneration.

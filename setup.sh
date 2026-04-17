@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================="
-echo "  Google Flow Agent — Setup"
+echo "  Flow Kit — Setup"
 echo "========================================="
 echo ""
 

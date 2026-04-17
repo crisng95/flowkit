@@ -96,5 +96,5 @@ Print table:
 | Scene | Order | Chain | endImage from | video_status | Duration |
 |-------|-------|-------|---------------|-------------|----------|
 
-Print: "Chained videos ready. Run /gla:concat <VID> to merge."
+Print: "Chained videos ready. Run /fk:concat <VID> to merge."
 Remind: "Check concat gaps — trim 0.4-0.7s overlap at chain boundaries if needed."

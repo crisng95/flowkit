@@ -1,10 +1,10 @@
-# gla:gen-narrator — Generate Narrator Text + TTS for All Scenes
+# fk:gen-narrator — Generate Narrator Text + TTS for All Scenes
 
 Auto-generate documentary-style narrator text from scene video_prompts, then generate TTS audio using a voice template.
 
-Usage: `/gla:gen-narrator <video_id> [--force] [--language vi] [--speed 1.1]`
+Usage: `/fk:gen-narrator <video_id> [--force] [--language vi] [--speed 1.1]`
 
-Prepares audio for `/gla:concat-fit-narrator`.
+Prepares audio for `/fk:concat-fit-narrator`.
 
 ## Step 1: Load project, video, scenes
 
@@ -42,7 +42,7 @@ curl -s http://127.0.0.1:8100/api/tts/templates
 
 If NO templates exist:
 ```
-No voice template found. Run /gla:gen-tts-template first to create one.
+No voice template found. Run /fk:gen-tts-template first to create one.
 Voice consistency requires a template — without it, each scene sounds different.
 ```
 **ABORT** — do not proceed without a voice template.
@@ -185,7 +185,7 @@ for scene in scenes:
 
 The `ref_text` is the **exact transcript** of what's spoken in `ref_audio`.
 
-- If template was created via `/gla:gen-tts-template`: `ref_text` = the standard base transcript used during creation (stored in `templates.json`)
+- If template was created via `/fk:gen-tts-template`: `ref_text` = the standard base transcript used during creation (stored in `templates.json`)
 - If template is a user-provided WAV: transcribe it first using whisper, then use that transcript as `ref_text` for all scenes
 
 ### Key rules:
@@ -195,7 +195,7 @@ The `ref_text` is the **exact transcript** of what's spoken in `ref_audio`.
 - Same `ref_audio` + `ref_text` for ALL scenes = consistent voice
 - `speed: 1.1` recommended for documentary pacing
 
-**mix: false** — we don't mix here. Mixing happens in `/gla:concat-fit-narrator`.
+**mix: false** — we don't mix here. Mixing happens in `/fk:concat-fit-narrator`.
 
 ## Step 7: Setup output directory
 
@@ -237,7 +237,7 @@ Narrator generation complete: <project_name>
   Total narration: XXXs
   Output: ${OUTDIR}/tts/
 
-  Next step: /gla:concat-fit-narrator <video_id>
+  Next step: /fk:concat-fit-narrator <video_id>
   Note: Interview scenes keep original video audio (no narrator overlay).
 ```
 
@@ -257,7 +257,7 @@ When writing narrator text for 30-40 scenes, follow a narrative arc:
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| TTS sounds different each scene | No voice template | Run /gla:gen-tts-template first |
+| TTS sounds different each scene | No voice template | Run /fk:gen-tts-template first |
 | Narrator text too long | Exceeds word count | Keep under 22 VN / 22 EN words |
 | Dead air in scene | Narrator text too short | Aim for 18+ VN / 18+ EN words |
 | Wrong language | Didn't match project language | Use --language flag or check project.language |

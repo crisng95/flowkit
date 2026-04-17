@@ -1,6 +1,6 @@
 Generate scene images for all scenes in a video.
 
-Usage: `/gla:gen-images <project_id> <video_id>`
+Usage: `/fk:gen-images <project_id> <video_id>`
 
 If not provided, ask or list projects/videos.
 
@@ -20,7 +20,7 @@ ori=$(echo "$ORI" | tr '[:upper:]' '[:lower:]')
 curl -s http://127.0.0.1:8100/api/projects/<PID>/characters
 ```
 
-**ABORT** if any entity is missing `media_id`. Tell user to run `/gla:gen-refs <PID>` first.
+**ABORT** if any entity is missing `media_id`. Tell user to run `/fk:gen-refs <PID>` first.
 
 ## Step 2: Get scenes and classify by chain_type
 
@@ -112,7 +112,7 @@ Print results table:
 | Scene | Order | chain_type | request_type | image_status | media_id (UUID) |
 |-------|-------|-----------|-------------|-------------|----------------|
 
-Print: "All scene images ready. Run /gla:gen-videos <PID> <VID> to generate videos."
+Print: "All scene images ready. Run /fk:gen-videos <PID> <VID> to generate videos."
 
 ## Important rules
 

@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for Google Flow Agent tests."""
+"""Shared pytest fixtures for Flow Kit tests."""
 
 import pytest
 

@@ -1,8 +1,8 @@
-# gla:youtube-seo — Generate YouTube Metadata (SEO-Optimized)
+# fk:youtube-seo — Generate YouTube Metadata (SEO-Optimized)
 
 Generate SEO-optimized YouTube metadata: hook title, description, hashtags, and niche keywords.
 
-Usage: `/gla:youtube-seo <project_id> [--language vi] [--niche military-documentary]`
+Usage: `/fk:youtube-seo <project_id> [--language vi] [--niche military-documentary]`
 
 ## Step 1: Load project context + channel rules
 
@@ -154,7 +154,7 @@ Turn on notifications 🔔 to never miss a video.
 #hashtag1 #hashtag2 #hashtag3 ... #hashtag15
 
 © {year} {channel_name} — All rights reserved.
-Generated with Google Flow Agent
+Generated with Flow Kit
 ```
 
 ## Step 5: Generate HASHTAGS
@@ -331,7 +331,7 @@ The primary output is the terminal print in Step 8 — the file is just a backup
 | Tags | 15% | Mix exact + broad + long-tail, max 500 chars |
 | Hashtags | 10% | First 3 = broad niche, next 12 = specific + long-tail |
 | Timestamps | 10% | Chapter markers boost watch time + SEO |
-| Thumbnail | 10% | (Handled by /gla:thumbnail) |
+| Thumbnail | 10% | (Handled by /fk:thumbnail) |
 
 ## Common Mistakes
 

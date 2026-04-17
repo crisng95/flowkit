@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Google Flow Agent",
+  "name": "Flow Kit",
   "version": "0.2.0",
   "description": "Local agent bridge for Google Flow API — captures tokens, solves reCAPTCHA, proxies API calls",
   "permissions": ["storage", "alarms", "tabs", "webRequest", "scripting", "declarativeNetRequest", "sidePanel"],
@@ -42,6 +42,6 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Google Flow Agent"
+    "default_title": "Flow Kit"
   }
 }

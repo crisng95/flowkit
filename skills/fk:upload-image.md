@@ -1,6 +1,6 @@
 Upload a local image file to Google Flow and get a media_id (UUID).
 
-Usage: `/gla:upload-image <file_path> [--project <project_id>] [--entity <entity_id>]`
+Usage: `/fk:upload-image <file_path> [--project <project_id>] [--entity <entity_id>]`
 
 Useful for: setting channel icons, covers, or any local image as an entity reference or scene image.
 
@@ -101,15 +101,15 @@ print(f'img_status={s.get(\"horizontal_image_status\")} mid={s.get(\"horizontal_
 ### Upload channel branding assets
 ```bash
 # Upload icon
-/gla:upload-image youtube/channels/<channel>/<channel>_icon.png --project <PID>
+/fk:upload-image youtube/channels/<channel>/<channel>_icon.png --project <PID>
 # Upload cover
-/gla:upload-image youtube/channels/<channel>/<channel>_cover.png --project <PID>
+/fk:upload-image youtube/channels/<channel>/<channel>_cover.png --project <PID>
 ```
 
 ### Replace a scene image with a local file
 ```bash
 # Upload the image
-/gla:upload-image /path/to/better_image.png --project <PID>
+/fk:upload-image /path/to/better_image.png --project <PID>
 # Patch the scene with the returned media_id
 # Then regenerate video from the new image
 ```

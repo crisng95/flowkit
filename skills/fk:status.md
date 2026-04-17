@@ -1,6 +1,6 @@
 Show full status dashboard for a project.
 
-Usage: `/gla:status <project_id>` or `/gla:status` (lists all projects)
+Usage: `/fk:status <project_id>` or `/fk:status` (lists all projects)
 
 ## If no project_id: list all projects
 
@@ -66,17 +66,17 @@ Print orientation and counts: `Orientation: ${ORI}` then X/Y refs ready, X/Y ima
 Use `${ORI}_image_status`, `${ORI}_video_status`, `${ORI}_upscale_status` for counting.
 
 Suggest next action:
-- If refs missing → "Run /gla:gen-refs <PID>"
-- If images missing → "Run /gla:gen-images <PID> <VID>"
-- If videos missing → "Run /gla:gen-videos <PID> <VID>"
-- If all done → "Run /gla:concat <VID>"
+- If refs missing → "Run /fk:gen-refs <PID>"
+- If images missing → "Run /fk:gen-images <PID> <VID>"
+- If videos missing → "Run /fk:gen-videos <PID> <VID>"
+- If all done → "Run /fk:concat <VID>"
 
 ## Statusline Integration
 
-The `/gla:status` output is available in Claude Code's statusline at the bottom, showing live project progress:
+The `/fk:status` output is available in Claude Code's statusline at the bottom, showing live project progress:
 
 ```
 GLA: ✓ext Operation Hormu 40sc img:40 vid:40 4K:26 ▶0/5
 ```
 
-**Note:** Default orientation for TTS narration is **HORIZONTAL** (landscape, 16:9). For VERTICAL (portrait, 9:16) projects, explicitly pass `orientation: "VERTICAL"` to `/gla:gen-narrator`.
+**Note:** Default orientation for TTS narration is **HORIZONTAL** (landscape, 16:9). For VERTICAL (portrait, 9:16) projects, explicitly pass `orientation: "VERTICAL"` to `/fk:gen-narrator`.

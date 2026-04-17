@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Google Flow Agent statusline for Claude Code
+# Flow Kit statusline for Claude Code
 # Optimized: parallel curl + single-pass jq + no python
 # ANSI colors: green=32, violet/magenta=35
 

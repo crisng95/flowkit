@@ -1,5 +1,5 @@
 /**
- * Google Flow Agent — Side Panel
+ * Flow Kit — Side Panel
  * Displays live connection status, metrics, and request log.
  */
 

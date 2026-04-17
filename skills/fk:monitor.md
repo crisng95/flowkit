@@ -1,8 +1,8 @@
-# gla:monitor — Full Pipeline Monitor
+# fk:monitor — Full Pipeline Monitor
 
 Poll project pipeline status every N seconds, detect state changes across all stages, send Telegram notifications, and optionally auto-download completed upscales.
 
-Usage: `/gla:monitor [project_id] [orientation] [--download] [--interval N]`
+Usage: `/fk:monitor [project_id] [orientation] [--download] [--interval N]`
 
 - `project_id` — omit to use most recently active project
 - `orientation` — `HORIZONTAL` or `VERTICAL` (auto-detected from video.orientation if omitted)
@@ -238,7 +238,7 @@ all_done = all(
 if all_done and not prev_all_done:
     notifications.append(
         '🎉 Project complete! All pipeline stages done.\n'
-        'Ready for /gla:concat'
+        'Ready for /fk:concat'
     )
 ```
 
@@ -409,7 +409,7 @@ Print a compact status line to console each cycle so progress is visible:
 
 | Scenario | Next Skill |
 |----------|------------|
-| All videos done, no 4K | `/gla:concat` |
-| All 4K downloaded | `/gla:concat --4k` |
-| Need narration first | `/gla:gen-narrator` → `/gla:concat --with-tts` |
-| Upload to YouTube | `/gla:youtube-seo` → `/gla:youtube-upload` |
+| All videos done, no 4K | `/fk:concat` |
+| All 4K downloaded | `/fk:concat --4k` |
+| Need narration first | `/fk:gen-narrator` → `/fk:concat --with-tts` |
+| Upload to YouTube | `/fk:youtube-seo` → `/fk:youtube-upload` |

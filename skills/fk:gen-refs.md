@@ -1,6 +1,6 @@
 Generate reference images for all entities in a project.
 
-Usage: `/gla:gen-refs <project_id>`
+Usage: `/fk:gen-refs <project_id>`
 
 If no project_id provided, use `GET /api/active-project` or list projects via `GET /api/projects`.
 
@@ -131,4 +131,4 @@ If error is `PUBLIC_ERROR_MINOR_INPUT_IMAGE`, the image_prompt describes or impl
 
 Poll and verify after each round. Print final results table showing all entities with media_id status.
 
-Print: "All references ready. Run /gla:gen-images <PID> <VID> to generate scene images."
+Print: "All references ready. Run /fk:gen-images <PID> <VID> to generate scene images."

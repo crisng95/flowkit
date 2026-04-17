@@ -1,8 +1,8 @@
-# gla:pipeline — Smart Full-Pipeline Orchestrator
+# fk:pipeline — Smart Full-Pipeline Orchestrator
 
 Auto-detect project state and run the correct stages (continuation or full run). Handles batching, parallelism, retries, downloads, TTS, and Telegram notifications.
 
-Usage: `/gla:pipeline [project_id] [orientation] [options]`
+Usage: `/fk:pipeline [project_id] [orientation] [options]`
 
 Options:
 - `--upscale` — include 4K upscale stage (TIER_TWO only)
@@ -14,9 +14,9 @@ Options:
 - `--orientation H|V` — HORIZONTAL or VERTICAL (auto-detected from video.orientation if omitted)
 
 Examples:
-- `/gla:pipeline` — detect state and continue most recent project
-- `/gla:pipeline --upscale --tts --download --notify` — full run with all options
-- `/gla:pipeline <project_id> HORIZONTAL --upscale --download` — explicit project + orientation
+- `/fk:pipeline` — detect state and continue most recent project
+- `/fk:pipeline --upscale --tts --download --notify` — full run with all options
+- `/fk:pipeline <project_id> HORIZONTAL --upscale --download` — explicit project + orientation
 
 ---
 
@@ -226,7 +226,7 @@ Batch 5. Poll 15s. Each video takes 2-5 min.
 
 ### Stage 2.5 — Review Videos
 
-Only run after all videos COMPLETED. Uses `/gla:review-video` to catch AI generation errors before upscaling.
+Only run after all videos COMPLETED. Uses `/fk:review-video` to catch AI generation errors before upscaling.
 
 ```bash
 # Run light review on all completed videos
@@ -302,7 +302,7 @@ curl -X POST http://127.0.0.1:8100/api/videos/<VID>/narrate \
 
 Poll `output/<slug>/tts/` for WAV files as they appear.
 
-**If no template exists:** Pause and instruct user to run `/gla:gen-tts-template` or `/gla:import-voice` first.
+**If no template exists:** Pause and instruct user to run `/fk:gen-tts-template` or `/fk:import-voice` first.
 
 ---
 
@@ -338,9 +338,9 @@ ffprobe -v quiet -show_entries format=duration -of csv=p=0 "<file>"
 
 ### Stage 6 — Concat
 
-Run after UPSCALE + DOWNLOAD + TTS all complete. Delegates to `/gla:concat`.
+Run after UPSCALE + DOWNLOAD + TTS all complete. Delegates to `/fk:concat`.
 
-Invoke: `/gla:concat --4k --with-tts` (or appropriate flags based on what was run).
+Invoke: `/fk:concat --4k --with-tts` (or appropriate flags based on what was run).
 
 ---
 
@@ -421,7 +421,7 @@ Pipeline complete for <project_name>
   TTS:       50/50
   Failed:    0
 
-Ready for: /gla:concat --4k --with-tts
+Ready for: /fk:concat --4k --with-tts
 ```
 
 Send via Telegram if `--notify`.
@@ -457,7 +457,7 @@ Main agent handles upscale + downloads. Both finish independently.
 ## Console Output Format
 
 ```
-[gla:pipeline] Operation Absolute Resolve - Cinematic Edition [HORIZONTAL]
+[fk:pipeline] Operation Absolute Resolve - Cinematic Edition [HORIZONTAL]
 Stage:     UPSCALE (39/50) + DOWNLOAD (39/50) rolling
 Queue:     5 pending / 5 processing
 TTS:       50/50 ✓ (parallel, done)
@@ -483,7 +483,7 @@ Cycle 12 / next poll in 15s...
 
 | After pipeline | Skill |
 |---|---|
-| Mix TTS into videos | `/gla:concat --with-tts` |
-| Add branding watermark | `/gla:brand-logo` |
-| Generate YouTube SEO | `/gla:youtube-seo` |
-| Upload to YouTube | `/gla:youtube-upload` |
+| Mix TTS into videos | `/fk:concat --with-tts` |
+| Add branding watermark | `/fk:brand-logo` |
+| Generate YouTube SEO | `/fk:youtube-seo` |
+| Upload to YouTube | `/fk:youtube-upload` |

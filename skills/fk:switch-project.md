@@ -1,11 +1,11 @@
-# gla:switch-project — Switch Active Project
+# fk:switch-project — Switch Active Project
 
 Switch the active project so all skills automatically target the correct project without needing explicit `project_id`.
 
 Usage:
-- `/gla:switch-project` — list projects and switch interactively
-- `/gla:switch-project <project_id>` — switch to a specific project by ID
-- `/gla:switch-project clear` — clear active project (revert to most-recent fallback)
+- `/fk:switch-project` — list projects and switch interactively
+- `/fk:switch-project <project_id>` — switch to a specific project by ID
+- `/fk:switch-project clear` — clear active project (revert to most-recent fallback)
 
 ---
 

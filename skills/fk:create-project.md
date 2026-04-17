@@ -297,7 +297,7 @@ When a character appears in the scene image, their face MUST be fully visible (f
 
 **`voice_description`** on characters (max ~30 words) — auto-appended to video prompts by the worker. Dialogue tone must match voice profile. Example: `"Deep calm heroic voice, speaks slowly with confidence"`.
 
-See `gla:camera-guide.md` for full camera language reference.
+See `fk:camera-guide.md` for full camera language reference.
 
 ---
 
@@ -373,7 +373,7 @@ SFX: soft footsteps on crystallized sugar ground.
 Negative: subtitles, watermark, text overlay.
 ```
 
-See `gla:camera-guide.md` for full Veo 3 camera/lighting/audio vocabulary and prompt template.
+See `fk:camera-guide.md` for full Veo 3 camera/lighting/audio vocabulary and prompt template.
 
 ---
 
@@ -393,7 +393,7 @@ See `gla:camera-guide.md` for full Veo 3 camera/lighting/audio vocabulary and pr
 Captain Harris spots unusual radar signatures. Dozens of Iranian fast boats race straight toward the convoy. He orders battle stations.
 ```
 
-See `gla:gen-narrator.md` for word count limits per language and narrative arc guide.
+See `fk:gen-narrator.md` for word count limits per language and narrative arc guide.
 
 ---
 
@@ -415,7 +415,7 @@ Print a summary table:
 - Project ID, Video ID
 - All entities with names and types
 - All scenes with prompts (truncated) and chain type
-- Next step: "Run /gla:gen-refs to generate reference images"
+- Next step: "Run /fk:gen-refs to generate reference images"
 
 ## Step 4: Review and Update Scenes
 
@@ -434,4 +434,4 @@ curl -X PATCH http://127.0.0.1:8100/api/scenes/<SID> \
 
 **Patchable fields:** `prompt`, `video_prompt`, `transition_prompt`, `image_prompt`, `character_names`, `narrator_text`, `display_order`, `chain_type`, `parent_scene_id`.
 
-**Workflow:** create scenes → review all prompts → PATCH to improve → then run /gla:gen-refs and /gla:gen-images. Scenes are mutable — update freely before generation starts.
+**Workflow:** create scenes → review all prompts → PATCH to improve → then run /fk:gen-refs and /fk:gen-images. Scenes are mutable — update freely before generation starts.

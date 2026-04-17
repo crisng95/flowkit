@@ -1,6 +1,6 @@
 Generate 4 YouTube-optimized thumbnail variants for a project video.
 
-Usage: `/gla:thumbnail [project_id]`
+Usage: `/fk:thumbnail [project_id]`
 
 ## Step 1: Load project context
 

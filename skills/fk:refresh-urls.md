@@ -1,11 +1,11 @@
 Refresh expired GCS signed URLs for all scenes in a video (images, videos, upscale videos) and character reference images.
 
-Usage: `/gla:refresh-urls <video_id> [--project-id <PID>]`
+Usage: `/fk:refresh-urls <video_id> [--project-id <PID>]`
 
 ## When to use
 
-- Before `/gla:review-video` if videos were generated hours ago (GCS signed URLs expire)
-- Before `/gla:concat-fit-narrator` if downloading from URLs instead of local files
+- Before `/fk:review-video` if videos were generated hours ago (GCS signed URLs expire)
+- Before `/fk:concat-fit-narrator` if downloading from URLs instead of local files
 - After any long gap between generation and consumption of media URLs
 
 ## Pre-flight

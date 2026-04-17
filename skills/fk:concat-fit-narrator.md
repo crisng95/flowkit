@@ -1,6 +1,6 @@
 Trim each scene video to fit its TTS narrator duration, burn text overlays, then concatenate into a final video.
 
-Usage: `/gla:concat-fit-narrator <video_id> [--buffer 0.5] [--4k]`
+Usage: `/fk:concat-fit-narrator <video_id> [--buffer 0.5] [--4k]`
 
 Default: trims each scene to `narrator_duration + 0.5s`, preserves 4K, mixes SFX + TTS, burns text overlay from `text_overlays.json`.
 
@@ -40,7 +40,7 @@ For each scene (sorted by display_order, index = IDX starting at 0):
 
 Where `IDX3` = zero-padded 3-digit index (000, 001, ...).
 
-**ABORT** if any scene has no video source. Tell user to run `/gla:gen-videos` first.
+**ABORT** if any scene has no video source. Tell user to run `/fk:gen-videos` first.
 
 If a scene has no TTS file, keep its full original duration (no trim).
 

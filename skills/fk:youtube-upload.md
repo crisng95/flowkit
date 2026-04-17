@@ -1,8 +1,8 @@
-# gla:youtube-upload — Upload Video to YouTube (Shorts + Long-form)
+# fk:youtube-upload — Upload Video to YouTube (Shorts + Long-form)
 
 Upload videos to YouTube with channel rule enforcement, auto-scheduling, and batch support.
 
-Usage: `/gla:youtube-upload <channel_name> <video_path_or_dir> [--schedule "time"] [--batch] [--dry-run]`
+Usage: `/fk:youtube-upload <channel_name> <video_path_or_dir> [--schedule "time"] [--batch] [--dry-run]`
 
 ## Step 1: Parse input and detect video type
 
@@ -61,12 +61,12 @@ If validation fails, print the reason and suggest the next valid slot.
 
 ### Single upload with explicit schedule:
 ```bash
-/gla:youtube-upload chiensudachieu output/clip_01_branded.mp4 --schedule "2026-04-07T07:00:00+07:00"
+/fk:youtube-upload chiensudachieu output/clip_01_branded.mp4 --schedule "2026-04-07T07:00:00+07:00"
 ```
 
 ### Single upload at next optimal slot:
 ```bash
-/gla:youtube-upload chiensudachieu output/clip_01_branded.mp4
+/fk:youtube-upload chiensudachieu output/clip_01_branded.mp4
 # Auto-picks next available optimal_time from channel rules
 ```
 
@@ -89,10 +89,10 @@ times = auto_schedule("<channel_name>", count=5, is_short=True)
 Before uploading, ensure each video has metadata. Two modes:
 
 ### Mode A: SEO already generated (recommended)
-User ran `/gla:youtube-seo` first. Provide title, description, tags as args.
+User ran `/fk:youtube-seo` first. Provide title, description, tags as args.
 
 ### Mode B: Auto-generate per clip
-If no metadata provided, run `/gla:youtube-seo` inline for each clip.
+If no metadata provided, run `/fk:youtube-seo` inline for each clip.
 
 **Required metadata per upload:**
 - `title` — max 65 chars (from channel rules `seo.title_max_chars`)
@@ -156,7 +156,7 @@ DRY RUN — No uploads will be made
  3  | clip_03_branded    | Short | Apr 7 17:00      | OK
  4  | clip_04_branded    | Short | Apr 8 07:00      | OK
 
-Confirm with /gla:youtube-upload chiensudachieu output/subclips/ --batch
+Confirm with /fk:youtube-upload chiensudachieu output/subclips/ --batch
 ```
 
 ## Batch Example (full workflow)
@@ -166,9 +166,9 @@ Confirm with /gla:youtube-upload chiensudachieu output/subclips/ --batch
 # 2. Brand all clips (run brand-logo)
 # 3. Upload batch with auto-schedule:
 
-/gla:youtube-upload chiensudachieu ${OUTDIR}/subclips/ --batch --dry-run
+/fk:youtube-upload chiensudachieu ${OUTDIR}/subclips/ --batch --dry-run
 # Review schedule, then:
-/gla:youtube-upload chiensudachieu ${OUTDIR}/subclips/ --batch
+/fk:youtube-upload chiensudachieu ${OUTDIR}/subclips/ --batch
 ```
 
 ## Channel Directory Reference
@@ -179,7 +179,7 @@ youtube/channels/<channel_name>/
   token.json             — Auth token (auto-created, auto-refreshes)
   channel_info.json      — Channel stats from YouTube API
   channel_rules.json     — Upload rules + SEO defaults
-  <channel>_icon.png     — Brand logo for /gla:brand-logo
+  <channel>_icon.png     — Brand logo for /fk:brand-logo
   upload_history.json    — Upload log (auto-created by this skill)
 ```
 

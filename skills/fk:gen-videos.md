@@ -1,6 +1,6 @@
 Generate videos for all scenes in a video.
 
-Usage: `/gla:gen-videos <project_id> <video_id>`
+Usage: `/fk:gen-videos <project_id> <video_id>`
 
 ## Step 0: Detect orientation
 
@@ -18,7 +18,7 @@ ori=$(echo "$ORI" | tr '[:upper:]' '[:lower:]')
 curl -s "http://127.0.0.1:8100/api/scenes?video_id=<VID>"
 ```
 
-**ABORT** if any scene is missing `${ori}_image_media_id` (UUID) or `${ori}_image_status` != `"COMPLETED"`. Tell user to run `/gla:gen-images` first.
+**ABORT** if any scene is missing `${ori}_image_media_id` (UUID) or `${ori}_image_status` != `"COMPLETED"`. Tell user to run `/fk:gen-images` first.
 
 ## Step 2: Filter scenes needing video
 
@@ -61,7 +61,7 @@ Print results table:
 | Scene | Order | video_status | video_media_id | video_url |
 |-------|-------|-------------|---------------|-----------|
 
-Print: "All videos ready. Run /gla:concat <VID> to download and merge."
+Print: "All videos ready. Run /fk:concat <VID> to download and merge."
 
 ## Important rules
 

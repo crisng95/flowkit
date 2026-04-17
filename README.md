@@ -177,18 +177,18 @@ System generates ref image per entity → then composes scenes using those refs
 
 ### Using Skills (recommended)
 
-Skills handle all the API calls, polling, and verification automatically. Use with Claude Code (`/gla:command`) or follow the recipe in `skills/*.md` for any AI agent.
+Skills handle all the API calls, polling, and verification automatically. Use with Claude Code (`/fk:command`) or follow the recipe in `skills/*.md` for any AI agent.
 
 ```
-/gla:create-project             ← interactive: asks story, creates entities + scenes
-/gla:gen-refs <project_id>      ← generates all reference images, verifies UUIDs
-/gla:gen-images <pid> <vid>     ← generates scene images with all refs applied
-/gla:gen-videos <pid> <vid>     ← generates videos (2-5 min each, polls automatically)
-/gla:concat <vid>               ← downloads + merges into final video
-/gla:status <pid>               ← dashboard: what's done, what's next
+/fk:create-project             ← interactive: asks story, creates entities + scenes
+/fk:gen-refs <project_id>      ← generates all reference images, verifies UUIDs
+/fk:gen-images <pid> <vid>     ← generates scene images with all refs applied
+/fk:gen-videos <pid> <vid>     ← generates videos (2-5 min each, polls automatically)
+/fk:concat <vid>               ← downloads + merges into final video
+/fk:status <pid>               ← dashboard: what's done, what's next
 ```
 
-Full pipeline in 5 commands. Each skill pre-checks dependencies (e.g. `/gla:gen-images` verifies all refs exist first).
+Full pipeline in 5 commands. Each skill pre-checks dependencies (e.g. `/fk:gen-images` verifies all refs exist first).
 
 ### Manual API (step by step)
 
@@ -365,51 +365,51 @@ Ready-to-use workflow recipes in `skills/` (also available as `/slash-commands` 
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:create-project` | Create project + entities + video + scenes interactively |
-| `/gla:gen-refs` | Generate reference images for all entities |
-| `/gla:gen-images` | Generate scene images with character refs |
-| `/gla:gen-videos` | Generate videos from scene images |
-| `/gla:concat` | Download + merge all scene videos |
+| `/fk:create-project` | Create project + entities + video + scenes interactively |
+| `/fk:gen-refs` | Generate reference images for all entities |
+| `/fk:gen-images` | Generate scene images with character refs |
+| `/fk:gen-videos` | Generate videos from scene images |
+| `/fk:concat` | Download + merge all scene videos |
 
 ### Advanced Video
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:gen-chain-videos` | Auto start+end frame chaining for smooth transitions (i2v_fl) |
-| `/gla:insert-scene` | Multi-angle shots, cutaways, close-ups within a chain |
-| `/gla:creative-mix` | Analyze story + suggest all techniques (chain, insert, r2v, parallel) |
+| `/fk:gen-chain-videos` | Auto start+end frame chaining for smooth transitions (i2v_fl) |
+| `/fk:insert-scene` | Multi-angle shots, cutaways, close-ups within a chain |
+| `/fk:creative-mix` | Analyze story + suggest all techniques (chain, insert, r2v, parallel) |
 
 ### Reference
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:camera-guide` | Camera angles, movements, lighting, DOF for cinematic video prompts |
+| `/fk:camera-guide` | Camera angles, movements, lighting, DOF for cinematic video prompts |
 
 ### TTS & Narration
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:gen-tts-template` | Create a voice template for consistent narration |
-| `/gla:gen-narrator` | Generate narrator text + TTS for all scenes |
-| `/gla:gen-text-overlays` | Generate text overlays from narrator text (dates, locations, stats) |
-| `/gla:concat-fit-narrator` | Trim scene videos to fit narrator duration, then concat |
+| `/fk:gen-tts-template` | Create a voice template for consistent narration |
+| `/fk:gen-narrator` | Generate narrator text + TTS for all scenes |
+| `/fk:gen-text-overlays` | Generate text overlays from narrator text (dates, locations, stats) |
+| `/fk:concat-fit-narrator` | Trim scene videos to fit narrator duration, then concat |
 
 ### YouTube
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:youtube-seo` | Generate SEO-optimized title, description, tags |
-| `/gla:brand-logo` | Apply channel icon watermark to video/thumbnails |
-| `/gla:youtube-upload` | Upload to YouTube with rule validation + scheduling |
-| `/gla:thumbnail` | Generate YouTube-optimized thumbnails |
+| `/fk:youtube-seo` | Generate SEO-optimized title, description, tags |
+| `/fk:brand-logo` | Apply channel icon watermark to video/thumbnails |
+| `/fk:youtube-upload` | Upload to YouTube with rule validation + scheduling |
+| `/fk:thumbnail` | Generate YouTube-optimized thumbnails |
 
 ### Utilities
 
 | Skill | Description |
 |-------|-------------|
-| `/gla:status` | Full project dashboard + recommended next action |
-| `/gla:fix-uuids` | Repair any CAMS... media_ids to UUID format |
-| `/gla:add-material` | Image material system |
+| `/fk:status` | Full project dashboard + recommended next action |
+| `/fk:fix-uuids` | Repair any CAMS... media_ids to UUID format |
+| `/fk:add-material` | Image material system |
 
 ### AI CLI Compatibility
 
@@ -417,8 +417,8 @@ Skills work with any AI CLI that can read files:
 
 | CLI | Instructions | How skills work |
 |-----|-------------|-----------------|
-| Claude Code | `CLAUDE.md` (auto-loaded) | Native `/gla:` slash commands |
-| Codex CLI | `AGENTS.md` → reads `CLAUDE.md` | User says `/gla:<name>`, agent reads `skills/gla:<name>.md` |
+| Claude Code | `CLAUDE.md` (auto-loaded) | Native `/fk:` slash commands |
+| Codex CLI | `AGENTS.md` → reads `CLAUDE.md` | User says `/fk:<name>`, agent reads `skills/fk:<name>.md` |
 | Gemini CLI | `GEMINI.md` → reads `CLAUDE.md` | Same pattern |
 
 ## Video Generation Techniques
@@ -545,7 +545,7 @@ Optional narrator voice for scenes. Uses [OmniVoice](https://github.com/tuannguy
 
 ### Setup
 
-See `skills/gla:gen-tts-template.md` for full install guide. Quick version:
+See `skills/fk:gen-tts-template.md` for full install guide. Quick version:
 
 ```bash
 pip install torch==2.8.0 torchaudio==2.8.0   # or +cu128 for NVIDIA
@@ -560,10 +560,10 @@ export TTS_PYTHON_BIN=/path/to/omnivoice-venv/bin/python3
 
 ### Workflow
 
-1. **Create voice template** — `/gla:gen-tts-template` — generates an anchor voice WAV
+1. **Create voice template** — `/fk:gen-tts-template` — generates an anchor voice WAV
 2. **Add narrator text** to scenes — `PATCH /api/scenes/{id}` with `narrator_text`
-3. **Generate narration** — `/gla:gen-narrator` — voice-clones the template for each scene
-4. **Concat with narration** — `/gla:concat-fit-narrator` — trims scene videos to match TTS duration
+3. **Generate narration** — `/fk:gen-narrator` — voice-clones the template for each scene
+4. **Concat with narration** — `/fk:concat-fit-narrator` — trims scene videos to match TTS duration
 
 CPU-only recommended (MPS produces artifacts). ~15-30s per scene.
 
@@ -600,9 +600,9 @@ Each channel has a rules file controlling upload scheduling and SEO:
 ### Skill Chain
 
 ```
-/gla:youtube-seo    → generates title, description, hashtags, tags
-/gla:brand-logo     → applies channel icon watermark
-/gla:youtube-upload  → validates rules + uploads (auto-detects Short vs Long-form)
+/fk:youtube-seo    → generates title, description, hashtags, tags
+/fk:brand-logo     → applies channel icon watermark
+/fk:youtube-upload  → validates rules + uploads (auto-detects Short vs Long-form)
 ```
 
 Upload validation checks: max per day, min gap between uploads, avoid dead hours. Auto-detects Short (<61s + vertical 9:16) vs Long-form.
@@ -615,8 +615,8 @@ Upload validation checks: max per day, min gap between uploads, avoid dead hours
 | Extension shows "No token" | Open labs.google/fx/tools/flow |
 | `CAPTCHA_FAILED: NO_FLOW_TAB` | Need a Google Flow tab open |
 | 403 MODEL_ACCESS_DENIED | Tier mismatch — auto-detect should handle it |
-| Scene images inconsistent | Check all refs have `media_id` (UUID). Run `/gla:fix-uuids` |
-| media_id starts with CAMS... | Run `/gla:fix-uuids` to extract UUID from URL |
+| Scene images inconsistent | Check all refs have `media_id` (UUID). Run `/fk:fix-uuids` |
+| media_id starts with CAMS... | Run `/fk:fix-uuids` to extract UUID from URL |
 | Upscale permission denied | Requires PAYGATE_TIER_TWO account |
 
 ## License

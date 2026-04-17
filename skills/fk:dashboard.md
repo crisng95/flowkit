@@ -1,6 +1,6 @@
 Show live GLA status in Claude Code statusline.
 
-Usage: `/gla:dashboard`
+Usage: `/fk:dashboard`
 
 The GLA statusline shows real-time project status at the bottom of Claude Code:
 

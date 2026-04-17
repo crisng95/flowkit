@@ -1,6 +1,6 @@
 Review AI-generated scene videos for quality using Claude Vision.
 
-Usage: `/gla:review-video <video_id> [--mode light|deep]`
+Usage: `/fk:review-video <video_id> [--mode light|deep]`
 
 Default mode: `light`. Orientation auto-detected from project `meta.json`.
 
@@ -31,7 +31,7 @@ curl -s "http://127.0.0.1:8100/api/scenes?video_id=<VID>"
 
 For each scene, verify `${ori}_video_status = COMPLETED` (orientation auto-detected from meta.json).
 
-**ABORT** if any scene is missing a completed video — tell user to run `/gla:gen-videos` first.
+**ABORT** if any scene is missing a completed video — tell user to run `/fk:gen-videos` first.
 
 ## Step 3: Run review via API
 
@@ -116,10 +116,10 @@ curl -X POST http://127.0.0.1:8100/api/requests \
   -H "Content-Type: application/json" \
   -d '{"type": "REGENERATE_IMAGE", "scene_id": "<SID>", "project_id": "<PID>", "video_id": "<VID>", "orientation": "${ORI}"}'
 ```
-Then run `/gla:gen-videos <PID> <VID>` after image is complete.
+Then run `/fk:gen-videos <PID> <VID>` after image is complete.
 
 ### Acceptable with good segments
-Note `usable_segments` time ranges for manual editing. Use `/gla:concat` and trim in post.
+Note `usable_segments` time ranges for manual editing. Use `/fk:concat` and trim in post.
 
 ### Character drift (low `character_consistency`)
 - Verify all entity ref images have `media_id` (UUID format)
@@ -157,9 +157,9 @@ Total: 6.9/10 | 4 scenes reviewed | 0 skipped
 ```
 
 Then print recommended actions:
-- Excellent/Good → "Ready for `/gla:concat <VID>`"
+- Excellent/Good → "Ready for `/fk:concat <VID>`"
 - Acceptable → "Note usable segments, trim in post"
-- Poor/Unusable → "Run `/gla:gen-images <PID> <VID>` to regenerate, then `/gla:gen-videos <PID> <VID>`"
+- Poor/Unusable → "Run `/fk:gen-images <PID> <VID>` to regenerate, then `/fk:gen-videos <PID> <VID>`"
 
 ## Known AI Video Errors
 

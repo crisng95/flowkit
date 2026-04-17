@@ -1,8 +1,8 @@
-# gla:research — Fact-Check & Research Before Scripting
+# fk:research — Fact-Check & Research Before Scripting
 
-Research and verify real-world events before creating documentary content. This skill MUST be run before `/gla:create-project` for any documentary project.
+Research and verify real-world events before creating documentary content. This skill MUST be run before `/fk:create-project` for any documentary project.
 
-Usage: `/gla:research <topic> [--language vi] [--depth deep|quick]`
+Usage: `/fk:research <topic> [--language vi] [--depth deep|quick]`
 
 Arguments:
 - `topic` — the subject to research (e.g., "US Iran conflict 2025", "Strait of Hormuz crisis")
@@ -108,12 +108,12 @@ Research complete: [Topic]
 - [N] real operation names confirmed
 - Saved to: .omc/research/{slug}_research.md
 
-Ready for /gla:create-project — use this research as the story source.
+Ready for /fk:create-project — use this research as the story source.
 ```
 
 ## Step 6: Handoff to Project Creation
 
-When the user proceeds to `/gla:create-project`, the research file serves as the **single source of truth** for:
+When the user proceeds to `/fk:create-project`, the research file serves as the **single source of truth** for:
 - `story` field — summary built from verified timeline
 - `narrator_text` — must reference only verified events
 - Scene descriptions — must depict real events, not invented scenarios
@@ -124,18 +124,18 @@ When the user proceeds to `/gla:create-project`, the research file serves as the
 ## Integration with Pipeline
 
 ```
-/gla:research "topic"          ← MUST run first
+/fk:research "topic"          ← MUST run first
     ↓
-/gla:create-project            ← story from research
+/fk:create-project            ← story from research
     ↓
-/gla:pipeline                  ← normal pipeline continues
+/fk:pipeline                  ← normal pipeline continues
 ```
 
 ## Examples
 
 **Good research → good content:**
 ```
-/gla:research "Strait of Hormuz shipping crisis 2025"
+/fk:research "Strait of Hormuz shipping crisis 2025"
 → Finds: Iran seized 2 tankers in June 2025, US deployed carrier group, 
   oil prices spiked 40%, UN resolution passed in August
 → Story uses these real events with our analysis of strategic implications

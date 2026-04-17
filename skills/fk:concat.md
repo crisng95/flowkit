@@ -1,6 +1,6 @@
 Download and concatenate all scene videos into a single video with optional TTS narration.
 
-Usage: `/gla:concat <video_id> [--with-tts] [--4k]`
+Usage: `/fk:concat <video_id> [--with-tts] [--4k]`
 
 Default: uses best available quality (4K upscale > regular video), preserves original audio.
 
@@ -25,7 +25,7 @@ Priority order for each scene:
 
 Check orientation from project or first scene. Use matching prefix (`horizontal_` or `vertical_`).
 
-**ABORT** if any scene has no video source. Tell user to run `/gla:gen-videos` first.
+**ABORT** if any scene has no video source. Tell user to run `/fk:gen-videos` first.
 
 ## Step 3: Setup output directory
 

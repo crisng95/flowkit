@@ -56,7 +56,7 @@ Two safe patterns for close-up INSERTs:
 
 Pattern B is preferred for dramatic close-ups — you get the cinematic zoom AND character consistency.
 
-**Camera angle ideas for edits** (see `/gla:camera-guide`):
+**Camera angle ideas for edits** (see `/fk:camera-guide`):
 - `"Extreme close-up of [character]'s eyes, shallow DOF"` — emotion (use Pattern A or B!)
 - `"Over-the-shoulder shot from [other character], watching"` — relationship
 - `"Low angle looking up at [subject], dramatic lighting"` — power
@@ -153,10 +153,10 @@ Scene 5 (Resolution) — ROOT (peaceful ending, different energy)
 Present the plan and ask which enhancements to apply. Then execute:
 
 1. Create any new INSERT scenes (`POST /api/scenes` with `"source": "system"`)
-2. Generate images for new scenes (`/gla:gen-images`)
+2. Generate images for new scenes (`/fk:gen-images`)
 2b. Review generated images — refine with EDIT_IMAGE or REGENERATE_IMAGE as needed
 3. Set up chain end_scene_media_ids
-4. Generate all videos with chaining (`/gla:gen-chain-videos`)
+4. Generate all videos with chaining (`/fk:gen-chain-videos`)
 5. For r2v scenes: `POST /api/requests {type: "GENERATE_VIDEO_REFS"}`
 
 ## Step 4: Output
@@ -176,4 +176,4 @@ Print the final scene timeline:
 01:20 Scene 5a   [EDIT←5]      Wide pull-back, empty market, volumetric light (i2v)
 ```
 
-Run `/gla:concat <VID>` to merge the final video.
+Run `/fk:concat <VID>` to merge the final video.

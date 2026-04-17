@@ -1,4 +1,4 @@
-"""Google Flow Agent SDK — high-level domain-model interface."""
+"""Flow Kit SDK — high-level domain-model interface."""
 
 from agent.sdk.models.base import DomainModel
 from agent.sdk.persistence.sqlite_repository import SQLiteRepository

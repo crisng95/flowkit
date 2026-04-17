@@ -1,8 +1,8 @@
-# gla:gen-text-overlays — Generate Text Overlays from Narrator Text
+# fk:gen-text-overlays — Generate Text Overlays from Narrator Text
 
-Analyze narrator text for each scene and extract key data points (dates, locations, statistics, milestones, costs) to create `text_overlays.json` for `/gla:concat-fit-narrator`.
+Analyze narrator text for each scene and extract key data points (dates, locations, statistics, milestones, costs) to create `text_overlays.json` for `/fk:concat-fit-narrator`.
 
-Usage: `/gla:gen-text-overlays <video_id> [--language vi]`
+Usage: `/fk:gen-text-overlays <video_id> [--language vi]`
 
 - `video_id` — the video to generate overlays for
 - `--language` — target language code (default: auto-detect from narrator text). **All overlay text MUST be in this language with proper diacritics/characters.**
@@ -131,7 +131,7 @@ Text overlays generated: <project_name>
   Styles: date=A, name=B, stat=C, cost=D
   Output: ${OUTDIR}/text_overlays.json
 
-Ready for /gla:concat-fit-narrator
+Ready for /fk:concat-fit-narrator
 ```
 
 ## Common Issues

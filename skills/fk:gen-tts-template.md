@@ -1,4 +1,4 @@
-# gla:gen-tts-template — Generate Voice Template
+# fk:gen-tts-template — Generate Voice Template
 
 Create a reusable voice template for consistent narration across all scenes.
 

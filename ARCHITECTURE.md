@@ -1,4 +1,4 @@
-# Google Flow Agent — Architecture
+# Flow Kit — Architecture
 
 ## Overview
 Standalone system for AI video production: Chrome extension talks to Google Flow API,

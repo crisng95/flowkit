@@ -1,4 +1,4 @@
-# gla:import-voice — Import Existing Voice as Template
+# fk:import-voice — Import Existing Voice as Template
 
 Register an existing WAV file as a reusable voice template for narration. Auto-transcribes the audio and registers it in the template system.
 
@@ -6,7 +6,7 @@ Register an existing WAV file as a reusable voice template for narration. Auto-t
 
 - You have a real voice recording (WAV) you want to use for narration
 - You want to clone a specific voice rather than designing one with `instruct`
-- Complementary to `/gla:gen-tts-template` which creates synthetic voices
+- Complementary to `/fk:gen-tts-template` which creates synthetic voices
 
 ## Prerequisites
 

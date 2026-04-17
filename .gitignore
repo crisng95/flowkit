@@ -10,8 +10,8 @@ youtube
 agent/active_project.json
 
 # Generated AI tool configs (run: python setup.py)
-.claude/commands/gla:*
+.claude/commands/fk:*
 .gemini/commands/
 AGENTS.md
 GEMINI.md
-.gla-setup.json
+.fk-setup.json
