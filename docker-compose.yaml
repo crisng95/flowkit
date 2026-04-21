@@ -1,0 +1,21 @@
+services:
+  flowkit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      FLOW_AGENT_DIR: /app/runtime
+      API_HOST: 0.0.0.0
+      API_PORT: "8100"
+      WS_HOST: 0.0.0.0
+      WS_PORT: "9222"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "127.0.0.1:8100:8100"
+      - "127.0.0.1:9222:9222"
+    volumes:
+      - flowkit-runtime:/app/runtime
+
+volumes:
+  flowkit-runtime:

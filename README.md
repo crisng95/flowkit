@@ -143,6 +143,51 @@ curl http://127.0.0.1:8100/health
 # {"status":"ok","extension_connected":true}
 ```
 
+## Coolify Hybrid Deployment
+
+This repo includes a `Dockerfile` and `docker-compose.yaml` for a hybrid Coolify setup:
+
+- Coolify runs the Python agent/API on your VM
+- Chrome extension + Google Flow tab stay on your local machine
+- Local Chrome reaches the VM through SSH tunnel, so the extension can keep using `127.0.0.1`
+
+### Coolify app settings
+
+- **Build Pack:** Docker Compose
+- **Compose file:** `/docker-compose.yaml`
+- **Ports:** published only on loopback
+  - `127.0.0.1:8100:8100`
+  - `127.0.0.1:9222:9222`
+- **Persistent volume:** `flowkit-runtime:/app/runtime`
+
+### Required runtime env
+
+```bash
+FLOW_AGENT_DIR=/app/runtime
+API_HOST=0.0.0.0
+API_PORT=8100
+WS_HOST=0.0.0.0
+WS_PORT=9222
+```
+
+### Local SSH tunnel
+
+Run this on your Windows machine before opening the extension:
+
+```powershell
+ssh -N -L 8100:127.0.0.1:8100 -L 9222:127.0.0.1:9222 hth2-box
+```
+
+Then:
+
+1. Load `extension/` as unpacked extension in Chrome
+2. Open `https://labs.google/fx/tools/flow`
+3. Verify the agent over the tunnel:
+
+```bash
+curl http://127.0.0.1:8100/health
+```
+
 ## End-to-End Example: "Pippip the Fish Merchant"
 
 A chubby cat sells fish at a market. 3 scenes, vertical, Pixar 3D style.
