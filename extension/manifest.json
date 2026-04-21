@@ -3,6 +3,10 @@
   "name": "Flow Kit",
   "version": "0.2.0",
   "description": "Local agent bridge for Google Flow API — captures tokens, solves reCAPTCHA, proxies API calls",
+  "flowkit": {
+    "agent_ws_url": "ws://127.0.0.1:9222",
+    "callback_base_url": "http://127.0.0.1:8100"
+  },
   "permissions": ["storage", "alarms", "tabs", "webRequest", "scripting", "declarativeNetRequest", "sidePanel"],
   "host_permissions": [
     "https://labs.google/*",
