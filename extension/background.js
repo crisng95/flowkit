@@ -215,6 +215,12 @@ function connectToAgent() {
         callbackSecret = msg.secret;
         chrome.storage.local.set({ callbackSecret: msg.secret });
         console.log('[FlowAgent] Received callback secret');
+      } else if (msg.type === 'seed_token') {
+        flowKey = msg.flowKey || null;
+        metrics.tokenCapturedAt = Date.now();
+        chrome.storage.local.set({ flowKey, metrics });
+        console.log('[FlowAgent] Seeded flow token from agent');
+        broadcastStatus();
       } else if (msg.type === 'pong') {
         // keepalive response
       }
