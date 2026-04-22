@@ -110,22 +110,125 @@ curl -s http://127.0.0.1:8100/api/flow/status
 
 ### Common Triggers
 - Chrome launched without really loading the lane-02 unpacked extension.
+- Newer branded Google Chrome builds ignore `--load-extension` and `--disable-extensions-except` unless the blocking features are disabled explicitly.
 - The lane-02 extension still points to lane-01 endpoints.
 - The second Chrome profile is not signed into Google Flow yet.
 - The lane-02 SSH tunnel (`8110` / `9232`) is missing or broken.
+- The local machine is logged out of Tailscale, so `hth2-box` is unreachable and the tunnel cannot be created.
 
 ### Solutions
 - Render a lane-specific unpacked extension bundle for `lane-02`.
 - Verify the bundle manifest points to `http://127.0.0.1:8110` and `ws://127.0.0.1:9232`.
+- Launch Chrome with:
+  - `--disable-features=DisableLoadExtensionCommandLineSwitch,DisableDisableExtensionsExceptCommandLineSwitch`
+- Check `tailscale status --json` on the local machine before retrying SSH.
+- If Tailscale shows `BackendState: NoState` or `You are logged out`, run `tailscale login` and complete auth first.
 - Start the lane-02 SSH tunnel.
 - Open the dedicated lane-02 Chrome profile.
 - Confirm the unpacked extension is really loaded in `chrome://extensions`.
 - Sign in with the second Google account and open `https://labs.google/fx/tools/flow`.
 
 ### Verification
+- `tailscale status --json` reports `BackendState: Running`.
+- `http://127.0.0.1:8110/health` reports `ws.connected=true` with `connects >= 1`.
 - `curl -s http://127.0.0.1:8110/health` reports `extension_connected=true`.
 - `curl -s http://127.0.0.1:18182/ready` returns `200`.
 - A lane-02 smoke run passes `CREATE_PROJECT` instead of failing immediately.
+
+## Issue: Docker agent creates root-owned runtime output
+
+### Symptoms
+- `CONCAT_CHAPTER` fails with `Permission denied` under `.../runtime/output/.../4k/...mp4`.
+- The chapter output directory exists but is owned by `root:root`.
+- The host lane-runner cannot write downloaded clip files into the chapter output tree.
+
+### Root Cause
+- The Dockerized FlowKit agent writes chapter output into a bind-mounted runtime directory while running as `root`, so new chapter directories become root-owned on the host.
+
+### Common Triggers
+- Running `flowkit-agent` or a same-VM lane agent container without an explicit `user`.
+- Mixing a Dockerized agent with a host-process lane-runner on the same runtime path.
+- Reusing a runtime tree after a root-owned chapter directory was already created.
+
+### Solutions
+- Run the agent container as the host UID:GID instead of root.
+- In the worker compose kit, set `FLOWKIT_UID` / `FLOWKIT_GID` and keep:
+  - `user: "${FLOWKIT_UID:-1000}:${FLOWKIT_GID:-1000}"`
+- Repair existing ownership before retrying local media stages.
+
+### Verification
+- `docker inspect <agent-container>` reports `Config.User` as the host UID:GID, for example `1000:1000`.
+- The host user can `touch` and remove a test file inside the affected chapter output directory.
+- `CONCAT_CHAPTER` no longer fails with `Permission denied`.
+
+## Issue: Media docker helper creates root-owned norm/final files
+
+### Symptoms
+- `norm/*.mp4` and final concat outputs are created as `root:root` even when the agent container itself runs as the host user.
+- Chapter can still complete, but local media artifacts under `runtime/output/.../norm` or the final mp4 are owned by root.
+
+### Root Cause
+- `fk_worker.media` launches `docker run` for `ffmpeg` / `ffprobe` without `--user`, so the helper container writes bind-mounted files as root.
+
+### Common Triggers
+- `MEDIA_DOCKER_IMAGE` and `MEDIA_DOCKER_WORK_ROOT` are enabled.
+- Local media stages (`normalize_clip`, `concat_clips`, `probe_*`) use the Docker media tool path.
+- `FLOWKIT_UID` / `FLOWKIT_GID` exist but are not passed into the helper `docker run`.
+
+### Solutions
+- Add `--user ${FLOWKIT_UID}:${FLOWKIT_GID}` to the helper `docker run` command.
+- Keep `FLOWKIT_UID` / `FLOWKIT_GID` present in `lane.env`.
+- Repair ownership of old output trees once after patching.
+
+### Verification
+- Media helper tests assert the Docker command includes `--user 1000:1000`.
+- New `norm/*.mp4` and final concat outputs are created as the host user, not root.
+
+## Issue: CONCAT_CHAPTER crashes because storage helper rejects chapter_output_uri
+
+### Symptoms
+- Local ffmpeg concat finishes and writes the final mp4.
+- Then `CONCAT_CHAPTER` crashes with:
+  - `TypeError: update_chapter_state() got an unexpected keyword argument 'chapter_output_uri'`
+
+### Root Cause
+- `fk_worker.stages.handle_concat_chapter()` passes `chapter_output_uri=...`, but `fk_worker.storage.update_chapter_state()` did not accept that keyword.
+
+### Common Triggers
+- A concat run reaches the DB update step after producing the final chapter file.
+- The worker code is newer than the storage helper signature.
+
+### Solutions
+- Extend `update_chapter_state()` to support `chapter_output_uri`.
+- Verify the `chapters` table column exists and write to it together with metadata updates.
+
+### Verification
+- Worker tests cover `update_chapter_state(..., chapter_output_uri=...)`.
+- `chapters.chapter_output_uri` is populated after local concat finishes.
+
+## Issue: GEN_VIDEOS marked completed even when a scene video failed
+
+### Symptoms
+- `GEN_VIDEOS` is marked `completed`.
+- A later `CONCAT_CHAPTER` fails with `Scene <id> has no downloadable video source`.
+- One or more scenes show `vertical_video_status=FAILED` or are missing video URLs.
+
+### Root Cause
+- The worker stage trusted batch request completion without re-checking scene-level output availability, so the pipeline advanced past the real failure point.
+
+### Common Triggers
+- One request in the batch fails while other scenes succeed.
+- Scene rows end up with `*_video_status=FAILED` and no matching downloadable URL.
+- The stage only waits for request records and does not validate final scene fields.
+
+### Solutions
+- Treat any non-`COMPLETED` request in the batch as a hard failure.
+- After `GEN_IMAGES`, `GEN_VIDEOS`, or `UPSCALE`, re-read scene rows and verify the expected output URL plus `*_status=COMPLETED`.
+- Fail the stage immediately instead of letting the pipeline drift into concat/upload.
+
+### Verification
+- Worker tests cover failed request records and missing scene video URLs.
+- A scene with `vertical_video_status=FAILED` now raises during `GEN_VIDEOS`, not during `CONCAT_CHAPTER`.
 
 ## Issue: CAPTCHA_FAILED NO_FLOW_TAB
 

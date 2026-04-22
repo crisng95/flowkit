@@ -373,3 +373,49 @@ class TestSingleton:
         instance = init_operations(mock_client, mock_repo)
         retrieved = get_operations()
         assert retrieved is instance
+
+
+class TestPollOperations:
+    @pytest.mark.asyncio
+    async def test_poll_operations_surfaces_error_details(self):
+        client = AsyncMock()
+        client.check_video_status = AsyncMock(return_value={
+            "data": {
+                "operations": [
+                    {
+                        "status": "MEDIA_GENERATION_STATUS_FAILED",
+                        "operation": {
+                            "name": "op-123",
+                            "error": {
+                                "message": "Flow blocked request",
+                                "details": [{"reason": "PUBLIC_ERROR_UNSAFE_GENERATION"}],
+                            },
+                        },
+                    }
+                ]
+            }
+        })
+
+        with patch("agent.sdk.services.operations.VIDEO_POLL_INTERVAL", 0):
+            result = await ops_module._poll_operations(client, [{"operation": {"name": "op-123"}}], timeout=1)
+
+        assert result["error"] == "Flow blocked request [PUBLIC_ERROR_UNSAFE_GENERATION]"
+
+    @pytest.mark.asyncio
+    async def test_poll_operations_falls_back_to_operation_name_when_error_missing(self):
+        client = AsyncMock()
+        client.check_video_status = AsyncMock(return_value={
+            "data": {
+                "operations": [
+                    {
+                        "status": "MEDIA_GENERATION_STATUS_FAILED",
+                        "operation": {"name": "op-456"},
+                    }
+                ]
+            }
+        })
+
+        with patch("agent.sdk.services.operations.VIDEO_POLL_INTERVAL", 0):
+            result = await ops_module._poll_operations(client, [{"operation": {"name": "op-456"}}], timeout=1)
+
+        assert result["error"] == "Operation failed: op-456"

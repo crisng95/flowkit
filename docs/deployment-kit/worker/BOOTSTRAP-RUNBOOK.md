@@ -28,16 +28,25 @@ chmod +x bootstrap-lane.sh
 ./bootstrap-lane.sh lane-01 flow-account-01
 ```
 
+Optional shortcut:
+
+```bash
+cd docs/deployment-kit/worker/scripts
+APP_SOURCE=/path/to/flowkit/repo ./bootstrap-lane.sh lane-01 flow-account-01
+```
+
 This creates:
 
 - `/srv/flowkit/lane-01/...`
 - env files
 - service unit files
+- and, if `APP_SOURCE` is set, a copy of the FlowKit app under `/srv/flowkit/lane-01/app`
 
 ## After bootstrap
 
 1. Sync app repo into:
    - `/srv/flowkit/lane-01/app`
+   - skip this if `APP_SOURCE` already copied it during bootstrap
 2. Copy unpacked extension into:
    - `/srv/flowkit/lane-01/extension`
 3. Edit:
@@ -100,13 +109,16 @@ If you want the agent and runner inside Docker instead of systemd:
 
 ```bash
 cp lane.env.example ./env/lane.env
-docker compose -f docker-compose.worker.yml up -d --build
+docker compose --env-file ./env/lane.env -f docker-compose.worker.yml up -d --build
 ```
 
 Notes:
 
 - `flowkit-agent` builds from `./app`
 - `lane-runner` builds from this worker kit
+- `FLOWKIT_UID` / `FLOWKIT_GID` are read by Compose from `--env-file ./env/lane.env`
+- set those values in `env/lane.env` if the host user is not `1000:1000`
+- both containers run as that host UID:GID to avoid root-owned files under `runtime/output/`
 - Chrome still stays host-managed
 
 ## Host-process lane-runner mode
@@ -198,6 +210,7 @@ Launch a separate Chrome profile:
 ```powershell
 "C:\Program Files\Google\Chrome\Application\chrome.exe" `
   --user-data-dir=C:\temp\flowkit-real-chrome-lane-02\UserData `
+  --disable-features=DisableLoadExtensionCommandLineSwitch,DisableDisableExtensionsExceptCommandLineSwitch `
   --disable-extensions-except=C:\temp\flowkit-extension-unpacked-lane-02 `
   --load-extension=C:\temp\flowkit-extension-unpacked-lane-02 `
   https://labs.google/fx/tools/flow

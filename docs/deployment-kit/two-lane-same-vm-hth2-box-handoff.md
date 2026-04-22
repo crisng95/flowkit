@@ -39,15 +39,186 @@ Target shape:
 - lane-02 tunnel process started locally:
   - `ssh -N -L 8110:127.0.0.1:8110 -L 9232:127.0.0.1:9232 hth2-box`
 - lane-02 Chrome was launched with the new profile and extension path
+- April 22 follow-up:
+  - local Tailscale was found logged out
+  - `tailscale login` was completed on the local Windows machine
+  - local tailnet state is back to `BackendState=Running`
+  - local node IP is now `100.109.92.89`
+  - `hth2-box` later came back online on Tailscale
+  - lane-02 tunnel is active again for:
+    - `8110`
+    - `9232`
+    - `18182`
+  - lane-02 Chrome was launched again with:
+    - `chrome://extensions`
+    - `https://labs.google/fx/tools/flow`
+  - important Chrome note:
+    - current branded Chrome ignored plain `--load-extension`
+    - the launch that actually worked used:
+      - `--disable-features=DisableLoadExtensionCommandLineSwitch,DisableDisableExtensionsExceptCommandLineSwitch`
 
-Important blocker still present:
+### Current live state after reconnect
 
-- VM `8110/health` still reports `extension_connected=false`
-- this means the lane-02 extension is not yet handshaking with the VM agent
-- likely causes:
-  - Chrome ignored `--load-extension`
-  - unpacked extension still needs manual load in `chrome://extensions`
-  - second Google account not yet signed in on the new profile
+- local lane-02 health now reports:
+  - `http://127.0.0.1:8110/health`
+  - `extension_connected=true`
+  - `ws.connected=true`
+- local lane-02 Flow status now reports:
+  - `http://127.0.0.1:8110/api/flow/status`
+  - `connected=true`
+  - `flow_key_present=true`
+- lane-02 runner health now reports:
+  - `http://127.0.0.1:18182/ready`
+  - `200`
+- lane-02 runner process was restarted on VM and is now listening on:
+  - `127.0.0.1:18182`
+- control demo services were restarted on VM and are now up again:
+  - `fk_control.api`
+  - `fk_control.scheduler`
+
+### Current smoke result
+
+New smoke project after reconnect:
+
+- title: `Lane 02 Single Chapter Smoke 2026-04-22 09-02`
+- project id: `9e134864-af02-47c9-9b6b-cdabbf67bb14`
+- chapter id: `18f6fb64-98ec-4d54-8ed9-64dcd5de1b43`
+- chapter slug: `lane_02_single_chapter_smoke_2026_04_22_09_02_chapter_01`
+
+Observed result:
+
+- chapter assigned to `lane-02`
+- `CREATE_PROJECT` completed successfully on first attempt
+- chapter received:
+  - `local_flow_project_id=5024576b-4a6b-45fb-9f41-bd634fde6dda`
+- `CREATE_ENTITIES` completed
+- `CREATE_VIDEO` completed
+- `CREATE_SCENES` completed
+- `GEN_REFS` completed
+- `GEN_IMAGES` completed
+- `GEN_VIDEOS` completed
+- later failure was no longer extension/account related
+- failure moved to:
+  - `CONCAT_CHAPTER`
+  - error:
+    - `Permission denied` under `/home/hth2/flowkit-worker-demo-lane-02/runtime/output/.../4k/...mp4`
+
+### Credit-saving stop point
+
+User requested short smoke only, not a full paid run.
+
+Actions taken:
+
+- lane-02 runner was stopped intentionally after the short proof run
+- control scheduler was also stopped intentionally
+- local tunnel / extension wiring can be re-used next session
+
+State at stop time:
+
+- `fk_worker.runner` stopped
+- `fk_control.scheduler` stopped
+- `18182/ready` no longer serving because the runner was intentionally shut down
+- chapter `18f6fb64-98ec-4d54-8ed9-64dcd5de1b43` ended `failed`
+- proof already achieved before stop:
+  - second account connected
+  - real lane-02 got the chapter
+  - real Flow project was created
+  - lane-02 progressed through media-generation stages
+
+### Post-stop debugging findings
+
+- the first `CONCAT_CHAPTER` failure was confirmed to be a real host-permission bug:
+  - chapter output dir was created as `root:root`
+  - path:
+    - `/home/hth2/flowkit-worker-demo-lane-02/runtime/output/lane_02_single_chapter_smoke_2026_04_22_09_02_chapter_01`
+- root cause:
+  - `flowkit-lane-02-agent` container was running with empty Docker `Config.User`
+  - this wrote runtime output as root on the bind mount
+- live VM mitigation applied:
+  - `flowkit-lane-02-agent` was recreated with:
+    - `--user 1000:1000`
+  - lane-02 runtime ownership was repaired back to `hth2:hth2`
+  - `8110/health` still worked after recreation
+- live lane-02 root was also synced with the updated worker kit pieces:
+  - `docker-compose.worker.yml`
+  - `Dockerfile.worker`
+  - `lane.env.example`
+  - `scripts/bootstrap-lane.sh`
+  - `fk_worker/stages.py`
+- live `env/lane.env` now includes:
+  - `FLOWKIT_UID=1000`
+  - `FLOWKIT_GID=1000`
+- after the permission fix, rerunning `CONCAT_CHAPTER` no longer failed on file ownership
+- the next real bug found was logical, not infra:
+  - one scene had:
+    - `vertical_video_status=FAILED`
+    - `vertical_video_url=null`
+  - scene id:
+    - `77dadaa7-f396-432f-b80a-e3ea1d1a4be4`
+  - failed request row:
+    - request id row: `1ec80191-b1b6-49ec-8b29-12bf693b7fed`
+    - Flow operation id: `ed972a10f55c34b355cf781539528b64`
+    - stored error before agent patch:
+      - `Operation failed: ed972a10f55c34b355cf781539528b64`
+  - batch status for `GENERATE_VIDEO` on that video at last inspection:
+    - `total=15`
+    - `completed=14`
+    - `failed=1`
+    - `all_succeeded=false`
+  - because worker stage logic only trusted batch request completion, the pipeline had incorrectly advanced beyond `GEN_VIDEOS`
+- repo fix now added:
+  - worker compose runs containers as host UID:GID
+  - `GEN_IMAGES` / `GEN_VIDEOS` / `UPSCALE` now fail fast when request status or final scene output is not actually ready
+  - agent SDK poller now extracts richer operation error text when Flow returns structured error details
+- important:
+  - repo fix was made locally in this repo
+  - agent error-detail patch was also copied into the live `flowkit-lane-02-agent` container and the container was restarted
+  - lane-02 runner and scheduler were intentionally left stopped after smoke to avoid further credit usage
+  - after a later clean restart of `flowkit-lane-02-agent`, the previous startup warning:
+    - `Failed to load custom materials: attempt to write a readonly database`
+    - did not reappear
+  - zero-credit DB write probe succeeded on live lane-02 agent:
+    - `POST /api/materials` created `lane_02_probe_material`
+    - `DELETE /api/materials/lane_02_probe_material` succeeded
+  - interpretation:
+    - current agent DB write path is healthy after the ownership/user fix
+  - one controlled low-cost retry was later allowed for the single failed scene only:
+    - request row reset from `FAILED` back to `PENDING`
+    - because `retry_count` was already `4` and `MAX_RETRIES=5`, this effectively allowed one final attempt
+    - the retry succeeded
+    - scene `77dadaa7-f396-432f-b80a-e3ea1d1a4be4` now has:
+      - `vertical_video_status=COMPLETED`
+      - `vertical_video_media_id=7cd1c47b-539c-4e89-9919-00452c7f87e6`
+  - after that retry:
+    - `GENERATE_VIDEO` batch status became:
+      - `total=15`
+      - `completed=15`
+      - `failed=0`
+      - `all_succeeded=true`
+  - local zero-credit replay of `CONCAT_CHAPTER` and `UPLOAD_ARTIFACTS` was then run directly on VM
+  - chapter is now `completed` in control DB:
+    - `chapter_output_uri=/home/hth2/flowkit-worker-demo-lane-02/runtime/output/lane_02_single_chapter_smoke_2026_04_22_09_02_chapter_01/lane_02_single_chapter_smoke_2026_04_22_09_02_chapter_01_final.mp4`
+  - artifact rows now exist for that chapter:
+    - `chapter_final`
+    - `manifest`
+    - both stored via local fallback `file://...`
+  - control-job consistency was repaired after the direct replay:
+    - `CONCAT_CHAPTER` job `26882d73-25d7-4d1e-8e13-d23a76bb86ed` is now `completed`
+    - `UPLOAD_ARTIFACTS` job `3c0d1819-fcc6-4db7-aa95-cc853f7f4f3a` is now `completed`
+  - chapter metadata was also cleaned up:
+    - `failed_job_type=null`
+    - `last_error_text=null`
+    - `repair_note='completed via direct local replay after single-scene retry'`
+  - another small code bug was found during that replay and fixed locally in repo:
+    - `fk_worker.storage.update_chapter_state()` had been missing `chapter_output_uri`
+- another ownership issue was also found and fixed locally in repo:
+  - `fk_worker.media` used `docker run` without `--user`, so `norm/*.mp4` and final concat outputs were still root-owned
+  - repo patch now passes `FLOWKIT_UID:GID` into media helper Docker commands
+  - existing files from the completed smoke chapter were chowned back to `hth2:hth2`
+  - bootstrap kit was improved again:
+    - `bootstrap-lane.sh` now supports optional `APP_SOURCE=/path/to/flowkit/repo`
+    - when provided, bootstrap copies app source straight into `DEPLOY_ROOT/app`
+    - this avoids leaving new lane roots with an empty `app/` directory
 
 ### Current VM state
 
@@ -276,19 +447,40 @@ Add lane-02 with:
 5. Launch second Chrome profile with second extension + second Google account
 6. Seed/control-test a single-chapter project pinned to lane-02
 
-## Exact next action now
+## Lowest-cost next action now
 
-1. On Windows, open the lane-02 Chrome profile.
-2. Go to `chrome://extensions`.
-3. Confirm `C:\temp\flowkit-extension-unpacked-lane-02` is actually loaded.
-4. Sign in with the second Google account in that lane-02 profile.
-5. Open `https://labs.google/fx/tools/flow`.
-6. Verify:
-   - `http://127.0.0.1:8110/health` shows `extension_connected=true`
-   - `http://127.0.0.1:18182/ready` returns `200`
-7. Re-run a one-chapter smoke project on control API.
+If the next session is still minimizing credit burn, do **not** restart the full scheduler pipeline first.
 
-Once step 6 turns green, the same lane-02 runtime should be able to pass `CREATE_PROJECT` for real.
+Retry only the one failed scene directly through the already-connected lane-02 agent:
+
+- scene id:
+  - `77dadaa7-f396-432f-b80a-e3ea1d1a4be4`
+- project id:
+  - `5024576b-4a6b-45fb-9f41-bd634fde6dda`
+- video id:
+  - `d16cdceb-934b-41b3-9dd5-8b94a2e73242`
+
+Suggested direct request:
+
+```powershell
+Invoke-RestMethod `
+  -Uri http://127.0.0.1:8110/api/requests `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"type":"GENERATE_VIDEO","orientation":"VERTICAL","scene_id":"77dadaa7-f396-432f-b80a-e3ea1d1a4be4","project_id":"5024576b-4a6b-45fb-9f41-bd634fde6dda","video_id":"d16cdceb-934b-41b3-9dd5-8b94a2e73242"}'
+```
+
+Then inspect only:
+
+- `GET /api/requests?scene_id=77dadaa7-f396-432f-b80a-e3ea1d1a4be4`
+- `GET /api/requests/batch-status?video_id=d16cdceb-934b-41b3-9dd5-8b94a2e73242&type=GENERATE_VIDEO&orientation=VERTICAL`
+- `GET /api/scenes?video_id=d16cdceb-934b-41b3-9dd5-8b94a2e73242`
+
+Why this is the cheapest meaningful retry:
+
+- it spends at most one scene-video retry, not a whole chapter rerun
+- it bypasses control scheduler and lane-runner
+- it should now surface a clearer upstream error message because the live agent poller was patched
 
 ## Exact next-session prompt
 

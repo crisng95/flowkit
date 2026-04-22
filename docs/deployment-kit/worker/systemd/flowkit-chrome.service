@@ -1,0 +1,15 @@
+[Unit]
+Description=FlowKit Chrome Session
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flowkit
+Environment=DISPLAY=:0
+ExecStart=/srv/flowkit/lane-01/scripts/start-chrome.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=FlowKit Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flowkit
+WorkingDirectory=/srv/flowkit/lane-01/app
+ExecStart=/srv/flowkit/lane-01/scripts/start-agent.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

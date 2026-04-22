@@ -9,6 +9,7 @@ if [[ $# -lt 1 ]]; then
   echo "  API_PORT_OVERRIDE=8110"
   echo "  WS_PORT_OVERRIDE=9232"
   echo "  RUNNER_HEALTH_PORT_OVERRIDE=18182"
+  echo "  APP_SOURCE=/path/to/flowkit/repo"
   echo "  SYSTEMD_DIR=/etc/systemd/system"
   echo "  SYSTEMCTL_BIN=systemctl"
   echo "  SUDO_BIN=sudo"
@@ -28,6 +29,7 @@ SUDO_BIN="${SUDO_BIN-sudo}"
 API_PORT_OVERRIDE="${API_PORT_OVERRIDE:-}"
 WS_PORT_OVERRIDE="${WS_PORT_OVERRIDE:-}"
 RUNNER_HEALTH_PORT_OVERRIDE="${RUNNER_HEALTH_PORT_OVERRIDE:-}"
+APP_SOURCE="${APP_SOURCE:-}"
 
 run_privileged() {
   if [[ -n "$SUDO_BIN" ]]; then
@@ -52,6 +54,18 @@ copy_optional_tree() {
   run_privileged cp -r "$source_path" "$target_path"
 }
 
+copy_tree_contents() {
+  local source_path="$1"
+  local target_path="$2"
+  [[ -d "$source_path" ]] || return 0
+  run_privileged cp -r "${source_path}/." "$target_path/"
+}
+
+if [[ -n "$APP_SOURCE" && ! -d "$APP_SOURCE" ]]; then
+  echo "APP_SOURCE does not exist: $APP_SOURCE" >&2
+  exit 1
+fi
+
 run_privileged mkdir -p \
   "${DEPLOY_ROOT}/app" \
   "${DEPLOY_ROOT}/chrome-profile" \
@@ -66,6 +80,15 @@ run_privileged cp -r "${WORKER_DIR}/fk_worker" "${DEPLOY_ROOT}/"
 copy_optional_tree "${WORKER_DIR}/tests" "${DEPLOY_ROOT}/"
 run_privileged cp "${WORKER_DIR}/requirements.txt" "${DEPLOY_ROOT}/"
 run_privileged cp "${WORKER_DIR}/scripts/"*.sh "${DEPLOY_ROOT}/scripts/"
+if [[ -f "${WORKER_DIR}/docker-compose.worker.yml" ]]; then
+  run_privileged cp "${WORKER_DIR}/docker-compose.worker.yml" "${DEPLOY_ROOT}/"
+fi
+if [[ -f "${WORKER_DIR}/Dockerfile.worker" ]]; then
+  run_privileged cp "${WORKER_DIR}/Dockerfile.worker" "${DEPLOY_ROOT}/"
+fi
+if [[ -n "$APP_SOURCE" ]]; then
+  copy_tree_contents "$APP_SOURCE" "${DEPLOY_ROOT}/app"
+fi
 
 run_privileged cp "${WORKER_DIR}/lane.env.example" "${DEPLOY_ROOT}/env/lane.env"
 run_privileged cp "${WORKER_DIR}/account.env.example" "${DEPLOY_ROOT}/env/account.env"
@@ -98,7 +121,11 @@ fi
 
 echo "Bootstrapped ${LANE_ID} at ${DEPLOY_ROOT}"
 echo "Next:"
-echo "  1. Sync FlowKit app code into ${DEPLOY_ROOT}/app"
+if [[ -n "$APP_SOURCE" ]]; then
+  echo "  1. FlowKit app code copied from ${APP_SOURCE} into ${DEPLOY_ROOT}/app"
+else
+  echo "  1. Sync FlowKit app code into ${DEPLOY_ROOT}/app"
+fi
 echo "  2. Put extension files into ${DEPLOY_ROOT}/extension"
 echo "  3. Edit ${DEPLOY_ROOT}/env/lane.env and account.env"
 echo "  4. Install Python deps"
