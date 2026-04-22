@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - .env.control
+    volumes:
+      - fk-control-postgres:/var/lib/postgresql/data
+      - ./postgres-schema.sql:/docker-entrypoint-initdb.d/001-postgres-schema.sql:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_PUBLISH_PORT:-5432}:5432"
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - fk-control-redis:/data
+    ports:
+      - "127.0.0.1:${REDIS_PUBLISH_PORT:-6379}:6379"
+
+  control-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fk-control-kit:latest
+    restart: unless-stopped
+    working_dir: /srv/control
+    env_file:
+      - .env.control
+    command: ["python", "-m", "fk_control.api"]
+    ports:
+      - "127.0.0.1:${CONTROL_API_PUBLISH_PORT:-8080}:8080"
+    depends_on:
+      - postgres
+      - redis
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fk-control-kit:latest
+    restart: unless-stopped
+    working_dir: /srv/scheduler
+    env_file:
+      - .env.control
+    command: ["python", "-m", "fk_control.scheduler"]
+    depends_on:
+      - postgres
+      - redis
+
+  assembler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fk-control-kit:latest
+    restart: unless-stopped
+    working_dir: /srv/assembler
+    env_file:
+      - .env.control
+    command: ["python", "-m", "fk_control.assembler"]
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  fk-control-postgres:
+  fk-control-redis:

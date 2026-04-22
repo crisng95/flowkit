@@ -112,10 +112,56 @@ def _build_character_profile(char_name: str, char_desc: str | None, story: str |
     return {"description": description, "image_prompt": image_prompt}
 
 
+def _extract_flow_error_message(flow_result: dict) -> str | None:
+    if not isinstance(flow_result, dict):
+        return None
+    if flow_result.get("error"):
+        return str(flow_result["error"])
+
+    data = flow_result.get("data")
+    if not isinstance(data, dict):
+        return None
+
+    error = data.get("error")
+    if not isinstance(error, dict):
+        return None
+
+    json_error = error.get("json")
+    if isinstance(json_error, dict):
+        message = json_error.get("message")
+        code = json_error.get("data", {}).get("code") if isinstance(json_error.get("data"), dict) else None
+        if message and code:
+            return f"{message} ({code})"
+        if message:
+            return str(message)
+
+    status = error.get("status") or flow_result.get("status")
+    if status:
+        return f"Flow request failed with status {status}"
+    return None
+
+
+def _extract_flow_project_id(flow_result: dict) -> str:
+    flow_error = _extract_flow_error_message(flow_result)
+    if flow_error:
+        raise HTTPException(502, f"Flow createProject failed: {flow_error}")
+
+    try:
+        data = flow_result.get("data", {})
+        result = data["result"]["data"]["json"]["result"]
+        return result["projectId"]
+    except (KeyError, TypeError) as exc:
+        logger.error("Unexpected Flow response: %s", flow_result)
+        raise HTTPException(502, f"Failed to parse Flow response: {exc}") from exc
+
+
 async def _detect_user_tier(client) -> str:
     """Auto-detect user paygate tier from Flow credits API."""
     try:
         result = await client.get_credits()
+        flow_error = _extract_flow_error_message(result)
+        if flow_error:
+            raise ValueError(flow_error)
         data = result.get("data", result)
         tier = data.get("userPaygateTier", "PAYGATE_TIER_ONE")
         logger.info("Auto-detected user tier: %s", tier)
@@ -155,16 +201,7 @@ async def create(body: ProjectCreate):
     detected_tier = await _detect_user_tier(client)
 
     flow_result = await client.create_project(body.name, body.tool_name)
-    if flow_result.get("error"):
-        raise HTTPException(502, f"Flow API error: {flow_result['error']}")
-
-    try:
-        data = flow_result.get("data", {})
-        result = data["result"]["data"]["json"]["result"]
-        flow_project_id = result["projectId"]
-    except (KeyError, TypeError) as e:
-        logger.error("Unexpected Flow response: %s", flow_result)
-        raise HTTPException(502, f"Failed to parse Flow response: {e}")
+    flow_project_id = _extract_flow_project_id(flow_result)
 
     logger.info("Flow project created: %s", flow_project_id)
 
