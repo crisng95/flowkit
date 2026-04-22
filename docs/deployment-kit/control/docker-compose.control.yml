@@ -26,6 +26,8 @@ services:
     image: fk-control-kit:latest
     restart: unless-stopped
     working_dir: /srv/control
+    environment:
+      PYTHONPATH: /srv/control
     env_file:
       - .env.control
     command: ["python", "-m", "fk_control.api"]
@@ -42,6 +44,8 @@ services:
     image: fk-control-kit:latest
     restart: unless-stopped
     working_dir: /srv/scheduler
+    environment:
+      PYTHONPATH: /srv/control
     env_file:
       - .env.control
     command: ["python", "-m", "fk_control.scheduler"]
@@ -56,6 +60,8 @@ services:
     image: fk-control-kit:latest
     restart: unless-stopped
     working_dir: /srv/assembler
+    environment:
+      PYTHONPATH: /srv/control
     env_file:
       - .env.control
     command: ["python", "-m", "fk_control.assembler"]

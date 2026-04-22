@@ -98,3 +98,11 @@ def test_run_control_demo_script_help():
     assert "RESET_STATE" in result.stdout
     assert "CONTROL_API_PID_FILE" in result.stdout
     assert "WAIT_FOR_ASSIGNMENTS" in result.stdout
+
+
+def test_control_compose_exposes_pythonpath_for_all_python_services():
+    compose_file = Path(__file__).resolve().parents[1] / "docker-compose.control.yml"
+
+    content = compose_file.read_text(encoding="utf-8")
+
+    assert "PYTHONPATH: /srv/control" in content
