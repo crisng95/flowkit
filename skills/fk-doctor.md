@@ -1,6 +1,24 @@
 Diagnose any FlowKit error and prescribe a fix. Knows the full error taxonomy across Google Flow, the Chrome extension, the FastAPI layer, the worker, and the YouTube upload pipeline.
 
-Usage:
+## When to use this skill
+
+**TRIGGER (auto-invoke) when:**
+- Any `/api/requests/*` response has `status=FAILED` or `error_message` is set
+- A request has been `PROCESSING` for > 10 minutes with no progress
+- `GET /health` returns `extension_connected: false`
+- User reports any error string containing: `UNSAFE_GENERATION`, `QUOTA`, `not found`, `CAPTCHA`, `NO_FLOW_KEY`, `NO_FLOW_TAB`, `extension_switched`, `Failed to fetch`, `MODEL_ACCESS_DENIED`, `PAYGATE_TIER_TWO`, `invalidTags`, `quotaExceeded`, `invalid_grant`
+- User asks "why did X fail", "what's wrong with the pipeline", "why is this stuck", "tại sao X lỗi", "lỗi gì vậy"
+- An HTTP 4xx/5xx reaches the main agent from any endpoint under `127.0.0.1:8100`
+- A YouTube upload returns `HttpError` from `googleapiclient`
+- `cryptography` / architecture / import errors surface during setup
+
+**DO NOT use when:**
+- The request is still `PENDING` and hasn't been attempted yet
+- The user is asking about features, not failures (route to `/fk-status` or the relevant `/fk-*` skill instead)
+- The error is in user code unrelated to the FlowKit pipeline
+
+## Usage
+
 - `/fk-doctor` — triage mode: scan recent FAILED requests + extension health, list what's broken and how to fix
 - `/fk-doctor <request_id>` — diagnose a single request by ID
 - `/fk-doctor "<error message>"` — lookup a specific error string and return the handling playbook
