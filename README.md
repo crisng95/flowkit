@@ -1,4 +1,20 @@
-# FlowKit
+<p align="center">
+  <img src="docs/images/flowkit_banner.svg" width="720" alt="FLOW KIT" />
+</p>
+
+<p align="center">
+  <a href="#license"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/></a>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python 3.10+"/>
+  <img src="https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome MV3"/>
+  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/ffmpeg-required-007808?logo=ffmpeg&logoColor=white" alt="ffmpeg"/>
+  <a href="CLAUDE.md"><img src="https://img.shields.io/badge/Docs-CLAUDE.md-8A2BE2" alt="Documentation"/></a>
+  <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/stargazers"><img src="https://img.shields.io/github/stars/tuannguyenhoangit-droid/google-flow-agent?style=flat&logo=github" alt="GitHub stars"/></a>
+  <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/issues"><img src="https://img.shields.io/github/issues/tuannguyenhoangit-droid/google-flow-agent?logo=github" alt="GitHub issues"/></a>
+  <a href="https://deepwiki.com/tuannguyenhoangit-droid/google-flow-agent"><img src="https://img.shields.io/badge/DeepWiki-AI%20Docs-6A3BC9" alt="DeepWiki"/></a>
+</p>
+
+# FLOW KIT
 
 Standalone system to generate AI videos via Google Flow API. Uses a Chrome extension as browser bridge for authentication, reCAPTCHA solving, and API proxying.
 
@@ -607,17 +623,90 @@ Each channel has a rules file controlling upload scheduling and SEO:
 
 Upload validation checks: max per day, min gap between uploads, avoid dead hours. Auto-detects Short (<61s + vertical 9:16) vs Long-form.
 
-## Troubleshooting
+## Error Handling
+
+Errors can originate from four layers — Google Flow backend, Chrome extension, FastAPI layer, and the worker itself. The worker's `_handle_failure` (`agent/worker/processor.py:414-481`) routes recovery by **`error_message` string content, not HTTP status**, because Flow lumps many distinct failures under HTTP 400 with varying `details.reason` values.
+
+### Flow-Native Structured Errors
+
+These arrive in the response body as `data.error.details[].reason`. The worker appends the reason to `error_message` as `"<msg> [<reason>]"`.
+
+| Reason string | Meaning | Auto-handling |
+|---------------|---------|---------------|
+| `PUBLIC_ERROR_UNSAFE_GENERATION` | Prompt tripped safety filter (people, violence, nudity) | Mark FAILED — rewrite prompt (use alias names, remove triggers) |
+| `PUBLIC_ERROR_USER_QUOTA_REACHED` | Daily credits exhausted | Mark FAILED — wait for reset or upgrade tier |
+| `PUBLIC_ERROR_MODEL_ACCESS_DENIED` | Tier mismatch (e.g. TIER_ONE trying Veo 3 / upscale) | Mark FAILED — auto-detect should downgrade to allowed model |
+| `Requested entity was not found` | Uploaded `media_id` expired (~1h TTL) | Auto-recover via `_recover_entity_not_found` — re-uploads from `image_url`, re-queues PENDING |
+| `Internal error encountered` | Flow backend transient 500 | Exponential backoff retry: `2^retry * 10s`, capped 300s |
+| `reCAPTCHA failed` / `captcha` | Extension couldn't solve CAPTCHA | Retry up to 10× without incrementing `retry_count` (processor.py:454-464) |
+
+### HTTP Status Codes
+
+| Status | Source | Meaning | Handling |
+|--------|--------|---------|----------|
+| **400** | Flow API | Invalid payload, UNSAFE_GENERATION, entity not found (sometimes) | Route by `details.reason` — some are auto-recoverable, others terminal |
+| **401** | Flow API | Bearer token expired | Extension re-captures token from labs.google tab; request retries |
+| **403** | Extension (`background.js:432`) | `CAPTCHA_FAILED`, `NO_FLOW_TAB`, or `MODEL_ACCESS_DENIED` | CAPTCHA → retry loop; NO_FLOW_TAB → fail (user must open Flow); tier → fail |
+| **404** | Flow API | `media_id` not found (expired upload) | Same as "Requested entity was not found" — auto re-upload |
+| **429** | Flow API | Rate limited / quota | Back off + retry; if `USER_QUOTA_REACHED` appears, fail |
+| **500** | Flow backend **or** extension fetch exception (`background.js:504`) | Transient server error OR network drop during fetch | Retry with exponential backoff |
+| **502** | FastAPI default (`agent/api/flow.py:80,92`) | Extension returned error without explicit status | Retry; check extension health |
+| **503** | FastAPI (`api/flow.py`) | "Extension not connected" or `NO_FLOW_KEY` | Worker waits for reconnect — status set to PENDING, not FAILED |
+| **504** | Agent | 60s timeout waiting for extension WS response | Treated as transient; re-queue PENDING |
+
+Status-code detection logic lives in `agent/worker/_parsing.py:_is_error` — a result is an error if `result.error` is set, `status >= 400`, **or** `data.error` is present.
+
+### Extension / Transport Errors
+
+String patterns in `error_message` that the worker recognizes:
+
+| Error message contains | Cause | Handling |
+|-----------------------|-------|----------|
+| `Extension not connected` | Chrome extension offline or WS dropped | 503 returned; worker re-queues PENDING and waits |
+| `extension reconnected` / `extension disconnected` | WS bounce mid-request | Re-queue PENDING without incrementing `retry_count` |
+| `extension_switched` | User switched Flow tabs mid-generation | Re-queue PENDING |
+| `NO_FLOW_KEY` | Extension has no captured bearer token | User must open `labs.google/fx/tools/flow` and sign in |
+| `NO_FLOW_TAB` | No Google Flow tab available for reCAPTCHA | User must open a Flow tab |
+| `Failed to fetch` | Network drop inside extension service worker | Retry with backoff |
+| `timeout` / WS 60s no response | Extension hung mid-request | Re-queue PENDING |
+
+### Worker Retry Policy
+
+`processor.py:_handle_failure` decides terminal vs retryable:
+
+1. **Auto-recover** if message contains `"not found"` → re-upload media, mark PENDING.
+2. **Transient WS** (`reconnected`/`disconnected`/`switched`) → re-queue PENDING, keep `retry_count`.
+3. **CAPTCHA** → retry up to 10× without counting toward `MAX_RETRIES`.
+4. **Default** → increment `retry_count`; if < `MAX_RETRIES` (5), schedule retry with `2^retry * 10s` backoff (capped 300s). Otherwise mark FAILED.
+
+### YouTube Upload Errors
+
+From `youtube/upload.py` (HTTP errors from YouTube Data API v3):
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `invalidTags` (400) | Tags exceed 500-char limit (incl. quote overhead: spaces → +2 per tag) | Trim tags; validate with `sum(len(t) + (2 if ' ' in t else 0) for t in tags) + (len(tags)-1) <= 500` |
+| `invalidCategoryId` (400) | Unknown category | Use `"22"` (People & Blogs) or `"24"` (Entertainment) |
+| `quotaExceeded` (403) | Daily 10K quota exhausted (uploads cost 1600) | Wait 24h (Pacific midnight reset) |
+| `uploadLimitExceeded` (400) | Channel daily upload cap hit | Wait 24h or use different channel |
+| `invalid_grant` (auth) | Token revoked or expired | Re-run `python3 youtube/auth.py <channel>` |
+| `scheduledPublishTimeInPast` | `publishAt` <= now | Use `auto_schedule()` or bump to next day |
+
+### Common Symptoms → Fix
 
 | Problem | Solution |
 |---------|----------|
 | Extension shows "Agent disconnected" | Start `python -m agent.main` |
-| Extension shows "No token" | Open labs.google/fx/tools/flow |
-| `CAPTCHA_FAILED: NO_FLOW_TAB` | Need a Google Flow tab open |
-| 403 MODEL_ACCESS_DENIED | Tier mismatch — auto-detect should handle it |
-| Scene images inconsistent | Check all refs have `media_id` (UUID). Run `/fk-fix-uuids` |
-| media_id starts with CAMS... | Run `/fk-fix-uuids` to extract UUID from URL |
-| Upscale permission denied | Requires PAYGATE_TIER_TWO account |
+| Extension shows "No token" | Open `labs.google/fx/tools/flow` and sign in |
+| `CAPTCHA_FAILED: NO_FLOW_TAB` | Open a Google Flow tab |
+| 403 `MODEL_ACCESS_DENIED` | Tier mismatch — check `/api/flow/credits`, downgrade model in `models.json` |
+| Scene images inconsistent | Check all refs have UUID `media_id` — run `/fk-fix-uuids` |
+| `media_id` starts with `CAMS...` | Run `/fk-fix-uuids` to extract UUID from URL |
+| Upscale "permission denied" | Requires `PAYGATE_TIER_TWO` account |
+| Request stuck in PROCESSING | Check `error_message` history; if extension dropped, restart extension |
+| "Requested entity was not found" spam | Image URLs expired — re-upload via `POST /api/upload-image` or wait for auto-recovery |
+| YouTube upload `invalidTags` | Tag-char overflow; reduce tags (quote overhead bytes count) |
+| Python `cryptography` arch mismatch | Use `python3.10`, not `python3.13` (x86/arm64 binary mismatch) |
 
 ## License
 
