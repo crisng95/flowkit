@@ -40,6 +40,7 @@ curl -s http://127.0.0.1:8100/health
 | `/fk-switch-project` | Switch active project |
 | `/fk-fix-uuids` | Fix non-UUID media_ids |
 | `/fk-refresh-urls` | Refresh expired GCS URLs |
+| `/fk-doctor` | Diagnose errors + prescribe fixes (Flow/extension/worker/YT) |
 | `/fk-add-material` | Set image material style |
 | `/fk-change-model` | Change video/image model |
 | `/fk-insert-scene` | Insert scenes into chain |
