@@ -1,12 +1,18 @@
 /**
- * Content script — bridge between background.js and injected.js
- * Injects injected.js into MAIN world to access window.grecaptcha
+ * Content script bridge between background.js and injected.js.
+ * Injects injected.js into the MAIN world to access window.grecaptcha.
  */
 (function () {
-  const s = document.createElement('script');
-  s.src = chrome.runtime.getURL('injected.js');
-  s.onload = () => s.remove();
-  (document.head || document.documentElement).appendChild(s);
+  if (window.__flowKitContentInjected) return;
+  window.__flowKitContentInjected = true;
+
+  if (!document.getElementById('flowkit-injected-script')) {
+    const script = document.createElement('script');
+    script.id = 'flowkit-injected-script';
+    script.src = chrome.runtime.getURL('injected.js');
+    script.onload = () => script.remove();
+    (document.head || document.documentElement).appendChild(script);
+  }
 })();
 
 chrome.runtime.onMessage.addListener((msg, _, reply) => {
@@ -28,16 +34,14 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
   }, 25000);
 
   window.addEventListener('CAPTCHA_RESULT', handler);
-
   window.dispatchEvent(new CustomEvent('GET_CAPTCHA', {
     detail: { requestId, pageAction },
   }));
 
-  return true; // keep channel open for async reply
+  return true;
 });
 
-// ─── TRPC Media URL Monitor ─────────────────────────────────
-// Forward intercepted TRPC responses with media URLs to background.js
+// Forward intercepted TRPC responses with media URLs to background.js.
 window.addEventListener('TRPC_MEDIA_URLS', (e) => {
   const { url, body } = e.detail || {};
   if (!body) return;

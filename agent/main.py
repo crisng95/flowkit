@@ -42,6 +42,9 @@ async def ws_handler(websocket):
 
     # Send callback secret so extension can authenticate HTTP callbacks
     await websocket.send(json.dumps({"type": "callback_secret", "secret": _CALLBACK_SECRET}))
+    # If the agent already knows a Flow token, seed it into the reconnecting extension.
+    if getattr(client, "_flow_key", None):
+        await websocket.send(json.dumps({"type": "seed_token", "flowKey": client._flow_key}))
 
     try:
         async for raw in websocket:

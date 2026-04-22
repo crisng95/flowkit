@@ -4,8 +4,12 @@ __pycache__/
 *.db-shm
 *.db-wal
 *.db-journal
+.pytest_cache/
+.venv/
+venv/
 .env
 output/
+runtime/
 youtube
 agent/active_project.json
 extension/_metadata/

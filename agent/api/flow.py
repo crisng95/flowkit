@@ -76,6 +76,11 @@ async def get_credits():
     if not client.connected:
         raise HTTPException(503, "Extension not connected")
     result = await client.get_credits()
+    data = result.get("data")
+    if isinstance(data, dict) and data:
+        # Some extension callbacks carry a top-level error alongside usable data.
+        # Project creation already tolerates this shape when reading the tier.
+        return data
     if result.get("error"):
         raise HTTPException(502, result["error"])
     return result.get("data", result)

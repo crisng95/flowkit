@@ -103,6 +103,23 @@ def _extract_operations(result: dict) -> list[dict]:
     return ops
 
 
+def _extract_operation_error(op: dict) -> str | None:
+    operation = op.get("operation", {}) if isinstance(op, dict) else {}
+    error = operation.get("error") or op.get("error")
+    if isinstance(error, dict):
+        message = error.get("message") or "Operation failed"
+        details = error.get("details")
+        if isinstance(details, list):
+            for detail in details:
+                if isinstance(detail, dict) and detail.get("reason"):
+                    return f"{message} [{detail['reason']}]"
+        return message
+    if error:
+        return str(error)
+    op_name = operation.get("name", "?")
+    return f"Operation failed: {op_name}"
+
+
 async def _poll_operations(
     client: FlowClient,
     operations: list[dict],
@@ -144,7 +161,7 @@ async def _poll_operations(
                 # Log full operation for debugging failure reason
                 import json as _json
                 logger.error("Operation FAILED: name=%s full=%s", op_name, _json.dumps(op)[:1000])
-                error_msg = f"Operation failed: {op_name}"
+                error_msg = _extract_operation_error(op)
                 has_error = True
                 break
             else:
