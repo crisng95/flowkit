@@ -145,6 +145,35 @@ chmod +x scripts/run-worker-demo.sh
 ./scripts/run-worker-demo.sh
 ```
 
+### Host-process ops wrapper
+
+Use the wrapper when you want consistent `start` / `stop` / `status` / `health`
+commands with shared pid files.
+
+```bash
+chmod +x scripts/lane-service.sh
+./scripts/lane-service.sh status
+./scripts/lane-service.sh health
+./scripts/lane-service.sh ready
+./scripts/lane-service.sh start
+./scripts/lane-service.sh stop
+```
+
+Status returns JSON with:
+
+- runner pid / liveness
+- `/health` result
+- `/ready` result
+
+`/ready` now stays `503` until the lane is actually dispatchable:
+
+- agent API reachable
+- extension connected
+- Flow account/token present
+
+This keeps the control scheduler from assigning new work to a lane that is only
+"half alive".
+
 Typical overrides for a local demo:
 
 ```bash
@@ -157,6 +186,24 @@ RUNNER_HEALTH_PORT=18181 \
 WORKER_CONSUMER_NAME=fk-demo-lane-01 \
 ./scripts/run-worker-demo.sh
 ```
+
+## Control host-process ops wrapper
+
+For the control demo stack:
+
+```bash
+cd ../control
+chmod +x scripts/control-service.sh
+./scripts/control-service.sh status
+./scripts/control-service.sh health
+./scripts/control-service.sh start
+./scripts/control-service.sh stop
+```
+
+This wrapper manages both:
+
+- control API pid
+- scheduler pid
 
 If object storage is not configured yet, you can allow local-only artifact registration for demo runs:
 

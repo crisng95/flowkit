@@ -1,13 +1,70 @@
 import os
 from pathlib import Path
+import socket
 import subprocess
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 def _wsl_path(path: Path) -> str:
     drive = path.drive.rstrip(":").lower()
     tail = path.as_posix().split(":", 1)[1]
     return f"/mnt/{drive}{tail}"
+
+
+class _ResetServer:
+    def __enter__(self):
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.bind(("127.0.0.1", 0))
+        self._socket.listen()
+        self.port = self._socket.getsockname()[1]
+        self._running = True
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+        return self
+
+    def _serve(self):
+        while self._running:
+            try:
+                conn, _ = self._socket.accept()
+            except OSError:
+                return
+            conn.close()
+
+    def __exit__(self, exc_type, exc, tb):
+        self._running = False
+        self._socket.close()
+        self._thread.join(timeout=1)
+        return False
+
+
+class _JsonHandler(BaseHTTPRequestHandler):
+    payload = b'{"status":"ok"}'
+
+    def do_GET(self):  # noqa: N802
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(self.payload)
+
+    def log_message(self, format, *args):  # noqa: A003
+        return
+
+
+class _JsonServer:
+    def __enter__(self):
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), _JsonHandler)
+        self.port = self._server.server_address[1]
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=1)
+        return False
 
 
 def test_lane_runner_script_help():
@@ -38,6 +95,129 @@ def test_run_worker_demo_script_help():
     assert result.returncode == 0
     assert "WAIT_FOR_HEALTH" in result.stdout
     assert "RUNNER_PID_FILE" in result.stdout
+
+
+def test_lane_service_script_reports_stopped_status():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "lane-service.sh"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                " ".join(
+                    [
+                        f"LANE_ROOT='{_wsl_path(root)}'",
+                        "RUNNER_HEALTH_URL='http://127.0.0.1:9/health'",
+                        "RUNNER_READY_URL='http://127.0.0.1:9/ready'",
+                        f"'{_wsl_path(script)}'",
+                        "status",
+                    ]
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert '"runner_running": false' in result.stdout.lower()
+        assert '"runner_pid": null' in result.stdout.lower()
+
+
+def test_lane_service_script_status_handles_connection_reset():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "lane-service.sh"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        with _ResetServer() as server:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    " ".join(
+                        [
+                            f"LANE_ROOT='{_wsl_path(root)}'",
+                            f"RUNNER_HEALTH_URL='http://127.0.0.1:{server.port}/health'",
+                            f"RUNNER_READY_URL='http://127.0.0.1:{server.port}/ready'",
+                            f"'{_wsl_path(script)}'",
+                            "status",
+                        ]
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        assert result.returncode == 0
+        assert '"status": "unreachable"' in result.stdout.lower()
+
+
+def test_lane_service_script_loads_runner_port_from_lane_env():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "lane-service.sh"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        env_dir = root / "env"
+        env_dir.mkdir()
+        payload_file = root / "health.json"
+        payload_file.write_text('{"status":"ok"}\n', encoding="utf-8")
+        lane_env = "\n".join(
+            [
+                f"RUNNER_HEALTH_URL=file://{_wsl_path(payload_file)}",
+                f"RUNNER_READY_URL=file://{_wsl_path(payload_file)}",
+            ]
+        )
+        (env_dir / "lane.env").write_text(f"{lane_env}\n", encoding="utf-8")
+        result = subprocess.run(
+            [
+                "bash",
+                "-lc",
+                " ".join(
+                    [
+                        f"LANE_ROOT='{_wsl_path(root)}'",
+                        f"'{_wsl_path(script)}'",
+                        "health",
+                    ]
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert '"status": "ok"' in result.stdout.lower()
+
+
+def test_lane_service_script_health_handles_connection_reset():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "lane-service.sh"
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        with _ResetServer() as server:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    " ".join(
+                        [
+                            f"LANE_ROOT='{_wsl_path(root)}'",
+                            f"RUNNER_HEALTH_URL='http://127.0.0.1:{server.port}/health'",
+                            f"'{_wsl_path(script)}'",
+                            "health",
+                        ]
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        assert result.returncode == 1
+        assert '"status": "unreachable"' in result.stdout.lower()
 
 
 def test_bootstrap_lane_script_supports_same_vm_lane_overrides():

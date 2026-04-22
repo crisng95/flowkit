@@ -1,5 +1,6 @@
 """Minimal scheduler stub that routes chapter requests into lane streams."""
 
+from datetime import datetime, timezone
 import time
 from uuid import uuid4
 
@@ -20,8 +21,35 @@ def ensure_group(stream: str, group: str, r=None) -> None:
             raise
 
 
-def idle_lane_scores() -> list[LaneScore]:
-    rows = [row for row in list_lanes() if row["status"] == "idle"]
+def _parse_timestamp(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    raise TypeError(f"Unsupported timestamp value: {value!r}")
+
+
+def lane_is_dispatchable(row: dict, *, now: datetime | None = None, stale_after_seconds: int | None = None) -> bool:
+    now = now or datetime.now(timezone.utc)
+    stale_after_seconds = stale_after_seconds or settings.lane_heartbeat_stale_after_seconds
+
+    if row.get("status") != "idle":
+        return False
+
+    heartbeat_at = _parse_timestamp(row.get("last_heartbeat_at"))
+    if heartbeat_at is None:
+        return False
+    if (now - heartbeat_at).total_seconds() > stale_after_seconds:
+        return False
+
+    metadata = row.get("lane_metadata") or {}
+    return bool(metadata.get("runner_ready"))
+
+
+def idle_lane_scores(*, now: datetime | None = None, stale_after_seconds: int | None = None) -> list[LaneScore]:
+    rows = [row for row in list_lanes() if lane_is_dispatchable(row, now=now, stale_after_seconds=stale_after_seconds)]
     return [
         LaneScore(
             lane_id=row["lane_id"],

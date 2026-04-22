@@ -60,7 +60,22 @@ def ping_all() -> dict:
 def list_lanes() -> list[dict]:
     with pg_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("select lane_id, vm_name, status, account_alias, credits_last_seen, token_age_seconds, current_chapter_id from lanes order by lane_id")
+            cur.execute(
+                """
+                select
+                  lane_id,
+                  vm_name,
+                  status,
+                  account_alias,
+                  credits_last_seen,
+                  token_age_seconds,
+                  current_chapter_id,
+                  last_heartbeat_at,
+                  lane_metadata
+                from lanes
+                order by lane_id
+                """
+            )
             return cur.fetchall()
 
 

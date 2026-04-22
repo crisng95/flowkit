@@ -53,6 +53,114 @@ curl -s http://127.0.0.1:8100/api/flow/status
 
 ## Known Issues
 
+## Issue: Lane stays paused and never receives jobs
+
+### Symptoms
+- Control overview shows the lane as `paused` instead of `idle`.
+- Scheduler keeps requeueing chapters even though the runner process exists.
+- Lane `/ready` returns `503`.
+
+### Root Cause
+- The runner heartbeat now marks a lane dispatchable only when all runtime
+  requirements are true:
+  - agent API reachable
+  - extension connected
+  - Flow key/account present
+- A stale heartbeat also makes the lane non-dispatchable.
+
+### Common Triggers
+- SSH tunnel is down.
+- Chrome profile is open but the unpacked extension did not load.
+- Second Google account is not signed in on the correct profile.
+- Runner process is up, but the agent/API port is unreachable.
+
+### Solutions
+- Check lane health:
+  - `./scripts/lane-service.sh status`
+  - `./scripts/lane-service.sh ready`
+- Check the agent directly:
+  - `curl -s http://127.0.0.1:8110/health`
+  - `curl -s http://127.0.0.1:8110/api/flow/status`
+- Restore the matching SSH tunnel, Chrome profile, and unpacked extension for
+  that lane.
+- After reconnecting extension/account, wait for the next heartbeat or restart
+  the runner.
+
+### Verification
+- Lane `/ready` returns `200`.
+- Control overview shows the lane back in `idle`.
+- New chapters can be assigned without requeue loops.
+
+## Issue: Flow credits endpoint returns 200 with embedded auth error
+
+### Symptoms
+- Lane health may show:
+  - `extension_connected=true`
+  - `flow_connected=true`
+  - `flow_key_present=true`
+- but direct Flow operations still fail with:
+  - `UNAUTHORIZED`
+  - `UNAUTHENTICATED`
+- `/api/flow/credits` returns a JSON `error` object instead of usable credits.
+
+### Root Cause
+- Some Flow auth failures come back as HTTP `200` with an embedded `error` payload.
+- Readiness code must inspect the JSON body, not just HTTP status.
+
+### Common Triggers
+- Local Chrome profile is connected to the extension, but the Google account session is expired.
+- Flow tab stayed open while login cookies became stale.
+- Wrong Google account is active in that Chrome profile.
+
+### Solutions
+- Check:
+  - `GET /api/flow/credits`
+- If payload contains `error`, treat the lane as auth-invalid even if WS and flow key look connected.
+- Re-login the correct Google account in that lane's Chrome profile.
+
+### Verification
+- `GET /api/flow/credits` returns real credits, not `error`.
+- Lane health reports:
+  - `flow_auth_valid=true`
+  - `runner_ready=true`
+- Control overview moves the lane from `paused` to `idle`.
+
+## Issue: CONCAT or UPLOAD marked failed with UUID serialization error
+
+### Symptoms
+- `CONCAT_CHAPTER` or `UPLOAD_ARTIFACTS` job ends `dead`.
+- error text contains:
+  - `Object of type UUID is not JSON serializable`
+- but the chapter may already have:
+  - `chapter_output_uri`
+  - `local_final_path`
+  - `uploaded_uris`
+- final file and artifact row may already exist despite job failure.
+
+### Root Cause
+- Worker stage handlers returned `chapter["id"]` as a Python `UUID` object.
+- `mark_job_completed()` serializes `result_json` with `json.dumps(...)`.
+- The job therefore failed after the real work had already completed.
+
+### Common Triggers
+- Host-process control smoke chapters read from Postgres via psycopg dict rows.
+- `handle_concat_chapter()` returning `chapter_id` directly.
+- `handle_upload_artifacts()` returning `chapter_id` directly.
+
+### Solutions
+- Convert stage result ids to strings before returning them.
+- If the failure already happened live:
+  - verify final file exists
+  - verify artifact row exists
+  - repair job status/result and chapter status in control DB
+  - avoid rerunning upload blindly because that can duplicate artifacts
+
+### Verification
+- `CONCAT_CHAPTER` and `UPLOAD_ARTIFACTS` job rows end `completed`.
+- `result_json.chapter_id` is a string.
+- chapter ends `completed`.
+- `chapter_output_uri` and artifact rows remain present.
+
 ## Issue: Agent disconnected
 
 ### Symptoms

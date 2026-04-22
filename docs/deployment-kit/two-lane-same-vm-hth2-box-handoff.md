@@ -76,6 +76,440 @@ Target shape:
   - `fk_control.api`
   - `fk_control.scheduler`
 
+### Current live state after ops-hardening bring-up
+
+As of April 22, 2026 later in the day:
+
+- control host-process services are up again on `hth2-box`:
+  - `http://127.0.0.1:18080/health` -> `{"status":"ok","postgres":true,"redis":true}`
+  - live process model:
+    - `python3 -m fk_control.api`
+    - `python3 -m fk_control.scheduler`
+- local Windows tunnels are active for both lanes:
+  - lane-01:
+    - `8100 -> 8100`
+    - `9222 -> 9222`
+  - lane-02:
+    - `8110 -> 8110`
+    - `9232 -> 9232`
+    - `18182 -> 18182`
+- local Chrome profiles were launched again with the correct unpacked extensions:
+  - lane-01:
+    - `C:\temp\flowkit-real-chrome\UserData`
+    - `C:\temp\flowkit-extension-unpacked`
+  - lane-02:
+    - `C:\temp\flowkit-real-chrome-lane-02\UserData`
+    - `C:\temp\flowkit-extension-unpacked-lane-02`
+- both host-process lane runners are currently running on VM:
+  - lane-01:
+    - `http://127.0.0.1:18181/ready` -> `200`
+    - status now `idle`
+  - lane-02:
+    - `http://127.0.0.1:18182/ready` -> `200`
+    - status now `idle`
+- control `/overview` now shows both real lanes as dispatchable:
+  - `lane-01.status=idle`
+  - `lane-02.status=idle`
+  - both lanes now have:
+    - `lane_metadata.runner_ready=true`
+    - `dispatchable_reason=ready`
+    - `extension_connected=true`
+    - `flow_connected=true`
+
+### Important ops-hardening notes from live bring-up
+
+- the new readiness gating works live:
+  - when extension/account was not connected, a lane stayed `paused`
+  - after reconnect, the same lane moved automatically to `idle`
+  - `/ready` stayed `503` until the lane was truly usable
+- lane-02 was the first live proof:
+  - runner stayed up
+  - `/health` reported:
+    - `dispatchable_reason=extension_disconnected`
+  - after local Chrome reconnect, lane-02 moved to:
+    - `runner_ready=true`
+    - `status=idle`
+- lane-01 needed one extra env correction on VM to match the host-demo control stack:
+  - `REDIS_URL` changed from:
+    - `redis://127.0.0.1:16379/0`
+    - to `redis://127.0.0.1:6379/0`
+  - `POSTGRES_DSN` changed from host publish port `15432`
+    - to direct host-local `5432`
+  - backup saved at:
+    - `/home/hth2/flowkit-worker-demo/env/lane.env.bak.ops-hardening`
+- current control wrapper usage on this VM is slightly special:
+  - repo script:
+    - `control/scripts/control-service.sh`
+  - but this host demo uses host-local Postgres/Redis and published API `18080`
+  - when using the wrapper directly on VM, pass host-demo env overrides:
+    - `CONTROL_API_URL=http://127.0.0.1:18080`
+    - `CONTROL_API_PORT=18080`
+    - `POSTGRES_DSN=postgresql://...@127.0.0.1:5432/fk_control`
+    - `REDIS_URL=redis://127.0.0.1:6379/0`
+    - `PYTHON_BIN=python3`
+
+### Latest auth/readiness finding
+
+After both local profiles were reconnected and both runners restarted:
+
+- lane-02 is fully ready again:
+  - `/api/flow/credits` returns real credits
+  - runner reports:
+    - `flow_auth_valid=true`
+    - `runner_ready=true`
+    - status `idle`
+- lane-01 exposed an additional real bug and account issue:
+  - local `GET http://127.0.0.1:8100/api/flow/credits` returned:
+    - embedded JSON `error`
+    - code `401`
+    - status `UNAUTHENTICATED`
+  - direct local create-project attempt on lane-01 failed with:
+    - `Flow createProject failed: Unauthorized (UNAUTHORIZED)`
+  - important nuance:
+    - this credits/auth failure came back as HTTP `200` with an embedded `error` object
+    - readiness logic was patched locally to detect that case
+  - after syncing the patch and restarting runners:
+    - lane-01 now correctly moves to status `paused`
+    - lane-01 metadata shows:
+      - `flow_auth_valid=false`
+      - `dispatchable_reason=flow_auth_invalid`
+    - lane-02 stays `idle`
+
+Current best interpretation:
+
+- same-VM dual lane runtime layout is healthy
+- gating now prevents false-positive dispatch into a bad account session
+- only remaining live blocker is lane-01 Google auth/session refresh inside the local lane-01 Chrome profile
+
+### Latest low-cost live proof after hardening
+
+One extra direct low-cost proof was run on lane-02 after readiness hardening:
+
+- direct local API call:
+  - `POST http://127.0.0.1:8110/api/projects`
+- result:
+  - project created successfully on real Flow
+  - returned project id:
+    - `a0353d82-d7ee-4ce1-97ed-03ea09453142`
+  - title:
+    - `Lane 02 Direct Create Only Smoke 2026-04-22 16-38`
+- immediate post-check:
+  - `GET http://127.0.0.1:8110/api/flow/credits` still returned valid credits
+  - lane-02 runner stayed:
+    - `idle`
+    - `runner_ready=true`
+
+Interpretation:
+
+- lane-02 is not only "connected"
+- lane-02 is now proven able to execute at least the first real paid/control-relevant Flow action after ops-hardening
+- this was done without re-running a full chapter pipeline
+
+### Final state after lane-01 auth refresh
+
+Later in the same session, lane-01 local Chrome was restarted cleanly on the
+correct profile and the auth state recovered:
+
+- local `GET http://127.0.0.1:8100/api/flow/credits` now returns real credits:
+  - `100`
+- lane-01 runner now reports:
+  - `flow_auth_valid=true`
+  - `runner_ready=true`
+  - status `idle`
+- control `/overview` now shows:
+  - `lane-01.status=idle`
+  - `lane-02.status=idle`
+  - both lanes have:
+    - `dispatchable_reason=ready`
+
+Another low-cost direct proof was then run on lane-01:
+
+- direct local API call:
+  - `POST http://127.0.0.1:8100/api/projects`
+- result:
+  - project created successfully on real Flow
+  - returned project id:
+    - `80cb55f6-95f5-4675-bed0-bf703ea4c687`
+  - title:
+    - `Lane 01 Direct Create Only Smoke 2026-04-22 16-43`
+- immediate post-check:
+  - lane-01 credits still returned valid data
+  - lane-01 runner stayed `idle`
+
+End-of-session interpretation:
+
+- same-VM dual lane is now operational in the lab in a meaningful sense
+- both lanes are:
+  - independently wired
+  - independently authenticated
+  - independently `ready`
+  - each proven able to execute direct `create-project`
+- next meaningful proof beyond this point would be a control-routed chapter run,
+  which is more credit-sensitive than the direct create-only checks above
+
+### Additional control-plane create-only proof
+
+One more low-cost proof was run through the control-plane job contract itself:
+
+- a control project/chapter was created directly in control DB:
+  - project id:
+    - `791c0c5d-48e9-4026-b460-b2f4f25e63e9`
+  - chapter id:
+    - `383145d8-7fdf-47bb-af29-f4a967ce9f95`
+- scheduler lane choice logic selected:
+  - `lane-02`
+- only the first control job was intentionally enqueued:
+  - `CREATE_PROJECT`
+  - job id:
+    - `deb53350-d7fb-437e-8092-0a1ba7b1edb7`
+- that control job completed successfully
+- chapter now has a real Flow project id:
+  - `c1f4a660-13fb-4d55-8c26-e354bf87876f`
+- to avoid running the rest of the pipeline, the chapter was intentionally tagged as:
+  - `review_required`
+  - with metadata note:
+    - `stopped intentionally after CREATE_PROJECT for low-cost control-plane proof`
+
+Interpretation:
+
+- control DB rows
+- control job persistence
+- Redis lane queue contract
+- runner consumption
+- and real Flow create-project
+
+have now all been proven together without releasing a full paid chapter pipeline.
+
+### Additional low-cost lane-01 pipeline proof after control create-only
+
+The lane-01 control smoke chapter was pushed a bit further, still staying below
+video generation:
+
+- chapter:
+  - `2d203365-f19c-47f1-b7ea-ddf20674df46`
+- project:
+  - `9765a16e-f869-4142-abda-53e85996a15e`
+- local Flow project id:
+  - `ffb39de3-ef92-40cf-a72e-b7dc03cfe0b9`
+
+Control-routed jobs completed successfully on `lane-01`:
+
+- `CREATE_PROJECT`
+- `CREATE_ENTITIES`
+- `CREATE_VIDEO`
+- `CREATE_SCENES`
+- `GEN_REFS`
+- `GEN_IMAGES`
+
+Concrete lane-01 proof after `GEN_IMAGES`:
+
+- local scene list for video:
+  - `3b43d114-e7e8-473b-b0af-5089887cb55a`
+- scene:
+  - `13c6ea9a-cf70-4550-8aeb-d8ad8770f8b6`
+- scene image output:
+  - `vertical_image_status=COMPLETED`
+  - `vertical_image_media_id=aaa88516-f3fc-4f62-a9c1-41885f8d5cfc`
+- reference entity for that chapter also has real media:
+  - entity id:
+    - `4958cac8-1a50-4be7-8818-c25c1617dc4f`
+  - ref media id:
+    - `c13aa193-5993-4023-a3a1-9fc62bc09579`
+
+Important:
+
+- lane-01 credits still remained readable after this proof:
+  - `100`
+- lane-01 runner stayed:
+  - `idle`
+  - `runner_ready=true`
+- chapter was intentionally forced back to:
+  - `review_required`
+  - to avoid flowing into `GEN_VIDEOS`
+
+Interpretation:
+
+- lane-01 is now proven not only for auth and create-project
+- it is also proven through the first real media-generation stages of the
+  control-routed worker path on the same VM lab setup
+
+Current logical next spend-heavy step, if ever resumed:
+
+- `GEN_VIDEOS` for the 1-scene lane-01 control smoke chapter
+- this is the first next step that is materially more credit-sensitive than the
+  work already completed above
+
+### Latest lane-01 video proof
+
+That "next spend-heavy step" was later exercised once for the same 1-scene
+lane-01 control smoke chapter:
+
+- chapter:
+  - `2d203365-f19c-47f1-b7ea-ddf20674df46`
+- video:
+  - `3b43d114-e7e8-473b-b0af-5089887cb55a`
+- scene:
+  - `13c6ea9a-cf70-4550-8aeb-d8ad8770f8b6`
+
+Control-routed `GEN_VIDEOS` on `lane-01` completed successfully:
+
+- job id:
+  - `2e3a4c2d-9331-4a90-b7a4-9b4d0627c1a4`
+- result on scene row:
+  - `vertical_video_status=COMPLETED`
+  - `vertical_video_media_id=d37cc7fe-289b-42d0-bb69-08acb35a97a9`
+
+Immediate post-check:
+
+- lane-01 credits still remained valid:
+  - dropped from `100` to `80`
+- lane-01 runner stayed:
+  - `idle`
+  - `runner_ready=true`
+- chapter was intentionally kept at:
+  - `review_required`
+  - to avoid moving into `CONCAT_CHAPTER` / `UPLOAD_ARTIFACTS`
+
+Updated interpretation:
+
+- lane-01 is now proven through:
+  - auth
+  - create-project
+  - create-entities
+  - create-video
+  - create-scenes
+  - gen-refs
+  - gen-images
+  - gen-videos
+
+At this point the next meaningful unpaid-ish boundary is gone.
+The remaining next steps are fundamentally end-of-chapter steps:
+
+- `CONCAT_CHAPTER`
+- `UPLOAD_ARTIFACTS`
+
+Those are operationally cheaper than video generation, but they only make sense
+if we intentionally decide to complete this smoke chapter end-to-end.
+
+### Final lane-01 end-to-end completion state
+
+The lane-01 control smoke chapter was later finished through the remaining end
+stages:
+
+- chapter:
+  - `2d203365-f19c-47f1-b7ea-ddf20674df46`
+- concat job:
+  - `ceaddccc-2c3d-4ba7-af10-35ae91121989`
+- upload job:
+  - `efab712a-8e4e-4212-91ba-cf621065960a`
+
+What happened:
+
+- both jobs initially executed the real work
+- but job completion bookkeeping failed with:
+  - `Object of type UUID is not JSON serializable`
+- root cause:
+  - worker `CONCAT_CHAPTER` / `UPLOAD_ARTIFACTS` result payloads returned
+    `chapter_id` as Python `UUID` instead of string
+- repo fix was added locally:
+  - stage result ids are now stringified before `mark_job_completed()`
+- live lane worker code was synced with the fix
+
+Live chapter state after repair:
+
+- chapter now marked:
+  - `completed`
+- `chapter_output_uri`:
+  - `/home/hth2/flowkit-worker-demo/runtime/output/control_create_only_smoke_lane_01_2026_04_22_chapter_01/control_create_only_smoke_lane_01_2026_04_22_chapter_01_final.mp4`
+- artifact row exists:
+  - `chapter_final`
+  - `storage_uri=file:///home/hth2/flowkit-worker-demo/runtime/output/control_create_only_smoke_lane_01_2026_04_22_chapter_01/control_create_only_smoke_lane_01_2026_04_22_chapter_01_final.mp4`
+- control job rows repaired to:
+  - `CONCAT_CHAPTER -> completed`
+  - `UPLOAD_ARTIFACTS -> completed`
+
+Important nuance:
+
+- the final mp4 currently exists but is `root:root` on disk
+- this does not block the proof chapter from being completed
+- to prevent recurrence, updated `fk_worker/media.py` was synced to both live
+  worker roots after this incident
+
+Current strongest proof now available:
+
+- lane-02:
+  - previously completed a full smoke chapter end-to-end
+- lane-01:
+  - now also completed a control-routed smoke chapter end-to-end
+
+This means both real lanes on the same VM lab have now been proven with
+meaningful end-to-end work, not only connect-only or create-only steps.
+
+### Final lane-02 control-routed completion state
+
+The earlier lane-02 control smoke chapter was later pushed through the same
+remaining stages and repaired to completion as well:
+
+- chapter:
+  - `383145d8-7fdf-47bb-af29-f4a967ce9f95`
+- project:
+  - `791c0c5d-48e9-4026-b460-b2f4f25e63e9`
+- local Flow project id:
+  - `c1f4a660-13fb-4d55-8c26-e354bf87876f`
+
+Control-routed stages now proven on lane-02 for that chapter:
+
+- `CREATE_PROJECT`
+- `CREATE_ENTITIES`
+- `CREATE_VIDEO`
+- `CREATE_SCENES`
+- `GEN_REFS`
+- `GEN_IMAGES`
+- `GEN_VIDEOS`
+- `CONCAT_CHAPTER`
+- `UPLOAD_ARTIFACTS`
+
+Live final outputs:
+
+- final chapter file:
+  - `/home/hth2/flowkit-worker-demo-lane-02/runtime/output/control_create_only_smoke_2026_04_22_chapter_01/control_create_only_smoke_2026_04_22_chapter_01_final.mp4`
+- artifact rows exist:
+  - `chapter_final`
+  - `manifest`
+
+Important nuance:
+
+- lane-02 initially hit the same UUID-serialization bookkeeping bug seen on
+  lane-01 for:
+  - `CONCAT_CHAPTER`
+  - `UPLOAD_ARTIFACTS`
+- this happened because the live runner process had not yet reloaded the synced
+  code fix
+- after repairing DB state, both lane runners were restarted so the live
+  processes now run the fixed worker code
+
+### Current end-of-session truth
+
+Control `/overview` now shows:
+
+- `lane-01.status=idle`
+- `lane-02.status=idle`
+- `chapter_status_counts.completed=3`
+- the completed chapters of interest are:
+  - lane-01 control-routed smoke:
+    - `2d203365-f19c-47f1-b7ea-ddf20674df46`
+  - lane-02 control-routed smoke:
+    - `383145d8-7fdf-47bb-af29-f4a967ce9f95`
+  - earlier lane-02 full smoke:
+    - `18f6fb64-98ec-4d54-8ed9-64dcd5de1b43`
+
+Strongest final interpretation:
+
+- same-VM dual-lane lab on `hth2-box` is now proven not only structurally
+- both real lanes have completed meaningful control-routed end-to-end chapter
+  work
+- the remaining failed chapter is historical and not the active blocking state
+
 ### Current smoke result
 
 New smoke project after reconnect:

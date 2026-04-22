@@ -27,14 +27,87 @@ from .stages import (
 from .storage import get_chapter, mark_job_claimed, mark_job_completed, mark_job_failed, publish_heartbeat, redis_client, set_lane_state, update_chapter_state
 
 
-def _credits_and_token_age(client: FlowKitClient) -> tuple[int | None, int | None]:
+def _dispatchable_reason(snapshot: dict) -> str:
+    if not snapshot.get("api_reachable"):
+        return "api_unreachable"
+    if not snapshot.get("extension_connected"):
+        return "extension_disconnected"
+    if not snapshot.get("flow_key_present"):
+        return "flow_key_missing"
+    if not snapshot.get("flow_connected"):
+        return "flow_disconnected"
+    if not snapshot.get("flow_auth_valid"):
+        return "flow_auth_invalid"
+    return "ready"
+
+
+def _extract_credits_probe(payload) -> tuple[bool, int | None]:
+    if not isinstance(payload, dict):
+        return False, None
+    if payload.get("error"):
+        return False, None
+    if "credits" not in payload:
+        return False, None
+    return True, payload.get("credits")
+
+
+def probe_lane_runtime(client: FlowKitClient) -> dict:
+    snapshot = {
+        "api_reachable": False,
+        "extension_connected": False,
+        "flow_connected": False,
+        "flow_key_present": False,
+        "flow_auth_valid": False,
+        "credits_last_seen": None,
+        "token_age_seconds": None,
+    }
+
+    try:
+        health = client.get_health()
+    except Exception:
+        reason = _dispatchable_reason(snapshot)
+        return {**snapshot, "runner_ready": False, "dispatchable_reason": reason, "lane_status": "paused"}
+
+    snapshot["api_reachable"] = True
+    snapshot["extension_connected"] = bool(health.get("extension_connected"))
+
     try:
         status = client.get_flow_status()
-        credits = client.get_flow_credits().get("credits")
-        token_age = 0 if status.get("flow_key_present") else None
-        return credits, token_age
     except Exception:
-        return None, None
+        status = {}
+
+    snapshot["flow_connected"] = bool(status.get("connected"))
+    snapshot["flow_key_present"] = bool(status.get("flow_key_present"))
+
+    try:
+        auth_valid, credits = _extract_credits_probe(client.get_flow_credits())
+        snapshot["credits_last_seen"] = credits
+        snapshot["flow_auth_valid"] = auth_valid
+    except Exception:
+        snapshot["credits_last_seen"] = None
+        snapshot["flow_auth_valid"] = False
+
+    snapshot["token_age_seconds"] = 0 if snapshot["flow_key_present"] else None
+    reason = _dispatchable_reason(snapshot)
+    ready = reason == "ready"
+    return {
+        **snapshot,
+        "runner_ready": ready,
+        "dispatchable_reason": reason,
+        "lane_status": "idle" if ready else "paused",
+    }
+
+
+def _lane_metadata_from_probe(probe: dict) -> dict:
+    return {
+        "api_reachable": probe["api_reachable"],
+        "extension_connected": probe["extension_connected"],
+        "flow_connected": probe["flow_connected"],
+        "flow_key_present": probe["flow_key_present"],
+        "flow_auth_valid": probe["flow_auth_valid"],
+        "runner_ready": probe["runner_ready"],
+        "dispatchable_reason": probe["dispatchable_reason"],
+    }
 
 
 def _dispatch(job_type: str, client: FlowKitClient, chapter: dict, payload: dict):
@@ -117,13 +190,37 @@ def run_forever() -> None:
     group = lane_group_name(settings.lane_id)
 
     while True:
-        credits, token_age = _credits_and_token_age(client)
-        state.mark_heartbeat(api_reachable=credits is not None or token_age is not None, credits_last_seen=credits, token_age_seconds=token_age)
-        publish_heartbeat(active_job_id=None, active_chapter_id=None, credits_last_seen=credits, token_age_seconds=token_age)
+        probe = probe_lane_runtime(client)
+        metadata_patch = _lane_metadata_from_probe(probe)
+        state.mark_heartbeat(
+            api_reachable=probe["api_reachable"],
+            credits_last_seen=probe["credits_last_seen"],
+            token_age_seconds=probe["token_age_seconds"],
+            extension_connected=probe["extension_connected"],
+            flow_connected=probe["flow_connected"],
+            flow_key_present=probe["flow_key_present"],
+            flow_auth_valid=probe["flow_auth_valid"],
+            runner_ready=probe["runner_ready"],
+            dispatchable_reason=probe["dispatchable_reason"],
+        )
+        publish_heartbeat(
+            active_job_id=None,
+            active_chapter_id=None,
+            credits_last_seen=probe["credits_last_seen"],
+            token_age_seconds=probe["token_age_seconds"],
+        )
         messages = read_lane_messages(r, stream, group)
         if not messages:
-            set_lane_state(status="idle", current_chapter_id=None, credits_last_seen=credits, token_age_seconds=token_age, last_error_text=None)
-            state.update(status="idle")
+            last_error_text = None if probe["runner_ready"] else probe["dispatchable_reason"]
+            set_lane_state(
+                status=probe["lane_status"],
+                current_chapter_id=None,
+                credits_last_seen=probe["credits_last_seen"],
+                token_age_seconds=probe["token_age_seconds"],
+                last_error_text=last_error_text,
+                lane_metadata_patch=metadata_patch,
+            )
+            state.update(status=probe["lane_status"])
             continue
 
         _, entries = messages[0]
@@ -146,28 +243,49 @@ def run_forever() -> None:
         wait_reason = prerequisite_wait_reason(chapter, envelope["job_type"])
         if wait_reason:
             r.xadd(stream, envelope)
-            set_lane_state(status="idle", current_chapter_id=None, credits_last_seen=credits, token_age_seconds=token_age, last_error_text=None)
-            state.update(status="idle")
+            set_lane_state(
+                status=probe["lane_status"],
+                current_chapter_id=None,
+                credits_last_seen=probe["credits_last_seen"],
+                token_age_seconds=probe["token_age_seconds"],
+                last_error_text=None if probe["runner_ready"] else probe["dispatchable_reason"],
+                lane_metadata_patch=metadata_patch,
+            )
+            state.update(status=probe["lane_status"])
             r.xack(stream, group, message_id)
             continue
 
         mark_job_claimed(envelope["job_id"], envelope["chapter_id"])
         state.mark_job_started(job_id=envelope["job_id"], chapter_id=envelope["chapter_id"])
-        publish_heartbeat(active_job_id=envelope["job_id"], active_chapter_id=envelope["chapter_id"], credits_last_seen=credits, token_age_seconds=token_age)
+        publish_heartbeat(
+            active_job_id=envelope["job_id"],
+            active_chapter_id=envelope["chapter_id"],
+            credits_last_seen=probe["credits_last_seen"],
+            token_age_seconds=probe["token_age_seconds"],
+        )
 
         try:
             result = _dispatch(envelope["job_type"], client, chapter, payload)
             mark_job_completed(envelope["job_id"], result=result if isinstance(result, dict) else {"items": result})
             state.mark_job_completed()
             if should_release_lane(envelope["job_type"]):
-                set_lane_state(status="idle", current_chapter_id=None, credits_last_seen=credits, token_age_seconds=token_age, last_error_text=None)
+                set_lane_state(
+                    status=probe["lane_status"],
+                    current_chapter_id=None,
+                    credits_last_seen=probe["credits_last_seen"],
+                    token_age_seconds=probe["token_age_seconds"],
+                    last_error_text=None if probe["runner_ready"] else probe["dispatchable_reason"],
+                    lane_metadata_patch=metadata_patch,
+                )
+                state.update(status=probe["lane_status"], active_chapter_id=None)
             else:
                 set_lane_state(
                     status="busy",
                     current_chapter_id=envelope["chapter_id"],
-                    credits_last_seen=credits,
-                    token_age_seconds=token_age,
+                    credits_last_seen=probe["credits_last_seen"],
+                    token_age_seconds=probe["token_age_seconds"],
                     last_error_text=None,
+                    lane_metadata_patch=metadata_patch,
                 )
                 state.update(status="busy", active_chapter_id=envelope["chapter_id"])
             r.xack(stream, group, message_id)
@@ -190,7 +308,14 @@ def run_forever() -> None:
                     metadata_patch={"failed_job_type": envelope["job_type"], "last_error_text": error_text},
                 )
                 state.mark_job_failed(error_text, degraded=True)
-            set_lane_state(status="degraded", current_chapter_id=envelope["chapter_id"], credits_last_seen=credits, token_age_seconds=token_age, last_error_text=error_text)
+            set_lane_state(
+                status="degraded",
+                current_chapter_id=envelope["chapter_id"],
+                credits_last_seen=probe["credits_last_seen"],
+                token_age_seconds=probe["token_age_seconds"],
+                last_error_text=error_text,
+                lane_metadata_patch=metadata_patch,
+            )
             r.xack(stream, group, message_id)
 
 

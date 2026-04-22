@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 from fk_worker import media
 from fk_worker import stages
@@ -79,6 +80,30 @@ def test_handle_upload_artifacts_uses_local_fallback_when_enabled(monkeypatch, t
     assert updates[0][1]["status"] == "completed"
 
 
+def test_handle_upload_artifacts_serializes_uuid_chapter_id(monkeypatch, tmp_path):
+    final_path = tmp_path / "chapter_final.mp4"
+    final_path.write_bytes(b"video")
+    chapter_id = uuid4()
+
+    monkeypatch.setattr(stages, "settings", SimpleNamespace(r2_prefix="projects", lane_id="lane-01", allow_local_artifact_fallback=True))
+    monkeypatch.setattr(stages, "upload_file", lambda path, key: (_ for _ in ()).throw(RuntimeError("no r2 creds")))
+    monkeypatch.setattr(stages, "sha256_file", lambda path: "sha256")
+    monkeypatch.setattr(stages, "insert_artifact", lambda **kwargs: None)
+    monkeypatch.setattr(stages, "update_chapter_state", lambda chapter_id, **kwargs: None)
+
+    chapter = {
+        "id": chapter_id,
+        "project_id": "project-1",
+        "project_slug": "project_slug",
+        "chapter_slug": "chapter_slug",
+        "chapter_metadata": {"local_final_path": str(final_path)},
+    }
+
+    result = stages.handle_upload_artifacts(chapter, {})
+
+    assert result["chapter_id"] == str(chapter_id)
+
+
 def test_update_chapter_state_supports_chapter_output_uri(monkeypatch):
     executed = {}
 
@@ -128,3 +153,73 @@ def test_update_chapter_state_supports_chapter_output_uri(monkeypatch):
     assert "chapter_output_uri = %s" in executed["sql"]
     assert executed["values"][0] == "completed"
     assert executed["values"][1] == "file:///tmp/final.mp4"
+
+
+def test_handle_concat_chapter_serializes_uuid_chapter_id(monkeypatch, tmp_path):
+    chapter_id = uuid4()
+    final_path = tmp_path / "output" / "demo_final.mp4"
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    video_path = tmp_path / "source.mp4"
+    video_path.write_bytes(b"video")
+
+    class _Client:
+        def get_project_output_dir(self, project_id):
+            return {"path": "output", "slug": "demo"}
+
+        def list_video_scenes(self, video_id):
+            return [
+                {
+                    "id": "scene-1",
+                    "display_order": 0,
+                    "vertical_video_url": "https://example.com/video.mp4",
+                    "vertical_video_status": "COMPLETED",
+                }
+            ]
+
+    class _Response:
+        def raise_for_status(self):
+            return None
+
+        def iter_bytes(self):
+            yield b"video"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _HttpClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def stream(self, method, url):
+            return _Response()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(stages, "FlowKitClient", _Client)
+    monkeypatch.setattr(stages.httpx, "Client", _HttpClient)
+    monkeypatch.setattr(stages, "local_clip_path", lambda output_dir, display_order, scene_id: video_path)
+    monkeypatch.setattr(stages, "prefer_scene_video_url", lambda scene, orientation, prefer_4k: scene["vertical_video_url"])
+    monkeypatch.setattr(stages, "probe_dimensions", lambda path: (1080, 1920))
+    monkeypatch.setattr(stages, "normalize_clip", lambda source, target, width, height: target.parent.mkdir(parents=True, exist_ok=True) or target.write_bytes(b"norm"))
+    monkeypatch.setattr(stages, "concat_clips", lambda clips, target: target.write_bytes(b"final"))
+    monkeypatch.setattr(stages, "probe_duration", lambda path: 8.0)
+    monkeypatch.setattr(stages, "settings", SimpleNamespace(flow_agent_dir=str(tmp_path)))
+    monkeypatch.setattr(stages, "update_chapter_state", lambda chapter_id, **kwargs: None)
+
+    chapter = {
+        "id": chapter_id,
+        "project_id": "project-1",
+        "local_flow_project_id": "flow-project-1",
+        "chapter_metadata": {"local_video_id": "video-1"},
+    }
+
+    result = stages.handle_concat_chapter(chapter, {})
+
+    assert result["chapter_id"] == str(chapter_id)

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 
 from redis.exceptions import ResponseError
 
@@ -157,3 +158,50 @@ def test_read_pending_messages_recreates_group_after_reset():
 
     assert messages == []
     assert fake_redis.events == [("xgroup_create", "chapters:pending", "scheduler", "0", True)]
+
+
+def test_idle_lane_scores_filters_out_non_dispatchable_or_stale_lanes(monkeypatch):
+    fresh = datetime.now(timezone.utc)
+    stale = fresh - timedelta(seconds=120)
+    monkeypatch.setattr(
+        scheduler,
+        "list_lanes",
+        lambda: [
+            {
+                "lane_id": "lane-01",
+                "status": "idle",
+                "credits_last_seen": 100,
+                "token_age_seconds": 10,
+                "last_heartbeat_at": fresh.isoformat(),
+                "lane_metadata": {"runner_ready": True},
+            },
+            {
+                "lane_id": "lane-02",
+                "status": "idle",
+                "credits_last_seen": 500,
+                "token_age_seconds": 1,
+                "last_heartbeat_at": fresh.isoformat(),
+                "lane_metadata": {"runner_ready": False},
+            },
+            {
+                "lane_id": "lane-03",
+                "status": "idle",
+                "credits_last_seen": 900,
+                "token_age_seconds": 1,
+                "last_heartbeat_at": stale.isoformat(),
+                "lane_metadata": {"runner_ready": True},
+            },
+            {
+                "lane_id": "lane-04",
+                "status": "busy",
+                "credits_last_seen": 900,
+                "token_age_seconds": 1,
+                "last_heartbeat_at": fresh.isoformat(),
+                "lane_metadata": {"runner_ready": True},
+            },
+        ],
+    )
+
+    scores = scheduler.idle_lane_scores(now=fresh, stale_after_seconds=45)
+
+    assert [(score.lane_id, score.credits_last_seen) for score in scores] == [("lane-01", 100)]

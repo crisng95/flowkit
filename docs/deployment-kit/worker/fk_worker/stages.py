@@ -94,6 +94,10 @@ def _chapter_local_video_id(chapter: dict) -> str:
     return video_id
 
 
+def _json_safe_id(value) -> str:
+    return str(value)
+
+
 def handle_create_project(client: FlowKitClient, chapter_id: str, payload: dict) -> dict:
     result = client.create_project(payload)
     update_chapter_state(
@@ -265,7 +269,7 @@ def handle_concat_chapter(chapter: dict, payload: dict) -> dict:
     update_chapter_state(chapter["id"], chapter_output_uri=str(final_path), metadata_patch={"local_final_path": str(final_path)})
     return {
         "status": "completed",
-        "chapter_id": chapter["id"],
+        "chapter_id": _json_safe_id(chapter["id"]),
         "final_path": str(final_path),
         "duration_seconds": duration,
         "width": width,
@@ -337,7 +341,7 @@ def handle_upload_artifacts(chapter: dict, payload: dict) -> dict:
     )
     return {
         "status": "completed",
-        "chapter_id": chapter["id"],
+        "chapter_id": _json_safe_id(chapter["id"]),
         "uploaded": uploads,
         "upload_mode": upload_mode,
     }

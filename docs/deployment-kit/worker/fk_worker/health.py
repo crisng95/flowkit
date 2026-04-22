@@ -20,7 +20,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
             return
 
         state = self.state_store.snapshot() if self.state_store else {}
-        ready = bool(state.get("api_reachable")) and state.get("status") != "starting"
+        ready = bool(state.get("runner_ready")) and state.get("status") != "starting"
         if self.path == "/ready" and not ready:
             self.send_response(503)
         else:

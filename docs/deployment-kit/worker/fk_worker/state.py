@@ -16,6 +16,12 @@ class RunnerState:
     lane_id: str
     status: str = "starting"
     api_reachable: bool = False
+    extension_connected: bool = False
+    flow_connected: bool = False
+    flow_key_present: bool = False
+    flow_auth_valid: bool = False
+    runner_ready: bool = False
+    dispatchable_reason: str = "starting"
     active_job_id: str | None = None
     active_chapter_id: str | None = None
     credits_last_seen: int | None = None
@@ -42,9 +48,27 @@ class RunnerStateStore:
             for key, value in fields.items():
                 setattr(self._state, key, value)
 
-    def mark_heartbeat(self, *, api_reachable: bool, credits_last_seen: int | None, token_age_seconds: int | None) -> None:
+    def mark_heartbeat(
+        self,
+        *,
+        api_reachable: bool,
+        credits_last_seen: int | None,
+        token_age_seconds: int | None,
+        extension_connected: bool = False,
+        flow_connected: bool = False,
+        flow_key_present: bool = False,
+        flow_auth_valid: bool = False,
+        runner_ready: bool = False,
+        dispatchable_reason: str = "starting",
+    ) -> None:
         self.update(
             api_reachable=api_reachable,
+            extension_connected=extension_connected,
+            flow_connected=flow_connected,
+            flow_key_present=flow_key_present,
+            flow_auth_valid=flow_auth_valid,
+            runner_ready=runner_ready,
+            dispatchable_reason=dispatchable_reason,
             credits_last_seen=credits_last_seen,
             token_age_seconds=token_age_seconds,
             last_heartbeat_at=utcnow(),

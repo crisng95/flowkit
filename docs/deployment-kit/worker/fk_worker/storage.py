@@ -71,9 +71,18 @@ def update_chapter_state(
             cur.execute(f"update chapters set {', '.join(sets)} where id = %s", values)
 
 
-def set_lane_state(*, status: str, current_chapter_id: str | None = None, credits_last_seen: int | None = None, token_age_seconds: int | None = None, last_error_text: str | None = None) -> None:
+def set_lane_state(
+    *,
+    status: str,
+    current_chapter_id: str | None = None,
+    credits_last_seen: int | None = None,
+    token_age_seconds: int | None = None,
+    last_error_text: str | None = None,
+    lane_metadata_patch: dict | None = None,
+) -> None:
     with pg_conn() as conn:
         with conn.cursor() as cur:
+            metadata_json = json.dumps(lane_metadata_patch or {})
             cur.execute(
                 """
                 update lanes
@@ -82,10 +91,11 @@ def set_lane_state(*, status: str, current_chapter_id: str | None = None, credit
                     credits_last_seen = coalesce(%s, credits_last_seen),
                     token_age_seconds = coalesce(%s, token_age_seconds),
                     last_error_text = %s,
+                    lane_metadata = lane_metadata || %s::jsonb,
                     last_heartbeat_at = now()
                 where lane_id = %s
                 """,
-                (status, current_chapter_id, credits_last_seen, token_age_seconds, last_error_text, settings.lane_id),
+                (status, current_chapter_id, credits_last_seen, token_age_seconds, last_error_text, metadata_json, settings.lane_id),
             )
 
 

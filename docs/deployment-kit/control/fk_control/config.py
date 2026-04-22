@@ -13,6 +13,7 @@ class Settings:
     default_material: str = os.environ.get("DEFAULT_MATERIAL", "realistic")
     default_chapter_seconds: int = int(os.environ.get("DEFAULT_CHAPTER_SECONDS", "300"))
     scheduler_consumer: str = os.environ.get("SCHEDULER_CONSUMER", "scheduler-01")
+    lane_heartbeat_stale_after_seconds: int = int(os.environ.get("LANE_HEARTBEAT_STALE_AFTER_SECONDS", "45"))
 
 
 settings = Settings()
