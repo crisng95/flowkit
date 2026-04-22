@@ -8,6 +8,7 @@ __pycache__/
 output/
 youtube
 agent/active_project.json
+extension/_metadata/
 
 # Generated AI tool configs (run: python setup.py)
 .claude/commands/fk:*
