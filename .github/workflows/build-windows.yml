@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           if [ ! -f "desktop/resources/icon.ico" ]; then
-            python -c "from PIL import Image; img=Image.open('desktop/resources/icon.png').convert('RGBA'); img.save('desktop/resources/icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]); print('Generated desktop/resources/icon.ico')"
+            python -c "from PIL import Image; img=Image.open('desktop/resources/icon.png').convert('RGBA'); s=min(img.size); left=(img.width-s)//2; top=(img.height-s)//2; img=img.crop((left, top, left+s, top+s)); img.save('desktop/resources/icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]); print('Generated square desktop/resources/icon.ico')"
           fi
 
       - name: Bundle Python agent with PyInstaller

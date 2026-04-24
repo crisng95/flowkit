@@ -2,6 +2,10 @@
     "name": "flowkit-desktop",
     "version": "0.2.0",
     "description": "FlowKit Desktop — AI Video Generation",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/thememuse/flowkit.git"
+    },
     "main": "out/main/main.js",
     "private": true,
     "scripts": {
