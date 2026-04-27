@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scene Review Board</title>
+<style>
+  :root {
+    --bg: #111113;
+    --surface: #1a1a1f;
+    --surface2: #222228;
+    --border: #333339;
+    --border-active: #5b7fff;
+    --text: #e4e4e8;
+    --text-dim: #888890;
+    --accent: #5b7fff;
+    --good: #3ddc84;
+    --redo: #ff6b6b;
+    --skip: #ffd93d;
+    --chain-line: #5b7fff55;
+    --card-w: 260px;
+    --card-h: 200px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+    flex-shrink: 0;
+  }
+
+  #header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  #header .stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  #header .stats .stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  #header .stats .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .dot-good { background: var(--good); }
+  .dot-redo { background: var(--redo); }
+  .dot-skip { background: var(--skip); }
+  .dot-pending { background: var(--text-dim); }
+
+  #header .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover { border-color: var(--accent); background: #2a2a33; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .btn-primary:hover { background: #4a6aee; }
+
+  /* ── Main Layout ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Canvas ── */
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+  }
+
+  #canvas-wrap:active { cursor: grabbing; }
+
+  #canvas {
+    position: absolute;
+    transform-origin: 0 0;
+  }
+
+  #connections {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  #nodes {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  /* ── Scene Card ── */
+  .scene-card {
+    position: absolute;
+    width: var(--card-w);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    user-select: none;
+  }
+
+  .scene-card:hover {
+    border-color: #555;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    transform: translateY(-1px);
+  }
+
+  .scene-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 4px 24px rgba(91,127,255,0.2);
+  }
+
+  .scene-card.feedback-good { border-left: 3px solid var(--good); }
+  .scene-card.feedback-redo { border-left: 3px solid var(--redo); }
+  .scene-card.feedback-skip { border-left: 3px solid var(--skip); }
+
+  .card-thumb {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    background: var(--surface2);
+    display: block;
+  }
+
+  .card-info {
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scene-num {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .scene-num.chain-cont {
+    background: #6b4fff;
+  }
+
+  .card-prompt {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .card-feedback-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Detail Panel ── */
+  #detail {
+    width: 420px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+    transition: width 0.2s;
+  }
+
+  #detail.collapsed { width: 0; border: none; }
+
+  #detail-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  #detail-content { display: none; flex-direction: column; height: 100%; }
+
+  .detail-video-wrap {
+    background: #000;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .detail-video-wrap video {
+    width: 100%;
+    display: block;
+    max-height: 240px;
+    object-fit: contain;
+  }
+
+  .detail-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .detail-nav .scene-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .detail-nav .nav-btns { display: flex; gap: 4px; }
+
+  .nav-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  .nav-btn:hover { border-color: var(--accent); }
+
+  .detail-info {
+    padding: 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .info-section {
+    margin-bottom: 12px;
+  }
+
+  .info-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .info-value {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--surface2);
+    padding: 6px 8px;
+    border-radius: 5px;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+
+  .chain-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .chain-badge.root { background: #2a3a6e; color: #8ab4ff; }
+  .chain-badge.continuation { background: #3a2a6e; color: #b88aff; }
+
+  /* ── Feedback Section ── */
+  .feedback-section {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .rating-btns {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .rating-btn {
+    flex: 1;
+    padding: 8px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .rating-btn:hover { opacity: 0.8; }
+  .rating-btn.active-good { border-color: var(--good); background: #3ddc8420; color: var(--good); }
+  .rating-btn.active-redo { border-color: var(--redo); background: #ff6b6b20; color: var(--redo); }
+  .rating-btn.active-skip { border-color: var(--skip); background: #ffd93d20; color: var(--skip); }
+
+  .history-entry {
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: var(--surface);
+    border-radius: 4px;
+    border-left: 3px solid var(--border);
+    font-size: 11px;
+  }
+  .history-entry.history-good { border-left-color: var(--good); }
+  .history-entry.history-redo { border-left-color: var(--redo); }
+  .history-entry.history-skip { border-left-color: var(--skip); }
+  .history-entry .history-meta {
+    color: var(--text-dim);
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+  .history-entry .history-text {
+    color: var(--text);
+  }
+
+  .feedback-textarea {
+    width: 100%;
+    height: 70px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px;
+    font-size: 12px;
+    font-family: inherit;
+    resize: vertical;
+  }
+
+  .feedback-textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Connection lines ── */
+  .chain-line {
+    stroke: var(--chain-line);
+    stroke-width: 2;
+    fill: none;
+  }
+
+  .chain-arrow {
+    fill: var(--chain-line);
+  }
+
+  /* ── Minimap ── */
+  #minimap {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 180px;
+    height: 120px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 50;
+    opacity: 0.8;
+  }
+
+  #minimap:hover { opacity: 1; }
+
+  #minimap canvas { width: 100%; height: 100%; }
+
+  .minimap-viewport {
+    position: absolute;
+    border: 1.5px solid var(--accent);
+    background: rgba(91,127,255,0.08);
+    pointer-events: none;
+  }
+
+  /* ── Zoom controls ── */
+  #zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 436px;
+    display: flex;
+    gap: 4px;
+    z-index: 50;
+  }
+
+  #zoom-controls .btn { width: 32px; height: 32px; padding: 0; text-align: center; font-size: 16px; }
+
+  /* ── Keyboard hints ── */
+  #keyboard-hints {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 50;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    line-height: 1.8;
+    opacity: 0.7;
+  }
+
+  kbd {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 10px;
+    font-family: inherit;
+  }
+
+  /* ── Feedback Done Modal ── */
+  #modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #modal-overlay.show { display: flex; }
+
+  #modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 560px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  #modal-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  #modal-body table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #modal-body th, #modal-body td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  #modal-body th {
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+
+  #modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  /* ── Loading ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    z-index: 300;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div>Loading scenes...</div>
+
+<div id="header">
+  <h1 id="project-title">Scene Review Board</h1>
+  <div class="stats" id="stats"></div>
+  <div class="actions">
+    <button class="btn" onclick="resetView()">Reset View</button>
+    <button class="btn" onclick="exportFeedback()">Export JSON</button>
+    <button class="btn btn-primary" onclick="showFeedbackDone()">Feedback Done</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <div id="canvas">
+      <svg id="connections"></svg>
+      <div id="nodes"></div>
+    </div>
+    <div id="keyboard-hints">
+      <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Prev / Next scene<br>
+      <kbd>Space</kbd> Play / Pause<br>
+      <kbd>1</kbd> Good  <kbd>2</kbd> Redo  <kbd>3</kbd> Skip<br>
+      <kbd>+</kbd> <kbd>-</kbd> Zoom
+    </div>
+    <div id="zoom-controls">
+      <button class="btn" onclick="zoomIn()">+</button>
+      <button class="btn" onclick="zoomOut()">&minus;</button>
+      <button class="btn" onclick="zoomFit()">Fit</button>
+    </div>
+  </div>
+
+  <div id="detail">
+    <div id="detail-empty">Click a scene to review</div>
+    <div id="detail-content">
+      <div class="detail-video-wrap">
+        <video id="detail-video" controls preload="none"></video>
+      </div>
+      <div class="detail-nav">
+        <span class="scene-title" id="detail-title"></span>
+        <div class="nav-btns">
+          <button class="nav-btn" onclick="navPrev()" title="Previous">&larr;</button>
+          <button class="nav-btn" onclick="navNext()" title="Next">&rarr;</button>
+        </div>
+      </div>
+      <div class="detail-info" id="detail-info"></div>
+      <div class="feedback-section">
+        <div class="rating-btns">
+          <button class="rating-btn" data-rating="good" onclick="setRating('good')">Good</button>
+          <button class="rating-btn" data-rating="redo" onclick="setRating('redo')">Redo</button>
+          <button class="rating-btn" data-rating="skip" onclick="setRating('skip')">Skip</button>
+          <button class="btn" id="mark-done-btn" onclick="markDone()" style="margin-left:auto;font-size:11px;padding:4px 10px;display:none" title="Resolve current feedback and archive to history">Done</button>
+        </div>
+        <textarea class="feedback-textarea" id="feedback-text" placeholder="Notes about this scene..." oninput="saveFeedbackText()"></textarea>
+        <div id="feedback-history" style="display:none;margin-top:8px">
+          <div class="info-label" style="cursor:pointer" onclick="toggleHistory()">History <span id="history-count"></span> &#9660;</div>
+          <div id="history-entries" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal">
+    <div id="modal-header">Feedback Summary</div>
+    <div id="modal-body"></div>
+    <div id="modal-footer">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn" onclick="copyFeedback()">Copy to Clipboard</button>
+      <button class="btn btn-primary" onclick="exportFeedback()">Export JSON</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──
+const BOARD_BASE = location.origin; // review_server.py at :8200
+const API_BASE = 'http://127.0.0.1:8100';
+// Resolved at init(): URL ?video_id= → active project → null
+let VIDEO_ID = new URLSearchParams(location.search).get('video_id') || null;
+const CARD_W = 260, CARD_H = 200, GAP_X = 60, GAP_Y = 40, PAD = 60;
+
+// ── State ──
+let scenes = [];
+let sceneMap = {};
+let videoFileMap = {}; // scene_id -> local video filename
+let positions = {};
+let selectedId = null;
+let feedback = {};
+let zoom = 1, panX = 0, panY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0, panStartPanX = 0, panStartPanY = 0;
+let _saveTimer = null;
+
+// ── Init ──
+async function init() {
+  try {
+    // If no ?video_id= query param, resolve from /api/active-project
+    if (!VIDEO_ID) {
+      try {
+        const aRes = await fetch(`${API_BASE}/api/active-project`);
+        if (aRes.ok) {
+          const a = await aRes.json();
+          VIDEO_ID = a.video_id || null;
+        }
+      } catch(e) {}
+    }
+    if (!VIDEO_ID) {
+      document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;color:#900">No video_id resolved. Pass <code>?video_id=&lt;id&gt;</code> in the URL or set an active project via <code>PUT /api/active-project</code>.</div>';
+      return;
+    }
+    // Fetch scenes and local video file list in parallel
+    const [scenesRes, filesRes] = await Promise.all([
+      fetch(`${BOARD_BASE}/api/scenes?video_id=${VIDEO_ID}`),
+      fetch(`${BOARD_BASE}/api/video-files`)
+    ]);
+    scenes = await scenesRes.json();
+    scenes.sort((a, b) => a.display_order - b.display_order);
+    scenes.forEach(s => sceneMap[s.id] = s);
+
+    // Map scene_id -> local video file (format: scene_NNN_shortid.mp4)
+    const filesData = await filesRes.json();
+    const localFiles = filesData.files || [];
+    scenes.forEach(s => {
+      const order = String(s.display_order).padStart(3, '0');
+      const shortId = (s.horizontal_video_media_id || s.id).substring(0, 8);
+      const match = localFiles.find(f => f.startsWith(`scene_${order}_`));
+      if (match) videoFileMap[s.id] = match;
+    });
+
+    // Load project name
+    try {
+      const pRes = await fetch(`${API_BASE}/api/projects/${scenes[0]?.project_id || ''}`);
+      if (pRes.ok) {
+        const proj = await pRes.json();
+        document.getElementById('project-title').textContent = proj.name || 'Scene Review Board';
+      }
+    } catch(e) {}
+
+    // Load saved feedback from server (persisted JSON file)
+    try {
+      const fbRes = await fetch(`${BOARD_BASE}/api/feedback`);
+      if (fbRes.ok) {
+        const serverFb = await fbRes.json();
+        if (Object.keys(serverFb).length > 0) feedback = serverFb;
+      }
+    } catch(e) {}
+
+    computeLayout();
+    render();
+    updateStats();
+    document.getElementById('loading').style.display = 'none';
+    zoomFit();
+  } catch(err) {
+    document.getElementById('loading').innerHTML = `<span style="color:var(--redo)">Error: ${err.message}<br>Make sure review_server.py is running:<br><code>python3 tools/review_server.py</code></span>`;
+  }
+}
+
+// ── Layout Engine ──
+function computeLayout() {
+  // Build parent→children map
+  const children = {};
+  scenes.forEach(s => {
+    if (s.parent_scene_id) {
+      if (!children[s.parent_scene_id]) children[s.parent_scene_id] = [];
+      children[s.parent_scene_id].push(s.id);
+    }
+  });
+
+  // Find chain roots and trace chains
+  const chains = [];
+  const assigned = new Set();
+
+  // Process by display_order to keep visual order
+  scenes.forEach(s => {
+    if (assigned.has(s.id)) return;
+    if (s.chain_type === 'ROOT' || !s.parent_scene_id) {
+      const chain = [];
+      function traceChain(id) {
+        if (!id || assigned.has(id)) return;
+        assigned.add(id);
+        chain.push(id);
+        // Follow children in display_order
+        const kids = (children[id] || []).sort((a, b) =>
+          (sceneMap[a]?.display_order || 0) - (sceneMap[b]?.display_order || 0)
+        );
+        kids.forEach(kid => traceChain(kid));
+      }
+      traceChain(s.id);
+      if (chain.length > 0) chains.push(chain);
+    }
+  });
+
+  // Catch any orphans
+  scenes.forEach(s => {
+    if (!assigned.has(s.id)) {
+      chains.push([s.id]);
+      assigned.add(s.id);
+    }
+  });
+
+  // Sort chains: multi-scene chains first (by first scene display_order), then singles
+  chains.sort((a, b) => {
+    const aMulti = a.length > 1 ? 0 : 1;
+    const bMulti = b.length > 1 ? 0 : 1;
+    if (aMulti !== bMulti) return aMulti - bMulti;
+    return (sceneMap[a[0]]?.display_order || 0) - (sceneMap[b[0]]?.display_order || 0);
+  });
+
+  // Position chains
+  let y = PAD;
+  // For single-scene chains, pack them in a grid
+  const singles = chains.filter(c => c.length === 1);
+  const multis = chains.filter(c => c.length > 1);
+
+  // First: multi-scene chains (horizontal rows)
+  multis.forEach(chain => {
+    chain.forEach((id, i) => {
+      positions[id] = { x: PAD + i * (CARD_W + GAP_X), y };
+    });
+    y += CARD_H + GAP_Y;
+  });
+
+  // Then: singles in a grid (4 columns)
+  const cols = 4;
+  let singleStartY = y + 20;
+  singles.forEach((chain, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    positions[chain[0]] = {
+      x: PAD + col * (CARD_W + GAP_X),
+      y: singleStartY + row * (CARD_H + GAP_Y)
+    };
+  });
+}
+
+// ── Render ──
+function render() {
+  renderNodes();
+  renderConnections();
+}
+
+function renderNodes() {
+  const container = document.getElementById('nodes');
+  container.innerHTML = '';
+
+  scenes.forEach(s => {
+    const pos = positions[s.id];
+    if (!pos) return;
+
+    const card = document.createElement('div');
+    card.className = 'scene-card';
+    card.id = `card-${s.id}`;
+    card.style.left = pos.x + 'px';
+    card.style.top = pos.y + 'px';
+
+    const fb = feedback[s.id];
+    if (fb?.rating) card.classList.add(`feedback-${fb.rating}`);
+    if (s.id === selectedId) card.classList.add('selected');
+
+    const imgUrl = s.horizontal_image_url;
+    const promptSnippet = (s.video_prompt || s.prompt || '').substring(0, 60);
+    const chainClass = s.chain_type === 'CONTINUATION' ? 'chain-cont' : '';
+
+    card.innerHTML = `
+      <img class="card-thumb" src="${imgUrl || ''}" alt="Scene ${s.display_order + 1}"
+           onerror="this.style.background='var(--surface2)'; this.alt='No image'"
+           loading="lazy">
+      <div class="card-info">
+        <span class="scene-num ${chainClass}">${s.display_order + 1}</span>
+        <span style="font-size:9px;color:var(--text-dim);font-family:monospace">${s.id.substring(0,8)}</span>
+        <span class="card-prompt" title="${escHtml(s.prompt || '')}">${escHtml(promptSnippet)}</span>
+        ${fb?.rating ? `<div class="card-feedback-indicator dot-${fb.rating}"></div>` : ''}
+      </div>
+    `;
+
+    card.addEventListener('click', () => selectScene(s.id));
+    container.appendChild(card);
+  });
+}
+
+function renderConnections() {
+  const svg = document.getElementById('connections');
+  // Compute bounds for SVG size
+  let maxX = 0, maxY = 0;
+  Object.values(positions).forEach(p => {
+    maxX = Math.max(maxX, p.x + CARD_W + 100);
+    maxY = Math.max(maxY, p.y + CARD_H + 100);
+  });
+  svg.setAttribute('width', maxX);
+  svg.setAttribute('height', maxY);
+  svg.innerHTML = '';
+
+  // Draw defs for arrow markers
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="rgba(91,127,255,0.4)"/>
+    </marker>
+  `;
+  svg.appendChild(defs);
+
+  scenes.forEach(s => {
+    if (!s.parent_scene_id) return;
+    const parentPos = positions[s.parent_scene_id];
+    const childPos = positions[s.id];
+    if (!parentPos || !childPos) return;
+
+    const x1 = parentPos.x + CARD_W;
+    const y1 = parentPos.y + CARD_H / 2;
+    const x2 = childPos.x;
+    const y2 = childPos.y + CARD_H / 2;
+
+    // Bezier curve
+    const cx1 = x1 + (x2 - x1) * 0.4;
+    const cx2 = x2 - (x2 - x1) * 0.4;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${x1},${y1} C${cx1},${y1} ${cx2},${y2} ${x2},${y2}`);
+    path.setAttribute('class', 'chain-line');
+    path.setAttribute('marker-end', 'url(#arrow)');
+    svg.appendChild(path);
+  });
+}
+
+// ── Selection & Detail ──
+function selectScene(id) {
+  selectedId = id;
+  const s = sceneMap[id];
+  if (!s) return;
+
+  // Update card highlighting
+  document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById(`card-${id}`);
+  if (card) card.classList.add('selected');
+
+  // Show detail panel
+  document.getElementById('detail-empty').style.display = 'none';
+  const content = document.getElementById('detail-content');
+  content.style.display = 'flex';
+
+  // Video — prefer local file, fallback to GCS URL
+  const video = document.getElementById('detail-video');
+  video.pause();
+  const localFile = videoFileMap[s.id];
+  if (localFile) {
+    video.src = `${BOARD_BASE}/videos/${localFile}`;
+    video.load();
+  } else if (s.horizontal_video_url) {
+    video.src = s.horizontal_video_url;
+    video.load();
+  } else {
+    video.removeAttribute('src');
+  }
+
+  // Title
+  document.getElementById('detail-title').innerHTML = `
+    Scene ${s.display_order + 1}
+    <span class="chain-badge ${s.chain_type === 'CONTINUATION' ? 'continuation' : 'root'}">${s.chain_type}</span>
+  `;
+
+  // Info sections
+  const info = document.getElementById('detail-info');
+  let html = '';
+
+  if (s.character_names?.length) {
+    html += infoBlock('Characters', s.character_names.join(', '));
+  }
+  html += infoBlock('Prompt', s.prompt || '-');
+  if (s.video_prompt) html += infoBlock('Video Prompt', s.video_prompt);
+  if (s.transition_prompt) html += infoBlock('Transition Prompt', s.transition_prompt);
+  if (s.parent_scene_id) {
+    const parent = sceneMap[s.parent_scene_id];
+    html += infoBlock('Parent Scene', parent ? `Scene ${parent.display_order + 1}` : s.parent_scene_id);
+  }
+
+  info.innerHTML = html;
+
+  // Feedback
+  const fb = feedback[id] || {};
+  document.querySelectorAll('.rating-btn').forEach(btn => {
+    const r = btn.dataset.rating;
+    btn.className = 'rating-btn' + (fb.rating === r ? ` active-${r}` : '');
+  });
+  document.getElementById('feedback-text').value = fb.text || '';
+
+  // Done button — show only when scene has an active rating
+  document.getElementById('mark-done-btn').style.display = fb.rating ? 'inline-block' : 'none';
+
+  // History
+  renderHistory(id);
+  document.getElementById('history-entries').style.display = 'none';
+}
+
+function infoBlock(label, value) {
+  return `<div class="info-section">
+    <div class="info-label">${label}</div>
+    <div class="info-value">${escHtml(value)}</div>
+  </div>`;
+}
+
+// ── Navigation ──
+function navPrev() {
+  if (!selectedId) return;
+  const idx = scenes.findIndex(s => s.id === selectedId);
+  if (idx > 0) selectScene(scenes[idx - 1].id);
+}
+
+function navNext() {
+  if (!selectedId) return;
+  const idx = scenes.findIndex(s => s.id === selectedId);
+  if (idx < scenes.length - 1) selectScene(scenes[idx + 1].id);
+}
+
+// ── Feedback ──
+function setRating(rating) {
+  if (!selectedId) return;
+  if (!feedback[selectedId]) feedback[selectedId] = {};
+  // Toggle off if same rating
+  if (feedback[selectedId].rating === rating) {
+    delete feedback[selectedId].rating;
+  } else {
+    feedback[selectedId].rating = rating;
+  }
+  saveFeedback();
+  // Update UI
+  const fb = feedback[selectedId];
+  document.querySelectorAll('.rating-btn').forEach(btn => {
+    const r = btn.dataset.rating;
+    btn.className = 'rating-btn' + (fb.rating === r ? ` active-${r}` : '');
+  });
+  document.getElementById('mark-done-btn').style.display = fb.rating ? 'inline-block' : 'none';
+  // Update card
+  const card = document.getElementById(`card-${selectedId}`);
+  if (card) {
+    card.classList.remove('feedback-good', 'feedback-redo', 'feedback-skip');
+    if (fb.rating) card.classList.add(`feedback-${fb.rating}`);
+    // Update indicator
+    const indicator = card.querySelector('.card-feedback-indicator');
+    if (indicator && fb.rating) {
+      indicator.className = `card-feedback-indicator dot-${fb.rating}`;
+    } else if (indicator && !fb.rating) {
+      indicator.remove();
+    } else if (!indicator && fb.rating) {
+      const info = card.querySelector('.card-info');
+      const dot = document.createElement('div');
+      dot.className = `card-feedback-indicator dot-${fb.rating}`;
+      info.appendChild(dot);
+    }
+  }
+  updateStats();
+}
+
+function saveFeedbackText() {
+  if (!selectedId) return;
+  if (!feedback[selectedId]) feedback[selectedId] = {};
+  feedback[selectedId].text = document.getElementById('feedback-text').value;
+  saveFeedback();
+}
+
+function saveFeedback() {
+  // Debounce: save to server after 500ms of no changes
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    fetch(`${BOARD_BASE}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedback)
+    }).catch(e => console.warn('Failed to save feedback to server:', e));
+  }, 500);
+}
+
+function markDone() {
+  if (!selectedId) return;
+  const fb = feedback[selectedId];
+  if (!fb || !fb.rating) return;
+
+  // Initialize history array
+  if (!fb.history) fb.history = [];
+
+  // Archive current feedback to history
+  fb.history.push({
+    rating: fb.rating,
+    text: fb.text || '',
+    resolved_at: new Date().toISOString()
+  });
+
+  // Clear current feedback
+  delete fb.rating;
+  fb.text = '';
+
+  saveFeedback();
+
+  // Update UI
+  document.querySelectorAll('.rating-btn').forEach(btn => {
+    btn.className = 'rating-btn';
+  });
+  document.getElementById('feedback-text').value = '';
+  document.getElementById('mark-done-btn').style.display = 'none';
+
+  // Update card
+  const card = document.getElementById(`card-${selectedId}`);
+  if (card) {
+    card.classList.remove('feedback-good', 'feedback-redo', 'feedback-skip');
+    const indicator = card.querySelector('.card-feedback-indicator');
+    if (indicator) indicator.remove();
+  }
+
+  // Refresh history display
+  renderHistory(selectedId);
+  updateStats();
+}
+
+function toggleHistory() {
+  const entries = document.getElementById('history-entries');
+  const isHidden = entries.style.display === 'none';
+  entries.style.display = isHidden ? 'block' : 'none';
+}
+
+function renderHistory(sceneId) {
+  const fb = feedback[sceneId] || {};
+  const historyDiv = document.getElementById('feedback-history');
+  const entriesDiv = document.getElementById('history-entries');
+  const countSpan = document.getElementById('history-count');
+
+  if (!fb.history || fb.history.length === 0) {
+    historyDiv.style.display = 'none';
+    return;
+  }
+
+  historyDiv.style.display = 'block';
+  countSpan.textContent = `(${fb.history.length})`;
+
+  entriesDiv.innerHTML = fb.history.map((h, i) => {
+    const date = new Date(h.resolved_at);
+    const timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    return `<div class="history-entry history-${h.rating}">
+      <div class="history-meta">#${i + 1} &middot; ${h.rating.toUpperCase()} &middot; ${timeStr}</div>
+      ${h.text ? `<div class="history-text">${escHtml(h.text)}</div>` : ''}
+    </div>`;
+  }).reverse().join('');
+}
+
+function updateStats() {
+  let good = 0, redo = 0, skip = 0, pending = 0;
+  scenes.forEach(s => {
+    const fb = feedback[s.id];
+    if (fb?.rating === 'good') good++;
+    else if (fb?.rating === 'redo') redo++;
+    else if (fb?.rating === 'skip') skip++;
+    else pending++;
+  });
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-badge"><div class="dot dot-good"></div> ${good} Good</div>
+    <div class="stat-badge"><div class="dot dot-redo"></div> ${redo} Redo</div>
+    <div class="stat-badge"><div class="dot dot-skip"></div> ${skip} Skip</div>
+    <div class="stat-badge"><div class="dot dot-pending"></div> ${pending} Pending</div>
+    <div class="stat-badge">${scenes.length} Total</div>
+  `;
+}
+
+// ── Pan & Zoom ──
+const canvasWrap = document.getElementById('canvas-wrap');
+const canvas = document.getElementById('canvas');
+
+canvasWrap.addEventListener('mousedown', e => {
+  if (e.target === canvasWrap || e.target === canvas || e.target.tagName === 'svg') {
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartPanX = panX;
+    panStartPanY = panY;
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  panX = panStartPanX + (e.clientX - panStartX);
+  panY = panStartPanY + (e.clientY - panStartY);
+  applyTransform();
+});
+
+window.addEventListener('mouseup', () => { isPanning = false; });
+
+canvasWrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvasWrap.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const oldZoom = zoom;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.max(0.1, Math.min(3, zoom * delta));
+
+  // Zoom toward cursor
+  panX = mx - (mx - panX) * (zoom / oldZoom);
+  panY = my - (my - panY) * (zoom / oldZoom);
+  applyTransform();
+}, { passive: false });
+
+function applyTransform() {
+  canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+}
+
+function zoomIn() { zoom = Math.min(3, zoom * 1.2); applyTransform(); }
+function zoomOut() { zoom = Math.max(0.1, zoom / 1.2); applyTransform(); }
+
+function zoomFit() {
+  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+  Object.values(positions).forEach(p => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + CARD_W);
+    maxY = Math.max(maxY, p.y + CARD_H);
+  });
+
+  const wrap = canvasWrap.getBoundingClientRect();
+  const contentW = maxX - minX + PAD * 2;
+  const contentH = maxY - minY + PAD * 2;
+
+  zoom = Math.min(1, wrap.width / contentW, wrap.height / contentH) * 0.9;
+  panX = (wrap.width - contentW * zoom) / 2 - minX * zoom + PAD * zoom;
+  panY = (wrap.height - contentH * zoom) / 2 - minY * zoom + PAD * zoom;
+  applyTransform();
+}
+
+function resetView() { zoom = 1; panX = 0; panY = 0; applyTransform(); }
+
+// ── Keyboard ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+  switch(e.key) {
+    case 'ArrowLeft': navPrev(); e.preventDefault(); break;
+    case 'ArrowRight': navNext(); e.preventDefault(); break;
+    case ' ':
+      e.preventDefault();
+      const v = document.getElementById('detail-video');
+      if (v.src) v.paused ? v.play() : v.pause();
+      break;
+    case '1': setRating('good'); break;
+    case '2': setRating('redo'); break;
+    case '3': setRating('skip'); break;
+    case '+': case '=': zoomIn(); break;
+    case '-': zoomOut(); break;
+  }
+});
+
+// ── Feedback Done ──
+function showFeedbackDone() {
+  const modal = document.getElementById('modal-overlay');
+  modal.classList.add('show');
+
+  let good = [], redo = [], skip = [], pending = [];
+  scenes.forEach(s => {
+    const fb = feedback[s.id];
+    const entry = { scene: s.display_order + 1, id: s.id, text: fb?.text || '' };
+    if (fb?.rating === 'good') good.push(entry);
+    else if (fb?.rating === 'redo') redo.push(entry);
+    else if (fb?.rating === 'skip') skip.push(entry);
+    else pending.push(entry);
+  });
+
+  let html = `<p style="margin-bottom:12px"><strong>${scenes.length}</strong> scenes reviewed:
+    <span style="color:var(--good)">${good.length} good</span>,
+    <span style="color:var(--redo)">${redo.length} redo</span>,
+    <span style="color:var(--skip)">${skip.length} skip</span>,
+    <span style="color:var(--text-dim)">${pending.length} pending</span></p>`;
+
+  if (redo.length) {
+    html += `<h3 style="color:var(--redo); margin:8px 0 4px">Redo (${redo.length})</h3><table>
+      <tr><th>Scene</th><th>Notes</th></tr>
+      ${redo.map(r => `<tr><td>${r.scene}</td><td>${escHtml(r.text) || '-'}</td></tr>`).join('')}
+    </table>`;
+  }
+
+  if (skip.length) {
+    html += `<h3 style="color:var(--skip); margin:8px 0 4px">Skip (${skip.length})</h3><table>
+      <tr><th>Scene</th><th>Notes</th></tr>
+      ${skip.map(r => `<tr><td>${r.scene}</td><td>${escHtml(r.text) || '-'}</td></tr>`).join('')}
+    </table>`;
+  }
+
+  if (pending.length) {
+    html += `<h3 style="color:var(--text-dim); margin:8px 0 4px">Pending (${pending.length})</h3>
+    <p style="font-size:12px;color:var(--text-dim)">Scenes: ${pending.map(p => p.scene).join(', ')}</p>`;
+  }
+
+  // History summary — scenes with resolved feedback
+  const withHistory = scenes.filter(s => feedback[s.id]?.history?.length > 0);
+  if (withHistory.length) {
+    html += `<h3 style="color:var(--accent); margin:12px 0 4px">Resolved History (${withHistory.length} scenes)</h3><table>
+      <tr><th>Scene</th><th>Rounds</th><th>Last Resolution</th></tr>
+      ${withHistory.map(s => {
+        const h = feedback[s.id].history;
+        const last = h[h.length - 1];
+        const date = new Date(last.resolved_at);
+        const timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        return `<tr><td>${s.display_order + 1}</td><td>${h.length}</td><td>${last.rating.toUpperCase()} — ${timeStr}</td></tr>`;
+      }).join('')}
+    </table>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = html;
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+function exportFeedback() {
+  const data = scenes.map(s => {
+    const fb = feedback[s.id] || {};
+    return {
+      scene_number: s.display_order + 1,
+      scene_id: s.id,
+      chain_type: s.chain_type,
+      rating: fb.rating || null,
+      notes: fb.text || null,
+      history: fb.history || [],
+      prompt: s.prompt,
+      video_prompt: s.video_prompt,
+      transition_prompt: s.transition_prompt
+    };
+  });
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `review-feedback-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyFeedback() {
+  const lines = [];
+  scenes.forEach(s => {
+    const fb = feedback[s.id];
+    if (fb?.rating) {
+      lines.push(`Scene ${s.display_order + 1}: ${fb.rating.toUpperCase()}${fb.text ? ' - ' + fb.text : ''}`);
+    }
+  });
+  navigator.clipboard.writeText(lines.join('\n'));
+  const btn = event.target;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy to Clipboard', 1500);
+}
+
+// ── Helpers ──
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+// ── Start ──
+init();
+</script>
+</body>
+</html>
