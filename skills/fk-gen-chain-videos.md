@@ -2,18 +2,26 @@ Generate videos with automatic scene chaining (start+end frame transitions).
 
 Usage: `/gen-chain-videos <project_id> <video_id>`
 
-This creates smooth transitions between CONTINUATION scenes by using the **next scene's image as the endImage** of the current scene's video.
+This creates smooth transitions between scenes in a chain by using the **NEXT scene's image as the endImage** of the current scene's video, so the last frame of scene N matches the first frame of scene N+1 → seamless concat.
 
 ## How chaining works
 
+For any scene that has a CHILD in the chain (i.e. some other scene with `parent_scene_id == this.id`):
+
 ```
-Scene 1 (ROOT):         startImage = scene1.image                        → video
-Scene 2 (CONTINUATION): startImage = scene2.image, endImage = scene1.image → video transitions FROM scene1 TO scene2
-Scene 3 (CONTINUATION): startImage = scene3.image, endImage = scene2.image → video transitions FROM scene2 TO scene3
-Last scene:             startImage = lastScene.image                      → video (no endImage)
+Scene N (chain head or middle): startImage = sceneN.image, endImage = sceneN+1.image
+                                → video plays FROM sceneN.image TO sceneN+1.image (the next scene's image)
+
+Scene N+1 (next in chain):      startImage = sceneN+1.image, endImage = sceneN+2.image (if N+2 exists)
+                                → continues the chain
+
+Last scene in chain (no child): startImage = lastScene.image, NO endImage
+                                → plain frame_2_video, no chained transition
 ```
 
-The `endImage` is the PARENT scene's image — the video smoothly transitions from the parent's visual world into the current scene.
+**Key invariant**: at the cut between two consecutive chain scenes, `sceneN.video.last_frame == sceneN+1.image == sceneN+1.video.first_frame` → **concat is seamless**.
+
+The `endImage` is the **CHILD scene's image** (the next scene's image_media_id), NOT the parent's. Chain heads (ROOT scenes that have a child) DO need an endImage; only chain tails (last scene in chain) and standalone ROOT scenes leave `endImage` null.
 
 ## Step 1: Pre-check
 
@@ -26,20 +34,24 @@ ABORT if any scene is missing `${ori}_image_media_id` (UUID).
 
 ## Step 2: Set up end_scene_media_ids for chaining
 
-For each CONTINUATION scene, set its `${ori}_end_scene_media_id` to its parent scene's `${ori}_image_media_id`:
+For each scene that has a CHILD in the chain (i.e. some other scene's `parent_scene_id == this.id`), set its `${ori}_end_scene_media_id` to that **child** scene's `${ori}_image_media_id`:
 
 ```bash
 curl -X PATCH http://127.0.0.1:8100/api/scenes/<SID> \
   -H "Content-Type: application/json" \
-  -d '{"${ori}_end_scene_media_id": "<parent_scene_image_media_id>"}'
+  -d '{"${ori}_end_scene_media_id": "<child_scene_image_media_id>"}'
 ```
 
 Logic:
 1. Sort scenes by `display_order`
-2. For each scene with `chain_type: "CONTINUATION"` and `parent_scene_id`:
-   - Look up parent scene
-   - Set `${ori}_end_scene_media_id` = parent's `${ori}_image_media_id`
-3. ROOT scenes and the last scene: no endImage (leave `${ori}_end_scene_media_id` null)
+2. Build a child map: `parent_id -> child_scene` (scan all scenes, key by `parent_scene_id`)
+3. For each scene `S`:
+   - If `S` has a child in the map → set `${ori}_end_scene_media_id = child.${ori}_image_media_id`
+   - Else (no child = chain tail or standalone ROOT) → leave `${ori}_end_scene_media_id` null
+
+**Affected scenes** (those that need an `end_scene_media_id`): chain heads (ROOT-with-child) AND chain middles (CONTINUATION-with-child). NOT chain tails, NOT standalone ROOTs.
+
+**Common mistake**: setting `end_scene_media_id` to the PARENT's image. That makes scene N's video end at scene N-1's frame — when concatenated forward (N then N+1), the cut between N's last frame and N+1's first frame is hard, defeating the chain. The correct frame at the end of scene N's video is `sceneN+1.image`.
 
 ## Step 3: Submit ALL video requests at once
 
