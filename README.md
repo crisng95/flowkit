@@ -12,6 +12,7 @@
   <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/stargazers"><img src="https://img.shields.io/github/stars/tuannguyenhoangit-droid/google-flow-agent?style=flat&logo=github" alt="GitHub stars"/></a>
   <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/issues"><img src="https://img.shields.io/github/issues/tuannguyenhoangit-droid/google-flow-agent?logo=github" alt="GitHub issues"/></a>
   <a href="https://deepwiki.com/tuannguyenhoangit-droid/google-flow-agent"><img src="https://img.shields.io/badge/DeepWiki-AI%20Docs-6A3BC9" alt="DeepWiki"/></a>
+  <a href="https://www.facebook.com/groups/flowkit.flowboard.community"><img src="https://img.shields.io/badge/Community-Facebook%20Group-1877F2?logo=facebook&logoColor=white" alt="Community: Facebook Group"/></a>
 </p>
 
 # FLOW KIT
@@ -707,6 +708,10 @@ From `youtube/upload.py` (HTTP errors from YouTube Data API v3):
 | "Requested entity was not found" spam | Image URLs expired — re-upload via `POST /api/upload-image` or wait for auto-recovery |
 | YouTube upload `invalidTags` | Tag-char overflow; reduce tags (quote overhead bytes count) |
 | Python `cryptography` arch mismatch | Use `python3.10`, not `python3.13` (x86/arm64 binary mismatch) |
+
+## Community
+
+Join the **[FlowKit & Flowboard Facebook Group](https://www.facebook.com/groups/flowkit.flowboard.community)** — the shared community for both projects. Post your story-video runs, share scene templates, ask for help with prompts, request features, or report bugs you've hit in the wild.
 
 ## License
 
