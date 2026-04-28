@@ -12,7 +12,6 @@
   <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/stargazers"><img src="https://img.shields.io/github/stars/tuannguyenhoangit-droid/google-flow-agent?style=flat&logo=github" alt="GitHub stars"/></a>
   <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/issues"><img src="https://img.shields.io/github/issues/tuannguyenhoangit-droid/google-flow-agent?logo=github" alt="GitHub issues"/></a>
   <a href="https://deepwiki.com/tuannguyenhoangit-droid/google-flow-agent"><img src="https://img.shields.io/badge/DeepWiki-AI%20Docs-6A3BC9" alt="DeepWiki"/></a>
-  <a href="https://www.facebook.com/groups/flowkit.flowboard.community"><img src="https://img.shields.io/badge/Community-Facebook%20Group-1877F2?logo=facebook&logoColor=white" alt="Community: Facebook Group"/></a>
 </p>
 
 # FLOW KIT
@@ -709,10 +708,26 @@ From `youtube/upload.py` (HTTP errors from YouTube Data API v3):
 | YouTube upload `invalidTags` | Tag-char overflow; reduce tags (quote overhead bytes count) |
 | Python `cryptography` arch mismatch | Use `python3.10`, not `python3.13` (x86/arm64 binary mismatch) |
 
-## Community
-
-Join the **[FlowKit & Flowboard Facebook Group](https://www.facebook.com/groups/flowkit.flowboard.community)** — the shared community for both projects. Post your story-video runs, share scene templates, ask for help with prompts, request features, or report bugs you've hit in the wild.
-
 ## License
 
 MIT
+
+---
+
+## Community & Support
+
+<p align="center">
+  <a href="https://www.facebook.com/groups/flowkit.flowboard.community">
+    <img src="https://img.shields.io/badge/Join%20the%20Community-FlowKit%20%26%20Flowboard%20on%20Facebook-1877F2?style=for-the-badge&logo=facebook&logoColor=white" alt="Join the FlowKit & Flowboard Facebook Group" />
+  </a>
+</p>
+
+The shared community for both **FlowKit** and **Flowboard**. Drop in to:
+
+- Post the story-video runs and thumbnails you've generated
+- Share scene templates, prompt recipes, and reference-image setups
+- Ask for help when an output isn't matching what you imagined
+- Request features and report bugs you've hit in the wild
+- Trade tips on Google Flow plan limits, Veo i2v behaviour, and Chrome extension setup
+
+→ **[facebook.com/groups/flowkit.flowboard.community](https://www.facebook.com/groups/flowkit.flowboard.community)**
