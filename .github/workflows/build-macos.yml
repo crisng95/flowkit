@@ -38,17 +38,7 @@ jobs:
         shell: bash
         run: |
           if [ ! -f "desktop/resources/icon.icns" ]; then
-            python - <<'PY'
-from PIL import Image
-img = Image.open("desktop/resources/icon.png").convert("RGBA")
-w, h = img.size
-s = min(w, h)
-left = (w - s) // 2
-top = (h - s) // 2
-img = img.crop((left, top, left + s, top + s)).resize((1024, 1024), Image.Resampling.LANCZOS)
-img.save("/tmp/flowkit-square.png")
-print("Generated /tmp/flowkit-square.png", img.size)
-PY
+            python -c "from PIL import Image; img=Image.open('desktop/resources/icon.png').convert('RGBA'); w,h=img.size; s=min(w,h); left=(w-s)//2; top=(h-s)//2; img=img.crop((left,top,left+s,top+s)).resize((1024,1024), Image.Resampling.LANCZOS); img.save('/tmp/flowkit-square.png'); print('Generated /tmp/flowkit-square.png', img.size)"
             mkdir -p /tmp/flowkit.iconset
             sips -z 16 16     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16.png
             sips -z 32 32     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16@2x.png
