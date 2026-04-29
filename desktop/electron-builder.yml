@@ -19,10 +19,6 @@ extraResources:
     to: agent
     filter:
       - "**/*"
-  - from: resources/ffmpeg
-    to: ffmpeg
-    filter:
-      - "**/*"
 
 mac:
   category: public.app-category.productivity

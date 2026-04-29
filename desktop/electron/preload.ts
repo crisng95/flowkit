@@ -1,8 +1,54 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+type FlowPanelState = {
+    visible: boolean
+    sidebarReady: boolean
+    flowReady: boolean
+    requestedVisible?: boolean
+}
+
 contextBridge.exposeInMainWorld('electron', {
     /** Open the Google Flow browser window */
-    openFlowTab: (options?: { focus?: boolean; reveal?: boolean }) => ipcRenderer.invoke('open-flow-tab', options),
+    openFlowTab: (options?: { focus?: boolean; reveal?: boolean; accountId?: string }) => ipcRenderer.invoke('open-flow-tab', options) as Promise<FlowPanelState>,
+    /** Flow extension side panel visibility */
+    getFlowPanelState: () => ipcRenderer.invoke('flow-panel-get-state') as Promise<FlowPanelState>,
+    setFlowPanelVisible: (visible: boolean, options?: { revealFlowIfNeeded?: boolean }) => ipcRenderer.invoke('flow-panel-set-visible', { visible, revealFlowIfNeeded: options?.revealFlowIfNeeded === true }) as Promise<{
+        visible: boolean
+        sidebarReady: boolean
+        flowReady: boolean
+        requestedVisible?: boolean
+    }>,
+    toggleFlowPanel: () => ipcRenderer.invoke('flow-panel-toggle') as Promise<FlowPanelState>,
+    /** Google Flow account/session profiles */
+    flowAccountsList: () => ipcRenderer.invoke('flow-accounts-list') as Promise<{
+        activeAccountId: string
+        accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+    }>,
+    flowAccountsCreate: (payload?: { id?: string; label?: string; email?: string; setActive?: boolean }) =>
+        ipcRenderer.invoke('flow-accounts-create', payload) as Promise<{
+            activeAccountId: string
+            accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+        }>,
+    flowAccountsUpdate: (payload: { id: string; label?: string; email?: string }) =>
+        ipcRenderer.invoke('flow-accounts-update', payload) as Promise<{
+            activeAccountId: string
+            accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+        }>,
+    flowAccountsDelete: (id: string) =>
+        ipcRenderer.invoke('flow-accounts-delete', id) as Promise<{
+            activeAccountId: string
+            accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+        }>,
+    flowAccountsSetActive: (payload: { id: string; openFlow?: boolean; focus?: boolean }) =>
+        ipcRenderer.invoke('flow-accounts-set-active', payload) as Promise<{
+            activeAccountId: string
+            accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+        }>,
+    flowAccountsLogout: (payload: { id: string; reopenFlow?: boolean; focus?: boolean }) =>
+        ipcRenderer.invoke('flow-accounts-logout', payload) as Promise<{
+            activeAccountId: string
+            accounts: Array<{ id: string; label: string; email: string; partition: string; createdAt: string; updatedAt: string }>
+        }>,
     /** Basic app info from Electron main process */
     getAppInfo: () => ipcRenderer.invoke('get-app-info') as Promise<{ name: string; version: string }>,
     /** Stable machine id used for license activation */
@@ -50,6 +96,11 @@ contextBridge.exposeInMainWorld('electron', {
         const handler = (_event: Electron.IpcRendererEvent, status: string) => callback(status)
         ipcRenderer.on('agent-status', handler)
         return () => ipcRenderer.removeListener('agent-status', handler)
+    },
+    onFlowPanelStateChanged: (callback: (state: FlowPanelState) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, state: FlowPanelState) => callback(state)
+        ipcRenderer.on('flow-panel-state-changed', handler)
+        return () => ipcRenderer.removeListener('flow-panel-state-changed', handler)
     },
     /** Subscribe to license status changes pushed by main process */
     onLicenseStatusChanged: (callback: (status: {

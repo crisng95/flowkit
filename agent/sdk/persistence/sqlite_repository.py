@@ -32,6 +32,7 @@ class SQLiteRepository(Repository):
             status=row.get("status", "ACTIVE"),
             user_paygate_tier=row.get("user_paygate_tier", "PAYGATE_TIER_ONE"),
             material=row.get("material"),
+            orientation=row.get("orientation", "VERTICAL"),
             allow_music=bool(row.get("allow_music", 0)),
             allow_voice=bool(row.get("allow_voice", 0)),
             narrator_voice=row.get("narrator_voice"),
@@ -189,6 +190,7 @@ class SQLiteRepository(Repository):
             language=project.language,
             status=project.status,
             user_paygate_tier=project.user_paygate_tier,
+            orientation=project.orientation,
             allow_music=int(project.allow_music),
             allow_voice=int(project.allow_voice),
         )
@@ -203,6 +205,7 @@ class SQLiteRepository(Repository):
         user_paygate_tier: str = "PAYGATE_TIER_ONE",
         id: Optional[str] = None,
         material: Optional[str] = None,
+        orientation: str = "VERTICAL",
         allow_music: bool = False,
         allow_voice: bool = False,
     ) -> Project:
@@ -214,6 +217,7 @@ class SQLiteRepository(Repository):
             user_paygate_tier=user_paygate_tier,
             id=id,
             material=material,
+            orientation=orientation,
             allow_music=allow_music,
             allow_voice=allow_voice,
         )
@@ -358,6 +362,7 @@ class SQLiteRepository(Repository):
         parent_scene_id: Optional[str] = None,
         chain_type: str = "ROOT",
         source: str = "root",
+        narrator_text: Optional[str] = None,
     ) -> Scene:
         row = await crud.create_scene(
             video_id=video_id,
@@ -370,6 +375,7 @@ class SQLiteRepository(Repository):
             parent_scene_id=parent_scene_id,
             chain_type=chain_type,
             source=source,
+            narrator_text=narrator_text,
         )
         return self._row_to_scene(row)
 

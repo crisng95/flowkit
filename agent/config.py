@@ -21,13 +21,42 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3o
 RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV")
 
 # ─── Worker ──────────────────────────────────────────────────
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "5"))
-VIDEO_POLL_INTERVAL = int(os.environ.get("VIDEO_POLL_INTERVAL", "10"))  # polling interval for video/upscale status
+# Stability profile (desktop default):
+# - Keep moderate overall concurrency
+# - Throttle image requests to reduce reCAPTCHA traffic flags
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "1"))
+VIDEO_POLL_INTERVAL = int(os.environ.get("VIDEO_POLL_INTERVAL", "15"))  # polling interval for video/upscale status
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
 VIDEO_POLL_TIMEOUT = int(os.environ.get("VIDEO_POLL_TIMEOUT", "420"))
-API_COOLDOWN = int(os.environ.get("API_COOLDOWN", "10"))  # seconds between API calls (anti-spam)
-MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "5"))  # Google Flow max parallel requests
+API_COOLDOWN = float(os.environ.get("API_COOLDOWN", "1"))  # seconds between API calls
+MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "4"))
+# All Flow generation requests consume reCAPTCHA budget.
+# Keep this conservative to avoid unusual-traffic lockouts.
+MAX_CONCURRENT_CAPTCHA_REQUESTS = int(os.environ.get("MAX_CONCURRENT_CAPTCHA_REQUESTS", "1"))
+CAPTCHA_API_COOLDOWN = float(os.environ.get("CAPTCHA_API_COOLDOWN", "10"))  # minimum gap between captcha-consuming API calls
+MAX_CONCURRENT_IMAGE_REQUESTS = int(os.environ.get("MAX_CONCURRENT_IMAGE_REQUESTS", "1"))
+IMAGE_API_COOLDOWN = float(os.environ.get("IMAGE_API_COOLDOWN", "12"))  # minimum gap between image/edit requests
+# Video queue can run in parallel without overloading captcha as heavily as image generation.
+MAX_CONCURRENT_VIDEO_REQUESTS = int(os.environ.get("MAX_CONCURRENT_VIDEO_REQUESTS", "4"))
+VIDEO_API_COOLDOWN = float(os.environ.get("VIDEO_API_COOLDOWN", "1"))  # min gap for video submit/status jobs
+# Ref stage (character + location) can run slightly faster than scene image stage.
+MAX_CONCURRENT_CHARACTER_REF_REQUESTS = int(os.environ.get("MAX_CONCURRENT_CHARACTER_REF_REQUESTS", "2"))
+CHARACTER_IMAGE_API_COOLDOWN = float(os.environ.get("CHARACTER_IMAGE_API_COOLDOWN", "5"))  # min gap for character/location ref ops
+CAPTCHA_RETRY_LIMIT = int(os.environ.get("CAPTCHA_RETRY_LIMIT", "10"))
+CAPTCHA_RETRY_BACKOFF_BASE = int(os.environ.get("CAPTCHA_RETRY_BACKOFF_BASE", "45"))  # seconds
+CAPTCHA_RETRY_BACKOFF_MAX = int(os.environ.get("CAPTCHA_RETRY_BACKOFF_MAX", "1800"))  # seconds
+CAPTCHA_GROUP_PAUSE_SEC = int(os.environ.get("CAPTCHA_GROUP_PAUSE_SEC", "180"))  # pause all image jobs
+CAPTCHA_TRAFFIC_PAUSE_SEC = int(os.environ.get("CAPTCHA_TRAFFIC_PAUSE_SEC", "900"))  # strict pause for TOO_MUCH_TRAFFIC
+CAPTCHA_SAFE_MODE_SEC = int(os.environ.get("CAPTCHA_SAFE_MODE_SEC", "1800"))  # temporary image safe-mode window
+CAPTCHA_SAFE_MODE_IMAGE_CONCURRENCY = int(os.environ.get("CAPTCHA_SAFE_MODE_IMAGE_CONCURRENCY", "1"))
+CAPTCHA_SAFE_MODE_IMAGE_COOLDOWN = float(os.environ.get("CAPTCHA_SAFE_MODE_IMAGE_COOLDOWN", "20"))
+CAPTCHA_CONTENT_TIMEOUT_PAUSE_SEC = int(os.environ.get("CAPTCHA_CONTENT_TIMEOUT_PAUSE_SEC", "90"))
+OPERATION_FAILED_RETRY_BASE_SEC = int(os.environ.get("OPERATION_FAILED_RETRY_BASE_SEC", "45"))
+REQUEST_DISPATCH_TIMEOUT = int(os.environ.get("REQUEST_DISPATCH_TIMEOUT", "120"))  # per-request dispatch timeout
 STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600"))  # 10 min
+FLOW_CREDITS_CACHE_TTL_SEC = int(os.environ.get("FLOW_CREDITS_CACHE_TTL_SEC", "1800"))
+FLOW_CREDITS_ERROR_TTL_SEC = int(os.environ.get("FLOW_CREDITS_ERROR_TTL_SEC", "30"))
+TIER_SYNC_MIN_INTERVAL_SEC = int(os.environ.get("TIER_SYNC_MIN_INTERVAL_SEC", "1800"))
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
@@ -57,11 +86,21 @@ OUTPUT_DIR = BASE_DIR / "output"
 SHARED_OUTPUT_DIR = OUTPUT_DIR / "_shared"
 TTS_TEMPLATES_DIR = SHARED_OUTPUT_DIR / "tts_templates"
 MUSIC_OUTPUT_DIR = SHARED_OUTPUT_DIR / "music"
+TTS_SETTINGS_PATH = BASE_DIR / "tts_settings.json"
 
 # ─── TTS (OmniVoice) ─────────────────────────────────────────
 TTS_MODEL = os.environ.get("TTS_MODEL", "k2-fsa/OmniVoice")
 TTS_DEVICE = os.environ.get("TTS_DEVICE", "cpu")  # MPS produces gibberish; CPU+fp32 works
 TTS_SAMPLE_RATE = int(os.environ.get("TTS_SAMPLE_RATE", "24000"))
+TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "elevenlabs").strip().lower()  # elevenlabs | omnivoice
+
+# ─── TTS (ElevenLabs) ────────────────────────────────────────
+ELEVENLABS_API_BASE = os.environ.get("ELEVENLABS_API_BASE", "https://api.elevenlabs.io").rstrip("/")
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+ELEVENLABS_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2").strip()
+ELEVENLABS_DEFAULT_VOICE_ID = os.environ.get("ELEVENLABS_DEFAULT_VOICE_ID", "").strip()
+ELEVENLABS_TIMEOUT_SEC = float(os.environ.get("ELEVENLABS_TIMEOUT_SEC", "60"))
+ELEVENLABS_MAX_RETRIES = int(os.environ.get("ELEVENLABS_MAX_RETRIES", "2"))
 
 # ─── Review / Claude Vision ──────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")

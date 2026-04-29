@@ -413,9 +413,9 @@ export default function ManualImagesPage() {
                 </CardHeader>
                 <CardContent className="pt-0 flex flex-col gap-3">
                     <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as 'single' | 'multiple')}>
-                        <TabsList className="w-full">
-                            <TabsTrigger value="single" className="flex-1">Đơn (Single)</TabsTrigger>
-                            <TabsTrigger value="multiple" className="flex-1">Hàng loạt (Multiple)</TabsTrigger>
+                        <TabsList>
+                            <TabsTrigger value="single" className="text-sm font-medium">Đơn (Single)</TabsTrigger>
+                            <TabsTrigger value="multiple" className="text-sm font-medium">Hàng loạt (Multiple)</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="single">

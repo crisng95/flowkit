@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
 import {
   Plus,
   Trash2,
@@ -11,6 +11,7 @@ import {
   Star,
   Mic,
   Download,
+  FolderOpen,
   FileText,
   Link2,
   Tv2,
@@ -91,6 +92,43 @@ interface SceneVideoSource {
   stage: "video" | "upscale";
   url: string | null;
   mediaId: string | null;
+}
+
+interface ScriptScenePayload {
+  display_order?: number | null;
+  prompt?: string | null;
+  image_prompt?: string | null;
+  video_prompt?: string | null;
+  narrator_text?: string | null;
+  character_names?: string[] | string | null;
+  transition_prompt?: string | null;
+  chain_type?: "ROOT" | "CONTINUATION" | "INSERT";
+  source?: string | null;
+}
+
+interface ScriptVideoPayload {
+  title?: string | null;
+  description?: string | null;
+  orientation?: string | null;
+}
+
+interface ScriptImportPayload {
+  format_version?: number;
+  title?: string | null;
+  description?: string | null;
+  orientation?: string | null;
+  video?: ScriptVideoPayload;
+  scenes: ScriptScenePayload[];
+}
+
+interface ScriptImportResponse {
+  ok: boolean;
+  video_id: string;
+  scenes_total: number;
+  deleted_scenes: number;
+  deleted_requests: number;
+  orientation: string;
+  title: string;
 }
 
 function parseSignedUrlExpiresAt(
@@ -256,6 +294,35 @@ function parseChars(raw: string[] | string | null): string[] {
     return JSON.parse(raw);
   } catch {
     return [];
+  }
+}
+
+function slugForFile(text: string): string {
+  const cleaned = text
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || "video";
+}
+
+function extractLocalPath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const text = String(url).trim();
+  if (!text) return null;
+  if (/^(\/|[A-Za-z]:[\\/])/.test(text)) return text;
+  try {
+    const parsed = new URL(text);
+    const host = (parsed.hostname || "").toLowerCase();
+    if (host !== "127.0.0.1" && host !== "localhost") return null;
+    if (parsed.pathname.replace(/\/+$/, "") !== "/api/flow/local-media")
+      return null;
+    const p = parsed.searchParams.get("path");
+    if (!p) return null;
+    return decodeURIComponent(p);
+  } catch {
+    return null;
   }
 }
 
@@ -500,6 +567,8 @@ Return JSON:
     videoOverride ??
     sceneUrl(scene, orientation, "video") ??
     sceneUrl(scene, orientation, "upscale");
+  const imageLocalPath = extractLocalPath(imagePreview);
+  const videoLocalPath = extractLocalPath(videoPreview);
   const videoStatus = sceneStatus(scene, orientation, "video");
   const statusRows = (["image", "video", "tts", "upscale"] as const).map(
     (stage) => ({
@@ -590,6 +659,11 @@ Return JSON:
               Chưa có ảnh
             </div>
           )}
+          {imageLocalPath && (
+            <div className="text-[10px] text-[hsl(var(--muted-foreground))] font-mono break-all">
+              Local: {imageLocalPath}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -624,6 +698,11 @@ Return JSON:
                 : videoStatus === "FAILED"
                   ? "Video lỗi, hãy tạo lại"
                   : "Chưa có video"}
+            </div>
+          )}
+          {videoLocalPath && (
+            <div className="text-[10px] text-[hsl(var(--muted-foreground))] font-mono break-all">
+              Local: {videoLocalPath}
             </div>
           )}
         </div>
@@ -780,6 +859,8 @@ function PipelineBar({
   const [retryingFailedImages, setRetryingFailedImages] = useState(false);
   const [retryingFailedVideos, setRetryingFailedVideos] = useState(false);
   const [batchMsg, setBatchMsg] = useState("");
+  const [downloadingAssets, setDownloadingAssets] = useState(false);
+  const [downloadAssetsDir, setDownloadAssetsDir] = useState("");
 
   const loadSceneFailures =
     useCallback(async (): Promise<SceneFailureSummary> => {
@@ -835,6 +916,15 @@ function PipelineBar({
   const hasReadyImageForOrientation = (scene: Scene): boolean => {
     const prefix = orientationPrefix(orientation);
     const mediaId = (scene as any)[`${prefix}_image_media_id`] as
+      | string
+      | null
+      | undefined;
+    return typeof mediaId === "string" && mediaId.trim().length > 0;
+  };
+
+  const hasReadyVideoForOrientation = (scene: Scene): boolean => {
+    const prefix = orientationPrefix(orientation);
+    const mediaId = (scene as any)[`${prefix}_video_media_id`] as
       | string
       | null
       | undefined;
@@ -994,15 +1084,27 @@ function PipelineBar({
   };
 
   const upscale = async () => {
-    const scenes = await fetchAPI<{ id: string }[]>(
+    const scenes = await fetchAPI<Scene[]>(
       `/api/scenes?video_id=${videoId}`,
     );
     if (!scenes.length) throw new Error("Chưa có phân cảnh nào.");
+    const readyScenes = scenes.filter(hasReadyVideoForOrientation);
+    const targetScenes = readyScenes.filter(
+      (s) => sceneStatus(s, orientation, "upscale") !== "COMPLETED",
+    );
+    if (!targetScenes.length) {
+      if (!readyScenes.length) {
+        throw new Error("Chưa có cảnh nào có video để upscale 4K.");
+      }
+      setBatchMsg("Tất cả cảnh đã có video đều đã upscale xong.");
+      return;
+    }
+    const skippedNoVideo = scenes.length - readyScenes.length;
     await fetchAPI("/api/requests/batch", {
       method: "POST",
       body: JSON.stringify({
-        requests: scenes.map((s) => ({
-          type: "UPSCALE_VIDEO",
+        requests: targetScenes.map((s) => ({
+          type: "UPSCALE_VIDEO_LOCAL",
           project_id: projectId,
           video_id: videoId,
           scene_id: s.id,
@@ -1010,7 +1112,11 @@ function PipelineBar({
         })),
       }),
     });
-    setBatchMsg(`✓ Đã gửi upscale cho ${scenes.length} cảnh.`);
+    setBatchMsg(
+      `✓ Đã gửi nâng 4K local cho ${targetScenes.length} cảnh đã có video${
+        skippedNoVideo > 0 ? ` (bỏ qua ${skippedNoVideo} cảnh chưa có video)` : ""
+      }.`,
+    );
   };
 
   const runStageAction = async (
@@ -1022,37 +1128,96 @@ function PipelineBar({
     return upscale();
   };
 
+  const downloadAllAssets = async () => {
+    setBatchMsg("");
+    setDownloadingAssets(true);
+    try {
+      const res = await fetchAPI<{
+        download_dir: string;
+        images_downloaded: number;
+        videos_downloaded: number;
+        failed?: string[];
+      }>(`/api/videos/${videoId}/download-assets`, {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: projectId,
+          orientation,
+          rebind_scene_urls: true,
+        }),
+      });
+      setDownloadAssetsDir(res.download_dir || "");
+      const failedCount = res.failed?.length ?? 0;
+      setBatchMsg(
+        `✓ Đã tải local ${res.images_downloaded} ảnh, ${res.videos_downloaded} video${
+          failedCount > 0 ? ` · lỗi ${failedCount}` : ""
+        }.`,
+      );
+    } catch (e: any) {
+      const raw = String(e?.message ?? "unknown");
+      if (raw.includes('API 404: {"detail":"Not Found"}')) {
+        setBatchMsg(
+          "Lỗi tải ảnh/video local: backend agent đang chạy bản cũ (thiếu endpoint download-assets). Khởi động lại app/agent rồi thử lại.",
+        );
+      } else {
+        setBatchMsg(`Lỗi tải ảnh/video local: ${raw}`);
+      }
+    } finally {
+      setDownloadingAssets(false);
+    }
+  };
+
+  const openDownloadFolder = async () => {
+    if (!downloadAssetsDir) return;
+    if (window.electron?.openPath) {
+      const result = await window.electron.openPath(downloadAssetsDir);
+      if (!result.ok && result.error) setBatchMsg(`Không mở được thư mục: ${result.error}`);
+      return;
+    }
+    setBatchMsg(`Thư mục local: ${downloadAssetsDir}`);
+  };
+
   const buildPreflightChecks = async (
     stage: "images" | "videos" | "video_refs" | "upscale",
   ): Promise<PreflightCheckItem[]> => {
-    const [health, scenes, chars] = await Promise.all([
+    const [health, scenes, chars, localUpscale] = await Promise.all([
       fetchAPI<{ extension_connected: boolean }>("/health"),
       fetchAPI<Scene[]>(`/api/scenes?video_id=${videoId}`),
       fetchAPI<{ id: string; media_id: string | null }[]>(
         `/api/projects/${projectId}/characters`,
       ),
+      stage === "upscale"
+        ? fetchAPI<{ ready: boolean; error?: string }>("/api/workflows/local-upscale/health")
+        : Promise.resolve(null),
     ]);
 
     const hasScenes = scenes.length > 0;
     const missingRefs = chars.filter((c) => !c.media_id).length;
     const imageReadyScenes = scenes.filter(hasReadyImageForOrientation).length;
     const missingImages = scenes.length - imageReadyScenes;
-    const missingVideos = scenes.filter(
-      (s) => sceneStatus(s, orientation, "video") !== "COMPLETED",
-    ).length;
+    const videoReadyScenes = scenes.filter(hasReadyVideoForOrientation).length;
+    const missingVideos = scenes.length - videoReadyScenes;
+    const extensionStrict = stage !== "upscale";
 
     const checks: PreflightCheckItem[] = [
       {
         id: "extension",
         label: "Extension connection",
-        status: health.extension_connected ? "pass" : "fail",
+        status: health.extension_connected
+          ? "pass"
+          : extensionStrict
+            ? "fail"
+            : "warn",
         description: health.extension_connected
           ? "Extension đã kết nối."
-          : "Extension đang mất kết nối.",
+          : extensionStrict
+            ? "Extension đang mất kết nối."
+            : "Extension đang mất kết nối (upscale local vẫn có thể chạy nếu video đã lưu local).",
         hint: health.extension_connected
           ? "Sẵn sàng gọi Flow API."
-          : "Mở tab Google Flow và bấm reconnect.",
-        blocking: true,
+          : extensionStrict
+            ? "Mở tab Google Flow và bấm reconnect."
+            : "Nếu thiếu video local, hệ thống mới cần extension để lấy lại nguồn.",
+        blocking: extensionStrict,
       },
       {
         id: "scenes",
@@ -1119,15 +1284,37 @@ function PipelineBar({
 
     if (stage === "upscale") {
       checks.push({
+        id: "upscale-tools",
+        label: "Local 4K dependencies",
+        status: localUpscale?.ready ? "pass" : "fail",
+        description: localUpscale?.ready
+          ? "Đã sẵn sàng ffmpeg + Real-ESRGAN cho nâng 4K local."
+          : "Thiếu dependency upscale local.",
+        hint: localUpscale?.ready
+          ? undefined
+          : localUpscale?.error || "Cài ffmpeg/ffprobe + realesrgan-ncnn-vulkan và model trước khi chạy.",
+        blocking: !localUpscale?.ready,
+      });
+      checks.push({
         id: "scene-videos",
         label: "Scene videos readiness",
-        status: missingVideos === 0 ? "pass" : "fail",
+        status:
+          videoReadyScenes === 0
+            ? "fail"
+            : missingVideos === 0
+              ? "pass"
+              : "warn",
         description:
-          missingVideos === 0
-            ? "Tất cả cảnh đã có video."
-            : `Còn ${missingVideos} cảnh chưa có video.`,
-        hint: missingVideos === 0 ? undefined : "Gen video trước khi upscale.",
-        blocking: true,
+          videoReadyScenes === 0
+            ? "Chưa có cảnh nào có video."
+            : missingVideos === 0
+              ? "Tất cả cảnh đã có video."
+              : `${videoReadyScenes} cảnh đã có video, ${missingVideos} cảnh chưa có video.`,
+        hint:
+          videoReadyScenes === 0
+            ? "Gen video trước khi upscale."
+            : "Upscale sẽ chạy ngay cho các cảnh đã có video.",
+        blocking: videoReadyScenes === 0,
         quickFixLabel: "Gen video thiếu",
         quickFix: async () => {
           await queueMissingVideos();
@@ -1281,7 +1468,7 @@ function PipelineBar({
                 void openPreflight("upscale");
               }}
             >
-              <Zap size={11} /> Nâng 4K
+              <Zap size={11} /> Nâng 4K local
             </Button>
             <Button
               variant="outline"
@@ -1378,6 +1565,23 @@ function PipelineBar({
             <Button size="sm" onClick={() => setShowExport(true)}>
               <Download size={11} /> Xuất video
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadAllAssets}
+              disabled={downloadingAssets}
+            >
+              <Download
+                size={11}
+                className={downloadingAssets ? "animate-pulse" : ""}
+              />{" "}
+              {downloadingAssets ? "Đang tải local..." : "Tải ảnh/video local"}
+            </Button>
+            {downloadAssetsDir && (
+              <Button variant="ghost" size="sm" onClick={openDownloadFolder}>
+                <FolderOpen size={11} /> Mở thư mục tải
+              </Button>
+            )}
           </div>
           <div className="text-[11px] text-[hsl(var(--muted-foreground))] leading-relaxed">
             Script lời (AI) → Giọng đọc (TTS) → Xuất video (bật fit narrator) để
@@ -1522,8 +1726,8 @@ function PipelineBar({
           />
           <BatchStatusBar
             videoId={videoId}
-            type="UPSCALE_VIDEO"
-            label="Nâng 4K"
+            type="UPSCALE_VIDEO_LOCAL"
+            label="Nâng 4K local"
             lastEventType={lastEventType}
             orientation={orientation}
           />
@@ -1691,6 +1895,15 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
     normalizeOrientation(video.orientation),
   );
   const [videoTitle, setVideoTitle] = useState(video.title);
+  const [scriptImportOpen, setScriptImportOpen] = useState(false);
+  const [scriptImporting, setScriptImporting] = useState(false);
+  const [scriptImportError, setScriptImportError] = useState("");
+  const [scriptImportInfo, setScriptImportInfo] = useState("");
+  const [scriptPayload, setScriptPayload] = useState<ScriptImportPayload | null>(
+    null,
+  );
+  const [scriptFileName, setScriptFileName] = useState("");
+  const scriptFileInputRef = useRef<HTMLInputElement | null>(null);
   const { lastEvent } = useWebSocket();
   const { connected: extensionConnected, check: recheckExtension } =
     useExtensionStatus();
@@ -1781,13 +1994,16 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
         setResolvedImageUrls((prev) =>
           prev[scene.id] === fresh ? prev : { ...prev, [scene.id]: fresh },
         );
-        const current = (scene as any)[`${source.prefix}_image_url`] as
-          | string
-          | null;
-        if (current !== fresh) {
-          await patchAPI(`/api/scenes/${scene.id}`, {
-            [`${source.prefix}_image_url`]: fresh,
-          });
+        const shouldPersistLocal = /\/api\/flow\/local-media\?path=/.test(fresh);
+        if (shouldPersistLocal) {
+          const current = (scene as any)[`${source.prefix}_image_url`] as
+            | string
+            | null;
+          if (current !== fresh) {
+            await patchAPI(`/api/scenes/${scene.id}`, {
+              [`${source.prefix}_image_url`]: fresh,
+            });
+          }
         }
         return fresh as string;
       } catch {
@@ -1841,15 +2057,18 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
         setResolvedVideoUrls((prev) =>
           prev[scene.id] === fresh ? prev : { ...prev, [scene.id]: fresh },
         );
-        const field =
-          source.stage === "upscale"
-            ? `${source.prefix}_upscale_url`
-            : `${source.prefix}_video_url`;
-        const current = (scene as any)[field] as string | null;
-        if (current !== fresh) {
-          await patchAPI(`/api/scenes/${scene.id}`, {
-            [field]: fresh,
-          });
+        const shouldPersistLocal = /\/api\/flow\/local-media\?path=/.test(fresh);
+        if (shouldPersistLocal) {
+          const field =
+            source.stage === "upscale"
+              ? `${source.prefix}_upscale_url`
+              : `${source.prefix}_video_url`;
+          const current = (scene as any)[field] as string | null;
+          if (current !== fresh) {
+            await patchAPI(`/api/scenes/${scene.id}`, {
+              [field]: fresh,
+            });
+          }
         }
         return fresh as string;
       } catch {
@@ -1947,6 +2166,138 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
     await patchAPI(`/api/videos/${video.id}`, { title: trimmed });
   };
 
+  const exportScript = async () => {
+    setScriptImportError("");
+    setScriptImportInfo("");
+    try {
+      const payload = await fetchAPI<any>(`/api/videos/${video.id}/script-export`);
+      const text = JSON.stringify(payload, null, 2);
+      const blob = new Blob([text], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      link.href = href;
+      link.download = `${slugForFile(videoTitle)}_script_${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      setScriptImportInfo("✓ Đã export kịch bản JSON.");
+    } catch (e: any) {
+      const raw = String(e?.message ?? "unknown");
+      if (raw.includes('API 404: {"detail":"Not Found"}')) {
+        setScriptImportError(
+          "Lỗi export kịch bản: backend agent đang chạy bản cũ (thiếu route script-export). Khởi động lại app/agent rồi thử lại.",
+        );
+      } else {
+        setScriptImportError(`Lỗi export kịch bản: ${raw}`);
+      }
+    }
+  };
+
+  const openImportScriptPicker = () => {
+    setScriptImportError("");
+    setScriptImportInfo("");
+    setScriptPayload(null);
+    setScriptFileName("");
+    scriptFileInputRef.current?.click();
+  };
+
+  const onImportScriptFilePicked = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const rawText = await file.text();
+      const parsed = JSON.parse(rawText);
+      if (!Array.isArray(parsed?.scenes) || parsed.scenes.length === 0) {
+        throw new Error("File kịch bản phải có mảng scenes và không được rỗng.");
+      }
+      const payload: ScriptImportPayload = {
+        format_version:
+          typeof parsed?.format_version === "number"
+            ? parsed.format_version
+            : undefined,
+        title:
+          typeof parsed?.title === "string" ? parsed.title : parsed?.video?.title,
+        description:
+          typeof parsed?.description === "string"
+            ? parsed.description
+            : parsed?.video?.description,
+        orientation:
+          typeof parsed?.orientation === "string"
+            ? parsed.orientation
+            : parsed?.video?.orientation,
+        video:
+          parsed?.video && typeof parsed.video === "object"
+            ? {
+                title:
+                  typeof parsed.video.title === "string"
+                    ? parsed.video.title
+                    : null,
+                description:
+                  typeof parsed.video.description === "string"
+                    ? parsed.video.description
+                    : null,
+                orientation:
+                  typeof parsed.video.orientation === "string"
+                    ? parsed.video.orientation
+                    : null,
+              }
+            : undefined,
+        scenes: parsed.scenes as ScriptScenePayload[],
+      };
+      setScriptPayload(payload);
+      setScriptFileName(file.name);
+      setScriptImportOpen(true);
+    } catch (e: any) {
+      setScriptImportError(
+        `Không đọc được file kịch bản: ${e?.message ?? "JSON không hợp lệ."}`,
+      );
+    }
+  };
+
+  const runImportScript = async () => {
+    if (!scriptPayload) return;
+    setScriptImporting(true);
+    setScriptImportError("");
+    try {
+      const result = await fetchAPI<ScriptImportResponse>(
+        `/api/videos/${video.id}/script-import`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...scriptPayload,
+            replace_existing: true,
+            clear_requests: true,
+          }),
+        },
+      );
+      setScriptImportOpen(false);
+      setScriptPayload(null);
+      setVideoTitle(result.title);
+      setOrientation(normalizeOrientation(result.orientation));
+      setResolvedImageUrls({});
+      setResolvedVideoUrls({});
+      setSelectedScene(null);
+      await load();
+      setScriptImportInfo(
+        `✓ Đã import ${result.scenes_total} cảnh, reset media an toàn và sẵn sàng generate.`,
+      );
+    } catch (e: any) {
+      const raw = String(e?.message ?? "unknown");
+      if (raw.includes('API 404: {"detail":"Not Found"}')) {
+        setScriptImportError(
+          "Lỗi import kịch bản: backend agent đang chạy bản cũ (thiếu route script-import). Khởi động lại app/agent rồi thử lại.",
+        );
+      } else {
+        setScriptImportError(`Lỗi import kịch bản: ${raw}`);
+      }
+    } finally {
+      setScriptImporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full gap-3 overflow-y-auto">
       {/* Header */}
@@ -1968,6 +2319,12 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
         >
           {scenes.length} cảnh{hasGaps ? " ⚠ thiếu cảnh" : ""}
         </span>
+        <Button variant="outline" size="sm" onClick={exportScript}>
+          <Download size={12} /> Export kịch bản
+        </Button>
+        <Button variant="outline" size="sm" onClick={openImportScriptPicker}>
+          <Upload size={12} /> Import kịch bản
+        </Button>
         <div className="flex-1" />
         {/* Extension status — click to reconnect when disconnected */}
         {extensionConnected ? (
@@ -2038,6 +2395,16 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
           ⚠ Một số cảnh không tạo được (display_order bị thiếu). Nhấn{" "}
           <strong>⚡ Sửa thứ tự</strong> để đánh số lại, sau đó thêm cảnh bị
           thiếu thủ công.
+        </div>
+      )}
+      {scriptImportInfo && (
+        <div className="text-xs rounded-md px-3 py-2 flex-shrink-0 bg-green-50 border border-green-200 text-green-700">
+          {scriptImportInfo}
+        </div>
+      )}
+      {scriptImportError && (
+        <div className="text-xs rounded-md px-3 py-2 flex-shrink-0 bg-red-50 border border-red-200 text-red-700">
+          {scriptImportError}
         </div>
       )}
 
@@ -2116,6 +2483,112 @@ export default function VideoDetailPage({ video, projectId, onBack }: Props) {
           )}
         </div>
       </div>
+
+      <input
+        ref={scriptFileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={onImportScriptFilePicked}
+      />
+
+      {scriptImportOpen && scriptPayload && (
+        <Dialog
+          open={scriptImportOpen}
+          onOpenChange={(next) => {
+            if (!scriptImporting) setScriptImportOpen(next);
+          }}
+        >
+          <DialogContent className="max-w-3xl">
+            <div className="flex flex-col gap-3 p-4">
+              <div className="text-base font-semibold">Import kịch bản</div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                File: <strong>{scriptFileName || "(không rõ tên)"}</strong>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded-md border p-2">
+                  <div className="text-[10px] uppercase text-[hsl(var(--muted-foreground))]">
+                    Tổng cảnh
+                  </div>
+                  <div className="text-sm font-semibold">
+                    {scriptPayload.scenes.length}
+                  </div>
+                </div>
+                <div className="rounded-md border p-2">
+                  <div className="text-[10px] uppercase text-[hsl(var(--muted-foreground))]">
+                    Tiêu đề video
+                  </div>
+                  <div className="text-sm font-semibold truncate">
+                    {scriptPayload.title ||
+                      scriptPayload.video?.title ||
+                      videoTitle}
+                  </div>
+                </div>
+                <div className="rounded-md border p-2">
+                  <div className="text-[10px] uppercase text-[hsl(var(--muted-foreground))]">
+                    Tỉ lệ
+                  </div>
+                  <div className="text-sm font-semibold">
+                    {normalizeOrientation(
+                      scriptPayload.orientation ||
+                        scriptPayload.video?.orientation ||
+                        orientation,
+                    ) === "VERTICAL"
+                      ? "9:16"
+                      : "16:9"}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs p-2.5">
+                Import sẽ ghi đè toàn bộ scene hiện tại của episode này, reset
+                media/status về trạng thái sẵn sàng generate, và xoá request cũ
+                để tránh xung đột queue.
+              </div>
+              <div className="max-h-56 overflow-y-auto rounded-md border p-2">
+                <div className="text-[10px] uppercase mb-1 text-[hsl(var(--muted-foreground))]">
+                  Xem trước cảnh (5 dòng đầu)
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {scriptPayload.scenes.slice(0, 5).map((sc, idx) => (
+                    <div
+                      key={`${idx}-${sc.display_order ?? idx}`}
+                      className="text-xs rounded border px-2 py-1.5"
+                    >
+                      <div className="font-semibold">
+                        Cảnh #{typeof sc.display_order === "number" ? sc.display_order + 1 : idx + 1}
+                      </div>
+                      <div className="text-[hsl(var(--muted-foreground))] truncate">
+                        {sc.prompt ||
+                          sc.image_prompt ||
+                          sc.video_prompt ||
+                          sc.narrator_text ||
+                          "(trống)"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={scriptImporting}
+                  onClick={() => setScriptImportOpen(false)}
+                >
+                  Huỷ
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={scriptImporting}
+                  onClick={runImportScript}
+                >
+                  {scriptImporting ? "Đang import..." : "Xác nhận import"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {showSceneReview && selectedScene && (
         <ReviewSceneModal

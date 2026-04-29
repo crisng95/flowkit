@@ -1,9 +1,9 @@
 import type { Scene, StatusType } from '../../types'
-import { orientationAspectCss, orientationPrefix } from '../../lib/orientation'
+import { orientationAspectCss, orientationPrefix, resolveMediaUrl } from '../../lib/orientation'
 
 interface SceneCardProps {
   scene: Scene
-  stage: 'image' | 'video' | 'upscale'
+  stage: 'image' | 'video' | 'upscale' | 'tts'
   orientation?: string
   thumbOverride?: string | null
   onThumbError?: () => void
@@ -22,7 +22,8 @@ const CHAIN_COLORS: Record<string, string> = {
   INSERT: 'var(--yellow)',
 }
 
-function getStageStatus(scene: Scene, stage: 'image' | 'video' | 'upscale', orientation?: string): StatusType {
+function getStageStatus(scene: Scene, stage: 'image' | 'video' | 'upscale' | 'tts', orientation?: string): StatusType {
+  if (stage === 'tts') return scene.tts_status ?? 'PENDING'
   const primary = orientationPrefix(orientation)
   const secondary = primary === 'vertical' ? 'horizontal' : 'vertical'
   const primaryStatus = scene[`${primary}_${stage}_status` as keyof Scene] as StatusType | undefined
@@ -42,8 +43,9 @@ function getThumbUrl(scene: Scene, orientation?: string): string | null {
 
 export default function SceneCard({ scene, stage, orientation, thumbOverride, onThumbError }: SceneCardProps) {
   const status = getStageStatus(scene, stage, orientation)
-  const thumbUrl = thumbOverride ?? getThumbUrl(scene, orientation)
-  const prompt = (scene.prompt ?? scene.image_prompt ?? '').slice(0, 60)
+  const thumbUrl = resolveMediaUrl(thumbOverride ?? getThumbUrl(scene, orientation))
+  const displayText = stage === 'tts' ? scene.narrator_text : (scene.prompt ?? scene.image_prompt)
+  const prompt = (displayText ?? '').slice(0, 60)
 
   return (
     <div
@@ -98,8 +100,8 @@ export default function SceneCard({ scene, stage, orientation, thumbOverride, on
 
       {/* Prompt */}
       {prompt && (
-        <p className="truncate" style={{ color: 'var(--muted)', fontSize: '10px' }} title={scene.prompt ?? ''}>
-          {prompt}{(scene.prompt ?? '').length > 60 ? '…' : ''}
+        <p className="truncate" style={{ color: 'var(--muted)', fontSize: '10px' }} title={displayText ?? ''}>
+          {prompt}{(displayText ?? '').length > 60 ? '…' : ''}
         </p>
       )}
     </div>

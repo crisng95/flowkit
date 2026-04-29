@@ -11,8 +11,9 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import ssl
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Awaitable, Callable
 
 
 def _build_continuation_prompt(base_prompt: str) -> str:
@@ -31,11 +32,192 @@ def _build_continuation_prompt(base_prompt: str) -> str:
     )
 
 
-def _char_matches(c: dict, name_set: set) -> bool:
-    """Check if a character matches any name in the set by slug OR display name."""
-    slug = c.get("slug") or ""
-    name = c.get("name", "")
-    return (slug and slug in name_set) or (name and name in name_set)
+def _normalized_name(value: str) -> str:
+    return slugify((value or "").strip()).lower()
+
+
+def _char_matches(c: dict, name_set: set[str]) -> bool:
+    """Check if an entity matches by slug/name (case-insensitive, slug-aware)."""
+    normalized_set = {_normalized_name(str(x)) for x in name_set if str(x).strip()}
+    slug = _normalized_name(c.get("slug") or "")
+    name = _normalized_name(c.get("name", ""))
+    return bool((slug and slug in normalized_set) or (name and name in normalized_set))
+
+
+def _char_mentioned_in_text(c: dict, text: str) -> bool:
+    """Fallback matcher when scene.character_names is missing."""
+    if not text:
+        return False
+    hay = text.lower()
+    slug = (c.get("slug") or "").strip().lower()
+    name = (c.get("name") or "").strip().lower()
+    return bool((slug and slug in hay) or (name and name in hay))
+
+
+def _with_reference_lock(prompt: str, ref_names: list[str]) -> str:
+    """When refs exist, force model to follow refs and ignore conflicting appearance text."""
+    p = (prompt or "").strip()
+    if not ref_names:
+        return p
+    ref_list = ", ".join(ref_names)
+    lock = (
+        f"STRICT CHARACTER CONSISTENCY MODE for [{ref_list}]. "
+        "Use provided reference images as the only source for character identity and appearance "
+        "(face, body, clothing, colors, proportions, style). "
+        "Do NOT redesign or reinterpret character looks. "
+        "Ignore all conflicting appearance text; prompt text controls only action, camera, environment, and mood."
+    )
+    return f"{lock} {p}".strip()
+
+
+_UNSAFE_ERROR_MARKERS = (
+    "public_error_unsafe_generation",
+    "unsafe_generation",
+    "unsafe generation",
+)
+
+# Keep this intentionally broad so we can neutralize risky phrases in both EN + VI prompts.
+_UNSAFE_TERM_RE = re.compile(
+    r"\b("
+    r"kill|killing|murder|blood|bloody|gore|gory|corpse|dead body|behead|decapitat|"
+    r"execution|torture|rape|sexual|nude|nudity|suicide|terrorist|"
+    r"giết|máu|đẫm máu|chặt đầu|hành quyết|tra tấn|cưỡng hiếp|khỏa thân|tự sát|khủng bố"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_error_text(result: dict) -> str:
+    if not isinstance(result, dict):
+        return str(result)
+    if result.get("error"):
+        return str(result["error"])
+    data = result.get("data", {})
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict):
+            msg = str(err.get("message") or json.dumps(err)[:240])
+            details = err.get("details")
+            if isinstance(details, list):
+                for detail in details:
+                    if isinstance(detail, dict):
+                        reason = detail.get("reason")
+                        if reason:
+                            msg = f"{msg} [{reason}]"
+                            break
+            return msg
+        if err:
+            return str(err)
+    return ""
+
+
+def _is_unsafe_generation_error(result: dict) -> bool:
+    low = _extract_error_text(result).lower()
+    return any(marker in low for marker in _UNSAFE_ERROR_MARKERS)
+
+
+def _sanitize_prompt_for_safety(prompt: str) -> str:
+    raw = " ".join(str(prompt or "").split())
+    if not raw:
+        raw = "Cinematic documentary environment shot with neutral action."
+    softened = _UNSAFE_TERM_RE.sub("dramatic", raw).strip()
+    safety_guard = (
+        "Family-friendly documentary visual. Non-graphic, non-violent, non-sexual, "
+        "no explicit injury, no blood, no hate symbols, no real-person likeness. "
+        "Focus on environment, camera angle, lighting, and neutral action only."
+    )
+    merged = f"{safety_guard} {softened}".strip()
+    return merged[:1400]
+
+
+async def _run_image_with_safe_fallback(
+    *,
+    prompt: str,
+    context: str,
+    call_with_prompt: Callable[[str], Awaitable[dict]],
+) -> dict:
+    result = await call_with_prompt(prompt)
+    if not (_is_error(result) and _is_unsafe_generation_error(result)):
+        return result
+
+    safe_prompt = _sanitize_prompt_for_safety(prompt)
+    logger.warning("%s blocked by safety filter, retrying with sanitized prompt", context)
+    retry = await call_with_prompt(safe_prompt)
+    if not _is_error(retry):
+        logger.info("%s recovered after safe-prompt retry", context)
+        return retry
+    if _is_unsafe_generation_error(retry):
+        return {
+            "error": (
+                "Request blocked by Google safety filter [PUBLIC_ERROR_UNSAFE_GENERATION]. "
+                "Da thu auto-safe prompt 1 lan nhung van bi chan. "
+                "Hay giam noi dung nhay cam/bao luc/18+ va thu lai."
+            )
+        }
+    return retry
+
+
+async def _resolve_scene_ref_media_ids(scene: dict, project_id: str) -> tuple[list[str], list[str], list[str]]:
+    """Resolve available reference media_ids for scene entities.
+
+    Rule:
+    - If a character/entity has uploaded/generated media_id => always use as reference.
+    - If no media_id => fallback to prompt text (do not block generation).
+    """
+    char_names_raw = scene.get("character_names")
+    if isinstance(char_names_raw, str):
+        try:
+            char_names_raw = json.loads(char_names_raw)
+        except json.JSONDecodeError:
+            char_names_raw = []
+    if not isinstance(char_names_raw, list):
+        char_names_raw = []
+
+    name_set = {_normalized_name(str(x)) for x in char_names_raw if str(x).strip()}
+    prompt_blob = " ".join(
+        str(scene.get(k) or "") for k in ("image_prompt", "prompt", "video_prompt", "narrator_text")
+    )
+
+    project_chars = await crud.get_project_characters(project_id)
+    valid_ids: list[str] = []
+    ref_names: list[str] = []
+    missing_names: list[str] = []
+    seen_ids: set[str] = set()
+    matched_any = False
+
+    for c in project_chars:
+        matched = _char_matches(c, name_set) if name_set else _char_mentioned_in_text(c, prompt_blob)
+        if not matched:
+            continue
+        matched_any = True
+        mid = c.get("media_id")
+        if mid and mid not in seen_ids:
+            valid_ids.append(mid)
+            ref_names.append(c.get("name") or c.get("slug") or "entity")
+            seen_ids.add(mid)
+        elif not mid and name_set:
+            missing_names.append(c.get("name") or c.get("slug") or "entity")
+
+    # Hard fallback: if no explicit mapping worked and project has exactly one
+    # character ref, force using that ref to keep character consistency.
+    if not matched_any and not valid_ids:
+        single_ref_chars = [
+            c for c in project_chars
+            if c.get("entity_type") == "character" and c.get("media_id")
+        ]
+        if len(single_ref_chars) == 1:
+            c = single_ref_chars[0]
+            mid = c.get("media_id")
+            if mid and mid not in seen_ids:
+                valid_ids.append(mid)
+                ref_names.append(c.get("name") or c.get("slug") or "character")
+                seen_ids.add(mid)
+
+    # De-duplicate while preserving order
+    if missing_names:
+        missing_names = list(dict.fromkeys(missing_names))
+
+    return valid_ids, ref_names, missing_names
 
 import aiohttp
 
@@ -162,6 +344,57 @@ async def _poll_operations(
     return {"error": f"Polling timeout after {timeout}s"}
 
 
+async def _check_operations_once(
+    client: FlowClient,
+    operations: list[dict],
+    *,
+    pending_retry_sec: int = 8,
+) -> dict:
+    """Single status-check pass for queue mode.
+
+    Returns:
+    - {"data": ...} when all operations are SUCCESSFUL
+    - {"error": "..."} when any operation FAILED
+    - {"pending": True, "retry_after_sec": N, ...} while still processing
+    """
+    if not operations:
+        return {"error": "No operations to check"}
+
+    status_result = await client.check_video_status(operations)
+    if _is_error(status_result):
+        return status_result
+
+    data = status_result.get("data", status_result)
+    ops = data.get("operations", [])
+    if not ops:
+        return {
+            "pending": True,
+            "retry_after_sec": pending_retry_sec,
+            "message": "Waiting for operation status",
+        }
+
+    all_done = True
+    for op in ops:
+        status = op.get("status", "")
+        if status == "MEDIA_GENERATION_STATUS_SUCCESSFUL":
+            continue
+        if status == "MEDIA_GENERATION_STATUS_FAILED":
+            op_name = op.get("operation", {}).get("name", "?")
+            return {"error": f"Operation failed: {op_name}"}
+        all_done = False
+
+    if all_done:
+        return {"data": data}
+
+    done_count = sum(1 for o in ops if o.get("status") == "MEDIA_GENERATION_STATUS_SUCCESSFUL")
+    return {
+        "pending": True,
+        "retry_after_sec": pending_retry_sec,
+        "message": f"Video generation in progress ({done_count}/{len(ops)} done)",
+        "data": {"operations": ops},
+    }
+
+
 class OperationService:
     """Executes media generation operations using FlowClient + Repository.
 
@@ -190,40 +423,30 @@ class OperationService:
 
         # Resolve character reference media_ids
         char_media_ids = None
-        char_names_raw = scene.get("character_names")
-        if char_names_raw and pid:
-            if isinstance(char_names_raw, str):
-                try:
-                    char_names_raw = json.loads(char_names_raw)
-                except json.JSONDecodeError:
-                    char_names_raw = []
-            if not isinstance(char_names_raw, list):
-                char_names_raw = []
-            if char_names_raw:
-                project_chars = await crud.get_project_characters(pid)
-                valid_ids = []
-                missing_refs = []
-                char_names_set = set(char_names_raw)
-                for c in project_chars:
-                    if not _char_matches(c, char_names_set):
-                        continue
-                    mid = c.get("media_id")
-                    if mid:
-                        valid_ids.append(mid)
-                    else:
-                        missing_refs.append(c.get("slug") or c["name"])
+        if pid:
+            valid_ids, ref_names, missing_names = await _resolve_scene_ref_media_ids(scene, pid)
+            if missing_names:
+                return {"error": f"Missing reference images for: {', '.join(missing_names)}"}
+            char_media_ids = valid_ids if valid_ids else None
+            if char_media_ids:
+                prompt = _with_reference_lock(prompt, ref_names)
+                logger.info(
+                    "Scene %s: using %d uploaded refs [%s]",
+                    scene.get("id", "?")[:8],
+                    len(char_media_ids),
+                    ", ".join(ref_names[:4]),
+                )
 
-                if missing_refs:
-                    return {"error": f"Waiting for reference images: {', '.join(missing_refs)}"}
-
-                char_media_ids = valid_ids if valid_ids else None
-                if char_media_ids:
-                    logger.info("Scene %s: using %d reference images",
-                                scene.get("id", "?")[:8], len(char_media_ids))
-
-        return await self._client.generate_images(
-            prompt=prompt, project_id=pid, aspect_ratio=aspect,
-            user_paygate_tier=tier, character_media_ids=char_media_ids,
+        return await _run_image_with_safe_fallback(
+            prompt=prompt,
+            context=f"Scene image {scene.get('id', '?')[:8]}",
+            call_with_prompt=lambda p: self._client.generate_images(
+                prompt=p,
+                project_id=pid,
+                aspect_ratio=aspect,
+                user_paygate_tier=tier,
+                character_media_ids=char_media_ids,
+            ),
         )
 
     async def edit_scene_image(self, scene: dict, orientation: str,
@@ -259,27 +482,25 @@ class OperationService:
 
         # Resolve character reference media_ids for edit consistency
         char_media_ids = None
-        char_names_raw = scene.get("character_names")
-        if char_names_raw and pid:
-            if isinstance(char_names_raw, str):
-                try:
-                    char_names_raw = json.loads(char_names_raw)
-                except json.JSONDecodeError:
-                    char_names_raw = []
-            if isinstance(char_names_raw, list) and char_names_raw:
-                project_chars = await crud.get_project_characters(pid)
-                valid_ids = []
-                char_names_set = set(char_names_raw)
-                for c in project_chars:
-                    if _char_matches(c, char_names_set) and c.get("media_id"):
-                        valid_ids.append(c["media_id"])
-                char_media_ids = valid_ids if valid_ids else None
+        if pid:
+            valid_ids, ref_names, missing_names = await _resolve_scene_ref_media_ids(scene, pid)
+            if missing_names:
+                return {"error": f"Missing reference images for: {', '.join(missing_names)}"}
+            char_media_ids = valid_ids if valid_ids else None
+            if char_media_ids:
+                edit_prompt = _with_reference_lock(edit_prompt, ref_names)
 
-        return await self._client.edit_image(
-            prompt=edit_prompt, source_media_id=src,
-            project_id=pid, aspect_ratio=aspect,
-            user_paygate_tier=tier,
-            character_media_ids=char_media_ids,
+        return await _run_image_with_safe_fallback(
+            prompt=edit_prompt,
+            context=f"Scene edit {scene.get('id', '?')[:8]}",
+            call_with_prompt=lambda p: self._client.edit_image(
+                prompt=p,
+                source_media_id=src,
+                project_id=pid,
+                aspect_ratio=aspect,
+                user_paygate_tier=tier,
+                character_media_ids=char_media_ids,
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -313,9 +534,13 @@ class OperationService:
             req_row = await crud.get_request(request_id)
             existing_op = req_row.get("request_id") if req_row else None
 
+        queue_mode = bool(request_id)
+
         if existing_op:
             logger.info("Video gen already submitted (op=%s), re-polling", existing_op[:30])
             operations = [{"operation": {"name": existing_op}, "status": "MEDIA_GENERATION_STATUS_PENDING"}]
+            if queue_mode:
+                return await _check_operations_once(self._client, operations, pending_retry_sec=max(8, VIDEO_POLL_INTERVAL))
             return await _poll_operations(self._client, operations)
 
         submit_result = await self._client.generate_video(
@@ -345,6 +570,14 @@ class OperationService:
             return submit_result
         if status == "MEDIA_GENERATION_STATUS_FAILED":
             return {"error": "Video generation failed immediately"}
+
+        if queue_mode:
+            return {
+                "pending": True,
+                "retry_after_sec": max(8, VIDEO_POLL_INTERVAL),
+                "message": "Video submitted. Waiting for completion.",
+                "data": {"operations": operations},
+            }
 
         logger.info("Video gen submitted, polling %d operations...", len(operations))
         return await _poll_operations(self._client, operations)
@@ -425,9 +658,13 @@ class OperationService:
             req_row = await crud.get_request(request_id)
             existing_op = req_row.get("request_id") if req_row else None
 
+        queue_mode = bool(request_id)
+
         if existing_op:
             logger.info("R2V already submitted (op=%s), re-polling", existing_op[:30])
             operations = [{"operation": {"name": existing_op}, "status": "MEDIA_GENERATION_STATUS_PENDING"}]
+            if queue_mode:
+                return await _check_operations_once(self._client, operations, pending_retry_sec=max(8, VIDEO_POLL_INTERVAL))
             return await _poll_operations(self._client, operations)
 
         submit_result = await self._client.generate_video_from_references(
@@ -457,6 +694,14 @@ class OperationService:
         if status == "MEDIA_GENERATION_STATUS_FAILED":
             return {"error": "R2V failed immediately"}
 
+        if queue_mode:
+            return {
+                "pending": True,
+                "retry_after_sec": max(8, VIDEO_POLL_INTERVAL),
+                "message": "R2V submitted. Waiting for completion.",
+                "data": {"operations": operations},
+            }
+
         logger.info("R2V submitted with %d refs, polling %d operations...", len(ref_ids), len(operations))
         return await _poll_operations(self._client, operations)
 
@@ -480,10 +725,14 @@ class OperationService:
             req_row = await crud.get_request(request_id)
             existing_op = req_row.get("request_id") if req_row else None
 
+        queue_mode = bool(request_id)
+
         if existing_op:
             # Already submitted — just re-poll
             logger.info("Upscale already submitted (op=%s), re-polling", existing_op[:30])
             operations = [{"operation": {"name": existing_op}, "status": "MEDIA_GENERATION_STATUS_PENDING"}]
+            if queue_mode:
+                return await _check_operations_once(self._client, operations, pending_retry_sec=max(8, VIDEO_POLL_INTERVAL))
             return await _poll_operations(self._client, operations, timeout=300)
 
         submit_result = await self._client.upscale_video(
@@ -524,6 +773,14 @@ class OperationService:
         if status == "MEDIA_GENERATION_STATUS_FAILED":
             return {"error": "Upscale failed immediately"}
 
+        if queue_mode:
+            return {
+                "pending": True,
+                "retry_after_sec": max(8, VIDEO_POLL_INTERVAL),
+                "message": "Upscale submitted. Waiting for completion.",
+                "data": {"operations": operations},
+            }
+
         logger.info("Upscale submitted, polling %d operations...", len(operations))
         poll_result = await _poll_operations(self._client, operations, timeout=300)
 
@@ -551,6 +808,14 @@ class OperationService:
         """
         entity_type = char.get("entity_type", "character")
         pid = project_id
+
+        # Idempotent path: if this entity already has a media_id, keep it.
+        # REGENERATE_CHARACTER_IMAGE clears media_id before calling this method.
+        existing_mid = char.get("media_id")
+        if existing_mid:
+            logger.info("%s '%s' already has media_id=%s, skip generate_reference_image",
+                        entity_type, char.get("name", "?"), str(existing_mid)[:20])
+            return {"data": {"media": [{"name": existing_mid}]}}
 
         # Fast path: image already generated, just need upload for UUID
         existing_url = char.get("reference_image_url")
@@ -584,9 +849,15 @@ class OperationService:
         tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
         aspect = _reference_aspect_ratio(entity_type)
 
-        result = await self._client.generate_images(
-            prompt=prompt, project_id=pid, aspect_ratio=aspect,
-            user_paygate_tier=tier,
+        result = await _run_image_with_safe_fallback(
+            prompt=prompt,
+            context=f"Ref image {char.get('id', '?')[:8]}",
+            call_with_prompt=lambda p: self._client.generate_images(
+                prompt=p,
+                project_id=pid,
+                aspect_ratio=aspect,
+                user_paygate_tier=tier,
+            ),
         )
 
         if not _is_error(result):
@@ -682,10 +953,10 @@ class OperationService:
 
     async def queue_upscale_video(self, scene_id: str, project_id: str,
                                   video_id: str, orientation: str | None = None) -> str:
-        """Queue an UPSCALE_VIDEO request. Returns request id."""
+        """Queue a local upscale request. Returns request id."""
         orientation = await self._resolve_queue_orientation(video_id, orientation)
         row = await crud.create_request(
-            req_type="UPSCALE_VIDEO", orientation=orientation,
+            req_type="UPSCALE_VIDEO_LOCAL", orientation=orientation,
             scene_id=scene_id, project_id=project_id, video_id=video_id,
         )
         return row["id"]

@@ -122,6 +122,13 @@ const SYSTEM_PROMPT = `You are a creative AI assistant that analyzes story scrip
 
 export async function analyzeStory(story: string, language: string, sceneCount?: number): Promise<ExtractedProject> {
     const count = sceneCount ?? 8
+    const languageLabel = language === 'vi'
+        ? 'Vietnamese'
+        : language === 'en'
+            ? 'English'
+            : language === 'es'
+                ? 'Spanish'
+                : language
     const prompt = `Analyze this story/script and extract structured data for AI video generation.
 
 STORY:
@@ -144,7 +151,7 @@ Return JSON with this exact schema:
     {
       "prompt": "Visual scene image prompt describing ACTION and SETTING only. Never describe character appearance (that comes from ref images). Max 2 sentences.",
       "video_prompt": "8-second video motion description: '0-3s: [camera/action]. 3-6s: [action]. 6-8s: [closing shot].'",
-      "narrator_text": "Narrator voiceover text for this scene (in ${language === 'vi' ? 'Vietnamese' : language === 'en' ? 'English' : language})",
+      "narrator_text": "Narrator voiceover text for this scene (in ${languageLabel})",
       "character_names": ["Names of characters appearing in this scene"]
     }
   ]
@@ -153,7 +160,7 @@ Return JSON with this exact schema:
 Rules:
 - Extract ${count} scenes total that tell the full story arc
 - Identify ALL named characters, key locations, and important objects/creatures
-- narrator_text must be in the same language as the story (${language === 'vi' ? 'Vietnamese' : 'target language'})
+- narrator_text must be in the same language as the story (${languageLabel})
 - scene prompts in English for best AI image generation results
 - entity_type: use "character" for people, "location" for places, "creature" for animals/monsters, "visual_asset" for objects
 - Return ONLY the JSON object, no markdown`

@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Image, Film, Zap, Users } from 'lucide-react'
+import { Image, Film, Mic, Zap, Users } from 'lucide-react'
 import { fetchAPI, patchAPI } from '../../api/client'
 import { useWebSocket } from '../../api/useWebSocket'
 import type { Character, Scene } from '../../types'
 import StageNode from './StageNode'
 import SceneCard from './SceneCard'
 import { orientationPrefix, resolveMediaUrl, sceneStatus } from '../../lib/orientation'
+import { Dialog, DialogContent } from '../ui/dialog'
 
-type ExpandedStage = 'refs' | 'image' | 'video' | 'upscale' | null
+type ExpandedStage = 'refs' | 'image' | 'video' | 'tts' | 'upscale' | null
 
 interface PipelineViewProps {
   projectId: string
@@ -117,18 +118,37 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
   const [expanded, setExpanded] = useState<ExpandedStage>(null)
   const [resolvedCharUrls, setResolvedCharUrls] = useState<Record<string, string>>({})
   const [resolvedSceneUrls, setResolvedSceneUrls] = useState<Record<string, string>>({})
+  const [charPreview, setCharPreview] = useState<{ url: string; name: string } | null>(null)
   const { lastEvent } = useWebSocket()
   const refreshingCharIdsRef = useRef<Set<string>>(new Set())
   const refreshingSceneIdsRef = useRef<Set<string>>(new Set())
   const failedCharRefreshAtRef = useRef<Map<string, number>>(new Map())
   const failedSceneRefreshAtRef = useRef<Map<string, number>>(new Map())
+  const autoSweepRanRef = useRef<string>('')
   const REFRESH_RETRY_DELAY_MS = 45_000
 
   const ensureFlowTabReadyForMedia = useCallback(async () => {
     const hasFlowTab = async () => {
       try {
-        const runtime = await fetchAPI<{ flow_tab_id?: number | null; flow_tab_url?: string | null }>('/api/flow/status')
-        return ((runtime.flow_tab_id !== null && runtime.flow_tab_id !== undefined) || !!runtime.flow_tab_url)
+        const runtime = await fetchAPI<{
+          runtime_connected?: boolean
+          agent_connected?: boolean
+          connected?: boolean
+          state?: string
+          flow_tab_id?: number | null
+          flow_tab_url?: string | null
+        }>('/api/flow/status')
+        const connected = Boolean(
+          runtime.runtime_connected
+          ?? runtime.agent_connected
+          ?? runtime.connected,
+        )
+        const hasTab = (
+          (runtime.flow_tab_id !== null && runtime.flow_tab_id !== undefined)
+          || !!runtime.flow_tab_url
+        )
+        const stateReady = String(runtime.state || '').toLowerCase() !== 'off'
+        return connected && hasTab && stateReady
       } catch {
         return false
       }
@@ -136,8 +156,13 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
     if (await hasFlowTab()) return true
     await window.electron?.openFlowTab?.({ focus: false, reveal: false })
     await window.electron?.reconnectExtension?.()
-    await new Promise(r => setTimeout(r, 1200))
-    return await hasFlowTab()
+    for (let i = 0; i < 8; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r => setTimeout(r, 650))
+      // eslint-disable-next-line no-await-in-loop
+      if (await hasFlowTab()) return true
+    }
+    return false
   }, [])
 
   const load = useCallback(async () => {
@@ -156,6 +181,7 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
     setResolvedSceneUrls({})
     failedCharRefreshAtRef.current.clear()
     failedSceneRefreshAtRef.current.clear()
+    autoSweepRanRef.current = ''
   }, [projectId, videoId])
 
   useEffect(() => {
@@ -191,7 +217,9 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       if (!url) return null
       setResolvedCharUrls(prev => (prev[char.id] === url ? prev : { ...prev, [char.id]: url }))
       failedCharRefreshAtRef.current.delete(char.id)
-      void patchAPI(`/api/characters/${char.id}`, { reference_image_url: url }).catch(() => { })
+      if (/\/api\/flow\/local-media\?path=/.test(url)) {
+        void patchAPI(`/api/characters/${char.id}`, { reference_image_url: url }).catch(() => { })
+      }
       return url
     } catch {
       failedCharRefreshAtRef.current.set(char.id, Date.now())
@@ -217,7 +245,9 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       if (!url) return null
       setResolvedSceneUrls(prev => (prev[scene.id] === url ? prev : { ...prev, [scene.id]: url }))
       failedSceneRefreshAtRef.current.delete(scene.id)
-      void patchAPI(`/api/scenes/${scene.id}`, { [`${source.prefix}_image_url`]: url }).catch(() => { })
+      if (/\/api\/flow\/local-media\?path=/.test(url)) {
+        void patchAPI(`/api/scenes/${scene.id}`, { [`${source.prefix}_image_url`]: url }).catch(() => { })
+      }
       return url
     } catch {
       failedSceneRefreshAtRef.current.set(scene.id, Date.now())
@@ -227,11 +257,80 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
     }
   }, [ensureFlowTabReadyForMedia, orientation, projectId])
 
-  // NOTE: Disable automatic refresh sweep here to avoid startup request storms.
-  // Refresh is still available through explicit user actions and onError handlers.
+  useEffect(() => {
+    if (!chars.length) return
+    let cancelled = false
+    const now = Date.now()
+    const candidates = chars
+      .filter((char) => {
+        if (!char.media_id) return false
+        const current = resolveMediaUrl(resolvedCharUrls[char.id] || char.reference_image_url)
+        if (!current) return true
+        return needsMediaUrlRefresh(current, now)
+      })
+      .slice(0, 6)
+    if (!candidates.length) return
+
+    const run = async () => {
+      const queue = [...candidates]
+      const workers = new Array(Math.min(2, queue.length)).fill(0).map(async () => {
+        while (queue.length && !cancelled) {
+          const next = queue.shift()
+          if (!next) break
+          // eslint-disable-next-line no-await-in-loop
+          await refreshCharacterPreview(next)
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(r => setTimeout(r, 220))
+        }
+      })
+      await Promise.all(workers)
+    }
+    void run()
+
+    return () => { cancelled = true }
+  }, [chars, refreshCharacterPreview, resolvedCharUrls])
+
+  useEffect(() => {
+    const sweepKey = `${projectId}:${videoId}:${orientation || ''}:${scenes.length}`
+    if (!scenes.length || autoSweepRanRef.current === sweepKey) return
+    autoSweepRanRef.current = sweepKey
+
+    let cancelled = false
+    const run = async () => {
+      const now = Date.now()
+      const candidates = scenes
+        .filter((scene) => {
+          if (sceneStatus(scene, orientation, 'image') !== 'COMPLETED') return false
+          const source = resolveSceneImageSource(scene, orientation)
+          if (!source?.mediaId) return false
+          const current = resolveMediaUrl(source.url)
+          if (!current) return true
+          return needsMediaUrlRefresh(current, now)
+        })
+        .slice(0, 8)
+      if (!candidates.length) return
+      if (!(await ensureFlowTabReadyForMedia())) return
+      const queue = [...candidates]
+      const workers = new Array(2).fill(0).map(async () => {
+        while (queue.length && !cancelled) {
+          const next = queue.shift()
+          if (!next) break
+          // eslint-disable-next-line no-await-in-loop
+          await refreshScenePreview(next)
+          // small cooldown to avoid burst against extension
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(r => setTimeout(r, 280))
+        }
+      })
+      await Promise.all(workers)
+    }
+    void run()
+    return () => { cancelled = true }
+  }, [ensureFlowTabReadyForMedia, orientation, projectId, refreshScenePreview, scenes, videoId])
 
   const imgStatus = (s: Scene) => sceneStatus(s, orientation, 'image')
   const vidStatus = (s: Scene) => sceneStatus(s, orientation, 'video')
+  const ttsStatus = (s: Scene) => sceneStatus(s, orientation, 'tts')
   const upsStatus = (s: Scene) => sceneStatus(s, orientation, 'upscale')
 
   // Stats
@@ -239,13 +338,22 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
   const refsTotal = chars.length
 
   const imagesCompleted = scenes.filter(s => imgStatus(s) === 'COMPLETED').length
-  const imagesFailed = scenes.some(s => imgStatus(s) === 'FAILED')
+  const imagesFailedCount = scenes.filter(s => imgStatus(s) === 'FAILED').length
+  const imagesFailed = imagesFailedCount > 0
 
   const videosCompleted = scenes.filter(s => vidStatus(s) === 'COMPLETED').length
-  const videosFailed = scenes.some(s => vidStatus(s) === 'FAILED')
+  const videosFailedCount = scenes.filter(s => vidStatus(s) === 'FAILED').length
+  const videosFailed = videosFailedCount > 0
+
+  const ttsScenes = scenes.filter(s => (s.narrator_text ?? '').trim())
+  const ttsTotal = ttsScenes.length
+  const ttsCompleted = ttsScenes.filter(s => ttsStatus(s) === 'COMPLETED').length
+  const ttsFailedCount = ttsScenes.filter(s => ttsStatus(s) === 'FAILED').length
+  const ttsFailed = ttsFailedCount > 0
 
   const upscaleCompleted = scenes.filter(s => upsStatus(s) === 'COMPLETED').length
-  const upscaleFailed = scenes.some(s => upsStatus(s) === 'FAILED')
+  const upscaleFailedCount = scenes.filter(s => upsStatus(s) === 'FAILED').length
+  const upscaleFailed = upscaleFailedCount > 0
 
   const total = scenes.length
 
@@ -257,6 +365,7 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       completed: refsCompleted,
       total: refsTotal,
       status: deriveStatus(refsCompleted, refsTotal, false),
+      failedCount: 0,
     },
     {
       key: 'image' as const,
@@ -265,6 +374,7 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       completed: imagesCompleted,
       total,
       status: deriveStatus(imagesCompleted, total, imagesFailed),
+      failedCount: imagesFailedCount,
     },
     {
       key: 'video' as const,
@@ -273,6 +383,16 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       completed: videosCompleted,
       total,
       status: deriveStatus(videosCompleted, total, videosFailed),
+      failedCount: videosFailedCount,
+    },
+    {
+      key: 'tts' as const,
+      name: 'TTS',
+      icon: Mic,
+      completed: ttsCompleted,
+      total: ttsTotal,
+      status: deriveStatus(ttsCompleted, ttsTotal, ttsFailed),
+      failedCount: ttsFailedCount,
     },
     {
       key: 'upscale' as const,
@@ -281,6 +401,7 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       completed: upscaleCompleted,
       total,
       status: deriveStatus(upscaleCompleted, total, upscaleFailed),
+      failedCount: upscaleFailedCount,
     },
   ]
 
@@ -298,6 +419,7 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
               completed={stage.completed}
               total={stage.total}
               status={stage.status}
+              failedCount={stage.failedCount}
               isExpanded={expanded === stage.key}
               onClick={() => toggle(stage.key)}
             />
@@ -312,14 +434,14 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
       {expanded && expanded !== 'refs' && scenes.length > 0 && (
         <div>
           <div className="text-xs mb-2 font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
-            {expanded} — {scenes.length} cảnh
+            {expanded} — {expanded === 'tts' ? ttsTotal : scenes.length} cảnh
           </div>
           <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
-            {scenes.map(scene => (
+            {(expanded === 'tts' ? ttsScenes : scenes).map(scene => (
               <SceneCard
                 key={scene.id}
                 scene={scene}
-                stage={expanded as 'image' | 'video' | 'upscale'}
+                stage={expanded}
                 orientation={orientation}
                 thumbOverride={resolvedSceneUrls[scene.id]}
                 onThumbError={() => { void refreshScenePreview(scene) }}
@@ -335,40 +457,85 @@ export default function PipelineView({ projectId, videoId, orientation }: Pipeli
           <div className="text-xs mb-2 font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
             ref — {chars.length} thực thể
           </div>
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-            {chars.map(c => {
-              const refSrc = resolveMediaUrl(resolvedCharUrls[c.id] || c.reference_image_url)
-              return (
-                <div
-                  key={c.id}
-                  className="flex flex-col gap-1.5 p-2 rounded text-xs"
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
-                >
-                  <div
-                    className="w-full rounded overflow-hidden flex items-center justify-center"
-                    style={{ aspectRatio: '3/4', background: 'var(--surface)', maxHeight: '80px' }}
-                  >
-                    {refSrc ? (
-                      <img
-                        src={refSrc}
-                        alt={c.name}
-                        className="w-full h-full object-cover"
-                        onError={() => { void refreshCharacterPreview(c) }}
-                      />
-                    ) : (
-                      <span style={{ color: 'var(--muted)', fontSize: '10px' }}>Chưa có ảnh</span>
-                    )}
-                  </div>
-                  <div className="font-semibold truncate" style={{ color: 'var(--text)' }}>{c.name}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '10px' }}>{c.entity_type}</div>
-                  <div style={{ color: c.media_id ? 'var(--green)' : 'var(--muted)', fontSize: '10px' }}>
-                    {c.media_id ? 'Sẵn sàng' : 'Đang chờ'}
-                  </div>
-                </div>
-              )
-            })}
+          <div
+            className="rounded overflow-hidden"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[920px] text-xs">
+                <thead style={{ background: 'var(--surface)' }}>
+                  <tr>
+                    <th className="text-left font-semibold px-3 py-2 w-[160px]" style={{ color: 'var(--muted)' }}>Ảnh ref</th>
+                    <th className="text-left font-semibold px-3 py-2 w-[190px]" style={{ color: 'var(--muted)' }}>Tên</th>
+                    <th className="text-left font-semibold px-3 py-2 w-[120px]" style={{ color: 'var(--muted)' }}>Loại</th>
+                    <th className="text-left font-semibold px-3 py-2" style={{ color: 'var(--muted)' }}>Prompt / mô tả (gọn)</th>
+                    <th className="text-left font-semibold px-3 py-2 w-[140px]" style={{ color: 'var(--muted)' }}>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chars.map(c => {
+                    const refSrc = resolveMediaUrl(resolvedCharUrls[c.id] || c.reference_image_url)
+                    const compactText = (c.image_prompt || c.description || '').replace(/\s+/g, ' ').trim()
+                    return (
+                      <tr key={c.id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td className="px-3 py-2 align-top">
+                          <div
+                            className="w-[128px] h-[84px] rounded overflow-hidden flex items-center justify-center"
+                            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                          >
+                            {refSrc ? (
+                              <img
+                                src={refSrc}
+                                alt={c.name}
+                                className="max-w-full max-h-full object-contain cursor-zoom-in"
+                                onClick={() => setCharPreview({ url: refSrc, name: c.name })}
+                                onError={() => { void refreshCharacterPreview(c) }}
+                              />
+                            ) : (
+                              <span style={{ color: 'var(--muted)', fontSize: '10px' }}>Chưa có ảnh</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <div className="font-semibold truncate" style={{ color: 'var(--text)', maxWidth: 180 }}>{c.name}</div>
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <div className="truncate" style={{ color: 'var(--muted)', maxWidth: 110 }}>{c.entity_type}</div>
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <div
+                            className="truncate"
+                            title={compactText || 'Chưa có mô tả'}
+                            style={{ color: 'var(--muted)', maxWidth: 420 }}
+                          >
+                            {compactText || 'Chưa có mô tả'}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <div style={{ color: c.media_id ? 'var(--green)' : 'var(--muted)' }}>
+                            {c.media_id ? 'Sẵn sàng' : 'Đang chờ'}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+      )}
+      {charPreview && (
+        <Dialog open onOpenChange={() => setCharPreview(null)}>
+          <DialogContent className="max-w-5xl p-0 overflow-hidden bg-black border-0">
+            <div className="flex flex-col gap-2 p-3">
+              <div className="text-xs text-white/80">{charPreview.name}</div>
+              <div className="flex items-center justify-center min-h-[55vh] max-h-[86vh]">
+                <img src={charPreview.url} alt={charPreview.name} className="max-w-full max-h-[82vh] object-contain" />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

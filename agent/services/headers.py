@@ -38,3 +38,21 @@ def random_headers() -> dict:
         "x-browser-year": "2025",
         "x-client-data": client_data,
     }
+
+
+def read_headers() -> dict:
+    """Headers for read-only endpoints (credits/media/status polling).
+
+    Keep deterministic browser-like headers so Google Flow read endpoints can
+    be called from extension context without relying on randomization.
+    """
+    return {
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "content-type": "text/plain;charset=UTF-8",
+        "origin": "https://labs.google",
+        "referer": "https://labs.google/",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+    }

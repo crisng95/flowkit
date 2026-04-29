@@ -1,13 +1,15 @@
-import { app, BrowserView, BrowserWindow, dialog, ipcMain, Tray, Menu, nativeImage, shell, session } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, dialog, ipcMain, Tray, Menu, nativeImage, shell, session, screen, safeStorage } from 'electron'
+import { dirname, join } from 'path'
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
 import { sidecar } from './sidecar'
 import { checkLicense, DEFAULT_LICENSE_API_BASE, getMachineId, loadLicenseConfig, saveLicenseConfig, type LicenseCheckResult } from './license'
 
 let mainWindow: BrowserWindow | null = null
 let flowWindow: BrowserWindow | null = null
-let flowSidebarView: BrowserView | null = null
+let flowSidebarWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let flowExtensionId: string | null = null
+let flowSessionPartition = ''
 let appQuitting = false
 let licenseEnforceTimer: ReturnType<typeof setInterval> | null = null
 let licenseEnforceInFlight = false
@@ -27,41 +29,360 @@ if (!gotSingleInstanceLock) {
 const ICON_PATH = join(__dirname, '../../resources/icon.png')
 const EXTENSION_PATH = join(process.resourcesPath ?? join(__dirname, '../../..'), 'extension')
 const FLOW_URL = 'https://labs.google/fx/tools/flow'
-const FLOW_SIDEBAR_RATIO = 0.30
-const FLOW_SIDEBAR_MIN = 320
-const FLOW_SIDEBAR_MAX = 460
+const FLOW_SIDEBAR_RATIO = 0.28
+const FLOW_SIDEBAR_MIN = 360
+const FLOW_SIDEBAR_MAX = 480
+const FLOW_SIDEBAR_GAP = 8
+const FLOW_SIDEBAR_MIN_HEIGHT = 560
+const FLOW_ACCOUNT_DEFAULT_ID = 'default'
+const FLOW_ACCOUNT_DEFAULT_LABEL = 'Tài khoản mặc định'
+const FLOW_ACCOUNT_PARTITION_PREFIX = 'persist:flowkit-flow-'
+const FLOW_ACCOUNTS_CONFIG_PATH = join(app.getPath('userData'), 'flow-accounts.json')
+const FLOW_UI_CONFIG_PATH = join(app.getPath('userData'), 'flow-ui.json')
 const LICENSE_CONFIG_PATH = join(app.getPath('userData'), 'license-config.json')
 const LICENSE_CACHE_PATH = join(app.getPath('userData'), 'license-cache.json')
 const DEFAULT_LICENSE_API = process.env.FLOWKIT_LICENSE_API_BASE ?? DEFAULT_LICENSE_API_BASE
 const LICENSE_REVOKE_POLL_MS = 5000
 
 let lastLicenseCheck: LicenseCheckResult | null = null
+const refererPatchedPartitions = new Set<string>()
+const extensionIdByPartition = new Map<string, string>()
+
+type FlowAccount = {
+    id: string
+    label: string
+    email: string
+    passwordEnc: string
+    partition: string
+    createdAt: string
+    updatedAt: string
+}
+
+type FlowAccountsConfig = {
+    activeAccountId: string
+    accounts: FlowAccount[]
+}
+
+type FlowUIConfig = {
+    sidebarVisible: boolean
+}
+
+function nowIso(): string {
+    return new Date().toISOString()
+}
+
+function normalizeFlowAccountId(raw: unknown): string {
+    const cleaned = String(raw ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^[-_]+|[-_]+$/g, '')
+    if (!cleaned) return ''
+    if (!/^[a-z0-9]/.test(cleaned)) return ''
+    return cleaned.slice(0, 40)
+}
+
+function deriveFlowAccountId(label: string): string {
+    const base = normalizeFlowAccountId(label) || 'account'
+    return base
+}
+
+function partitionForAccountId(accountId: string): string {
+    return `${FLOW_ACCOUNT_PARTITION_PREFIX}${accountId}`
+}
+
+function encodeSecret(secret: string): string {
+    const plain = String(secret ?? '')
+    if (!plain) return ''
+    try {
+        if (safeStorage.isEncryptionAvailable()) {
+            const encrypted = safeStorage.encryptString(plain)
+            return `safe:${encrypted.toString('base64')}`
+        }
+    } catch (err) {
+        console.warn('[main] safeStorage encrypt failed, fallback plain:', err)
+    }
+    return `plain:${Buffer.from(plain, 'utf-8').toString('base64')}`
+}
+
+function decodeSecret(cipher: string | null | undefined): string {
+    const raw = String(cipher ?? '').trim()
+    if (!raw) return ''
+    if (raw.startsWith('safe:')) {
+        const b64 = raw.slice('safe:'.length).trim()
+        if (!b64) return ''
+        try {
+            const buf = Buffer.from(b64, 'base64')
+            if (safeStorage.isEncryptionAvailable()) {
+                return safeStorage.decryptString(buf)
+            }
+        } catch (err) {
+            console.warn('[main] safeStorage decrypt failed:', err)
+            return ''
+        }
+        return ''
+    }
+    if (raw.startsWith('plain:')) {
+        const b64 = raw.slice('plain:'.length).trim()
+        if (!b64) return ''
+        try {
+            return Buffer.from(b64, 'base64').toString('utf-8')
+        } catch {
+            return ''
+        }
+    }
+    // Backward compatibility for old plain values.
+    return raw
+}
+
+function normalizeFlowAccount(raw: any, index = 0): FlowAccount | null {
+    const id = normalizeFlowAccountId(raw?.id) || (index === 0 ? FLOW_ACCOUNT_DEFAULT_ID : '')
+    if (!id) return null
+    const labelRaw = String(raw?.label ?? '').trim()
+    const label = labelRaw || (id === FLOW_ACCOUNT_DEFAULT_ID ? FLOW_ACCOUNT_DEFAULT_LABEL : `Tài khoản ${index + 1}`)
+    const email = String(raw?.email ?? '').trim()
+    const partitionRaw = String(raw?.partition ?? '').trim()
+    const partition = partitionRaw.startsWith('persist:')
+        ? partitionRaw
+        : partitionForAccountId(id)
+    const passwordEnc = String(raw?.passwordEnc ?? '').trim()
+    const createdAt = String(raw?.createdAt ?? '').trim() || nowIso()
+    const updatedAt = String(raw?.updatedAt ?? '').trim() || createdAt
+    return { id, label, email, passwordEnc, partition, createdAt, updatedAt }
+}
+
+function defaultFlowAccountsConfig(): FlowAccountsConfig {
+    const createdAt = nowIso()
+    return {
+        activeAccountId: FLOW_ACCOUNT_DEFAULT_ID,
+        accounts: [{
+            id: FLOW_ACCOUNT_DEFAULT_ID,
+            label: FLOW_ACCOUNT_DEFAULT_LABEL,
+            email: '',
+            passwordEnc: '',
+            partition: partitionForAccountId(FLOW_ACCOUNT_DEFAULT_ID),
+            createdAt,
+            updatedAt: createdAt,
+        }],
+    }
+}
+
+function defaultFlowUIConfig(): FlowUIConfig {
+    return { sidebarVisible: true }
+}
+
+function normalizeFlowUIConfig(raw: any): FlowUIConfig {
+    return {
+        sidebarVisible: raw?.sidebarVisible !== false,
+    }
+}
+
+function normalizeFlowAccountsConfig(raw: any): FlowAccountsConfig {
+    const listRaw = Array.isArray(raw?.accounts) ? raw.accounts : []
+    const dedup = new Map<string, FlowAccount>()
+    listRaw.forEach((row: any, idx: number) => {
+        const normalized = normalizeFlowAccount(row, idx)
+        if (!normalized) return
+        dedup.set(normalized.id, normalized)
+    })
+    if (!dedup.has(FLOW_ACCOUNT_DEFAULT_ID)) {
+        const fallback = defaultFlowAccountsConfig().accounts[0]
+        dedup.set(FLOW_ACCOUNT_DEFAULT_ID, fallback)
+    }
+    const accounts = Array.from(dedup.values())
+    const activeCandidate = normalizeFlowAccountId(raw?.activeAccountId)
+    const activeAccountId = accounts.some((a) => a.id === activeCandidate)
+        ? activeCandidate
+        : accounts[0].id
+    return { activeAccountId, accounts }
+}
+
+function loadFlowAccountsConfig(): FlowAccountsConfig {
+    try {
+        mkdirSync(dirname(FLOW_ACCOUNTS_CONFIG_PATH), { recursive: true })
+        if (!existsSync(FLOW_ACCOUNTS_CONFIG_PATH)) {
+            const seeded = defaultFlowAccountsConfig()
+            writeFileSync(FLOW_ACCOUNTS_CONFIG_PATH, JSON.stringify(seeded, null, 2), 'utf-8')
+            return seeded
+        }
+        const raw = JSON.parse(readFileSync(FLOW_ACCOUNTS_CONFIG_PATH, 'utf-8'))
+        const normalized = normalizeFlowAccountsConfig(raw)
+        writeFileSync(FLOW_ACCOUNTS_CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf-8')
+        return normalized
+    } catch (err) {
+        console.error('[main] Failed to load flow accounts config, fallback default:', err)
+        const fallback = defaultFlowAccountsConfig()
+        try {
+            writeFileSync(FLOW_ACCOUNTS_CONFIG_PATH, JSON.stringify(fallback, null, 2), 'utf-8')
+        } catch {
+            // no-op
+        }
+        return fallback
+    }
+}
+
+let flowAccountsConfig: FlowAccountsConfig = loadFlowAccountsConfig()
+
+function loadFlowUIConfig(): FlowUIConfig {
+    try {
+        mkdirSync(dirname(FLOW_UI_CONFIG_PATH), { recursive: true })
+        if (!existsSync(FLOW_UI_CONFIG_PATH)) {
+            const seeded = defaultFlowUIConfig()
+            writeFileSync(FLOW_UI_CONFIG_PATH, JSON.stringify(seeded, null, 2), 'utf-8')
+            return seeded
+        }
+        const raw = JSON.parse(readFileSync(FLOW_UI_CONFIG_PATH, 'utf-8'))
+        const normalized = normalizeFlowUIConfig(raw)
+        writeFileSync(FLOW_UI_CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf-8')
+        return normalized
+    } catch (err) {
+        console.error('[main] Failed to load flow ui config, fallback default:', err)
+        const fallback = defaultFlowUIConfig()
+        try {
+            writeFileSync(FLOW_UI_CONFIG_PATH, JSON.stringify(fallback, null, 2), 'utf-8')
+        } catch {
+            // no-op
+        }
+        return fallback
+    }
+}
+
+let flowUIConfig: FlowUIConfig = loadFlowUIConfig()
+let flowSidebarVisible = flowUIConfig.sidebarVisible
+
+function saveFlowUIConfig(next: FlowUIConfig): FlowUIConfig {
+    const normalized = normalizeFlowUIConfig(next)
+    flowUIConfig = normalized
+    flowSidebarVisible = normalized.sidebarVisible
+    mkdirSync(dirname(FLOW_UI_CONFIG_PATH), { recursive: true })
+    writeFileSync(FLOW_UI_CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf-8')
+    return normalized
+}
+
+function saveFlowAccountsConfig(next: FlowAccountsConfig): FlowAccountsConfig {
+    const normalized = normalizeFlowAccountsConfig(next)
+    flowAccountsConfig = normalized
+    mkdirSync(dirname(FLOW_ACCOUNTS_CONFIG_PATH), { recursive: true })
+    writeFileSync(FLOW_ACCOUNTS_CONFIG_PATH, JSON.stringify(normalized, null, 2), 'utf-8')
+    return normalized
+}
+
+function getFlowAccountById(accountId?: string | null): FlowAccount {
+    const desired = normalizeFlowAccountId(accountId ?? '') || flowAccountsConfig.activeAccountId
+    return flowAccountsConfig.accounts.find((a) => a.id === desired)
+        ?? flowAccountsConfig.accounts[0]
+}
+
+function isFlowSidebarActuallyVisible(): boolean {
+    return Boolean(flowSidebarWindow && !flowSidebarWindow.isDestroyed() && flowSidebarWindow.isVisible())
+}
+
+function getFlowPanelStatePayload() {
+    const sidebarAlive = Boolean(flowSidebarWindow && !flowSidebarWindow.isDestroyed())
+    const sidebarShown = isFlowSidebarActuallyVisible()
+    return {
+        // Reflect actual on-screen state (not only requested config state).
+        visible: sidebarShown,
+        sidebarReady: sidebarAlive,
+        flowReady: Boolean(flowWindow && !flowWindow.isDestroyed()),
+        requestedVisible: flowSidebarVisible,
+    }
+}
+
+function emitFlowPanelStateChanged() {
+    mainWindow?.webContents.send('flow-panel-state-changed', getFlowPanelStatePayload())
+}
 
 // In dev mode, use local extension path
 const extensionPath = app.isPackaged
     ? EXTENSION_PATH
     : join(__dirname, '../../../extension')
 
-async function loadExtension() {
-    try {
-        // Patch declarativeNetRequest — use webRequest to inject Referer header instead
-        session.defaultSession.webRequest.onBeforeSendHeaders(
-            { urls: ['https://aisandbox-pa.googleapis.com/*'] },
-            (details, callback) => {
-                const headers = { ...details.requestHeaders }
-                headers['Referer'] = 'https://labs.google/'
-                callback({ requestHeaders: headers })
-            }
-        )
+function patchRefererHeaderForSession(ses: Electron.Session, partitionKey: string) {
+    if (refererPatchedPartitions.has(partitionKey)) return
+    ses.webRequest.onBeforeSendHeaders(
+        { urls: ['https://aisandbox-pa.googleapis.com/*'] },
+        (details, callback) => {
+            const headers = { ...details.requestHeaders }
+            headers['Referer'] = 'https://labs.google/'
+            callback({ requestHeaders: headers })
+        }
+    )
+    refererPatchedPartitions.add(partitionKey)
+}
 
-        // Use new API (Electron 36+), fall back to deprecated for older builds
-        const extHost = (session.defaultSession as any).extensions ?? session.defaultSession
+function getExtensionsHost(ses: Electron.Session): any {
+    return (ses as any).extensions ?? ses
+}
+
+async function ensureExtensionLoadedForPartition(ses: Electron.Session, partitionKey: string): Promise<string> {
+    const cached = extensionIdByPartition.get(partitionKey)
+    if (cached) return cached
+    const extHost = getExtensionsHost(ses)
+    try {
         const loaded = await extHost.loadExtension(extensionPath, { allowFileAccess: true })
-        flowExtensionId = (loaded as any)?.id ?? null
-        console.log('[main] Extension loaded from:', extensionPath, 'id:', flowExtensionId ?? 'unknown')
+        const id = (loaded as any)?.id ?? ''
+        if (!id) throw new Error('Missing extension id')
+        extensionIdByPartition.set(partitionKey, id)
+        return id
     } catch (err) {
-        console.error('[main] Failed to load extension:', err)
+        const all = typeof extHost.getAllExtensions === 'function'
+            ? await extHost.getAllExtensions()
+            : []
+        const existing = Array.isArray(all)
+            ? all.find((ext: any) => {
+                const p = String(ext?.path ?? '')
+                const n = String(ext?.name ?? '').toLowerCase()
+                return n.includes('flow kit') || p.includes('/extension') || p.endsWith('\\extension')
+            })
+            : null
+        const id = String(existing?.id ?? '')
+        if (id) {
+            extensionIdByPartition.set(partitionKey, id)
+            return id
+        }
+        throw err
     }
+}
+
+async function unloadExtensionForPartition(partitionKey: string) {
+    const id = extensionIdByPartition.get(partitionKey)
+    if (!id) return
+    try {
+        const ses = session.fromPartition(partitionKey)
+        const extHost = getExtensionsHost(ses)
+        if (typeof extHost.removeExtension === 'function') {
+            await extHost.removeExtension(id)
+        }
+    } catch (err) {
+        console.warn('[main] removeExtension failed:', { partitionKey, id, err })
+    } finally {
+        extensionIdByPartition.delete(partitionKey)
+    }
+}
+
+async function prepareFlowRuntimeForAccount(accountId?: string | null): Promise<{ account: FlowAccount; flowSession: Electron.Session; extensionId: string }> {
+    const account = getFlowAccountById(accountId)
+    const partitionKey = account.partition
+    const flowSession = session.fromPartition(partitionKey)
+    patchRefererHeaderForSession(flowSession, partitionKey)
+    const extensionId = await ensureExtensionLoadedForPartition(flowSession, partitionKey)
+
+    if (flowSessionPartition && flowSessionPartition !== partitionKey) {
+        await unloadExtensionForPartition(flowSessionPartition)
+    }
+
+    flowSessionPartition = partitionKey
+    flowExtensionId = extensionId
+    if (flowAccountsConfig.activeAccountId !== account.id) {
+        saveFlowAccountsConfig({
+            ...flowAccountsConfig,
+            activeAccountId: account.id,
+        })
+    }
+
+    return { account, flowSession, extensionId }
 }
 
 function calcFlowSidebarWidth(totalWidth: number): number {
@@ -69,15 +390,118 @@ function calcFlowSidebarWidth(totalWidth: number): number {
     return Math.max(FLOW_SIDEBAR_MIN, Math.min(FLOW_SIDEBAR_MAX, byRatio))
 }
 
-function layoutFlowViews() {
+function layoutFlowWindows() {
     if (!flowWindow || flowWindow.isDestroyed()) return
-    const [totalWidth, totalHeight] = flowWindow.getContentSize()
-    const sidebarWidth = flowSidebarView ? calcFlowSidebarWidth(totalWidth) : 0
+    if (!flowSidebarWindow || flowSidebarWindow.isDestroyed()) return
 
-    if (flowSidebarView) {
-        flowSidebarView.setBounds({ x: Math.max(0, totalWidth - sidebarWidth), y: 0, width: sidebarWidth, height: totalHeight })
-        flowSidebarView.setAutoResize({ height: true })
+    if (!flowSidebarVisible) {
+        if (flowSidebarWindow.isVisible()) flowSidebarWindow.hide()
+        return
     }
+
+    const flowBounds = flowWindow.getBounds()
+    const display = screen.getDisplayMatching(flowBounds)
+    const workArea = display.workArea
+    const sidebarWidth = calcFlowSidebarWidth(flowBounds.width)
+    const sidebarHeight = Math.max(FLOW_SIDEBAR_MIN_HEIGHT, flowBounds.height)
+    const rightX = flowBounds.x + flowBounds.width + FLOW_SIDEBAR_GAP
+    const leftX = flowBounds.x - sidebarWidth - FLOW_SIDEBAR_GAP
+    const canFitRight = rightX + sidebarWidth <= workArea.x + workArea.width
+    const canFitLeft = leftX >= workArea.x
+
+    // Prefer non-overlap. If no room beside Flow window, dock as floating window in work area.
+    if (!canFitRight && !canFitLeft) {
+        const x = Math.max(workArea.x, workArea.x + workArea.width - sidebarWidth)
+        const y = Math.max(workArea.y, Math.min(flowBounds.y, workArea.y + workArea.height - sidebarHeight))
+        flowSidebarWindow.setBounds({ x, y, width: sidebarWidth, height: sidebarHeight })
+        if (flowWindow.isVisible() && !flowSidebarWindow.isVisible()) {
+            if (typeof flowSidebarWindow.showInactive === 'function') flowSidebarWindow.showInactive()
+            else flowSidebarWindow.show()
+        }
+        return
+    }
+    const x = canFitRight ? rightX : leftX
+
+    let y = flowBounds.y
+    if (y + sidebarHeight > workArea.y + workArea.height) {
+        y = Math.max(workArea.y, workArea.y + workArea.height - sidebarHeight)
+    }
+
+    flowSidebarWindow.setBounds({ x, y, width: sidebarWidth, height: sidebarHeight })
+    if (flowWindow.isVisible() && !flowSidebarWindow.isVisible()) {
+        if (typeof flowSidebarWindow.showInactive === 'function') flowSidebarWindow.showInactive()
+        else flowSidebarWindow.show()
+    }
+}
+
+function createFlowSidebarWindow(showOnReady = false) {
+    if (!flowExtensionId) {
+        flowSidebarWindow = null
+        console.warn('[main] Flow extension ID unavailable — sidebar window disabled')
+        return null
+    }
+    if (flowSidebarWindow && !flowSidebarWindow.isDestroyed()) {
+        layoutFlowWindows()
+        if (showOnReady && flowSidebarVisible && !flowSidebarWindow.isVisible()) {
+            if (typeof flowSidebarWindow.showInactive === 'function') flowSidebarWindow.showInactive()
+            else flowSidebarWindow.show()
+        }
+        return flowSidebarWindow
+    }
+
+    flowSidebarWindow = new BrowserWindow({
+        width: FLOW_SIDEBAR_MIN,
+        height: 900,
+        minWidth: FLOW_SIDEBAR_MIN,
+        minHeight: FLOW_SIDEBAR_MIN_HEIGHT,
+        title: 'Flow Agent',
+        backgroundColor: '#0a0f1f',
+        autoHideMenuBar: true,
+        show: false,
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            session: session.fromPartition(flowSessionPartition || getFlowAccountById().partition),
+        }
+    })
+    flowSidebarWindow.setMenuBarVisibility(false)
+    flowSidebarWindow.webContents.setWindowOpenHandler(({ url }) => {
+        void shell.openExternal(url)
+        return { action: 'deny' }
+    })
+
+    const sidePanelUrl = `chrome-extension://${flowExtensionId}/side_panel.html`
+    flowSidebarWindow.webContents.loadURL(sidePanelUrl).catch((err) => {
+        console.error('[main] Failed to load extension sidebar window:', err)
+    })
+    flowSidebarWindow.webContents.on('did-finish-load', () => {
+        console.log('[main] Flow sidebar window loaded:', flowSidebarWindow?.webContents.getURL())
+    })
+    flowSidebarWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+        console.error('[main] Flow sidebar window failed:', { code, desc, url })
+    })
+
+    flowSidebarWindow.on('close', (event) => {
+        if (appQuitting) return
+        event.preventDefault()
+        flowSidebarWindow?.hide()
+        emitFlowPanelStateChanged()
+    })
+
+    flowSidebarWindow.on('show', () => emitFlowPanelStateChanged())
+    flowSidebarWindow.on('hide', () => emitFlowPanelStateChanged())
+
+    flowSidebarWindow.on('closed', () => {
+        flowSidebarWindow = null
+        emitFlowPanelStateChanged()
+    })
+
+    layoutFlowWindows()
+    if (showOnReady && flowSidebarVisible) {
+        if (typeof flowSidebarWindow.showInactive === 'function') flowSidebarWindow.showInactive()
+        else flowSidebarWindow.show()
+    }
+    return flowSidebarWindow
 }
 
 
@@ -121,6 +545,7 @@ function createMainWindow() {
 
     mainWindow.webContents.on('did-finish-load', () => {
         console.log('[main] Main window renderer loaded:', mainWindow?.webContents.getURL())
+        emitFlowPanelStateChanged()
     })
 
     mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
@@ -132,7 +557,7 @@ function createMainWindow() {
     })
 }
 
-function createFlowWindow(opts: { focusOnShow?: boolean; revealOnReady?: boolean } = {}) {
+function createFlowWindow(flowSession: Electron.Session, account: FlowAccount, opts: { focusOnShow?: boolean; revealOnReady?: boolean } = {}) {
     console.log('[main] Creating Flow window')
     const focusOnShow = opts.focusOnShow === true
     const revealOnReady = opts.revealOnReady !== false
@@ -141,13 +566,13 @@ function createFlowWindow(opts: { focusOnShow?: boolean; revealOnReady?: boolean
         height: 900,
         minWidth: 1080,
         minHeight: 680,
-        title: 'Google Flow',
+        title: account?.label ? `Google Flow • ${account.label}` : 'Google Flow',
         backgroundColor: '#0a0f1f',
         show: false,
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,
-            session: session.defaultSession,
+            session: flowSession,
         }
     })
 
@@ -168,56 +593,50 @@ function createFlowWindow(opts: { focusOnShow?: boolean; revealOnReady?: boolean
         if (!flowWindow || flowWindow.isDestroyed() || !revealOnReady) return
         if (focusOnShow) {
             flowWindow.show()
+            createFlowSidebarWindow(true)
+            layoutFlowWindows()
             flowWindow.focus()
             return
         }
         if (typeof flowWindow.showInactive === 'function') flowWindow.showInactive()
         else flowWindow.show()
+        createFlowSidebarWindow(true)
+        layoutFlowWindows()
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus()
     })
 
-    if (flowExtensionId) {
-        flowSidebarView = new BrowserView({
-            webPreferences: {
-                contextIsolation: true,
-                nodeIntegration: false,
-                session: session.defaultSession,
-            }
-        })
-        flowWindow.addBrowserView(flowSidebarView)
-        const sidePanelUrl = `chrome-extension://${flowExtensionId}/side_panel.html`
-        flowSidebarView.webContents.loadURL(sidePanelUrl).catch((err) => {
-            console.error('[main] Failed to load extension sidebar:', err)
-        })
-        flowSidebarView.webContents.on('did-finish-load', () => {
-            console.log('[main] Flow sidebar loaded:', flowSidebarView?.webContents.getURL())
-        })
-        flowSidebarView.webContents.on('did-fail-load', (_e, code, desc, url) => {
-            console.error('[main] Flow sidebar failed:', { code, desc, url })
-        })
-    } else {
-        flowSidebarView = null
-        console.warn('[main] Flow extension ID unavailable — sidebar disabled in Flow window')
-    }
+    createFlowSidebarWindow(false)
 
-    layoutFlowViews()
-    flowWindow.on('resize', layoutFlowViews)
-    flowWindow.on('maximize', layoutFlowViews)
-    flowWindow.on('unmaximize', layoutFlowViews)
-    flowWindow.on('enter-full-screen', layoutFlowViews)
-    flowWindow.on('leave-full-screen', layoutFlowViews)
+    layoutFlowWindows()
+    flowWindow.on('move', layoutFlowWindows)
+    flowWindow.on('resize', layoutFlowWindows)
+    flowWindow.on('maximize', layoutFlowWindows)
+    flowWindow.on('unmaximize', layoutFlowWindows)
+    flowWindow.on('enter-full-screen', layoutFlowWindows)
+    flowWindow.on('leave-full-screen', layoutFlowWindows)
 
     flowWindow.on('close', (event) => {
         if (appQuitting) return
         // Keep Flow session alive for token/captcha; hide instead of destroying.
         event.preventDefault()
         flowWindow?.hide()
+        if (flowSidebarWindow && !flowSidebarWindow.isDestroyed()) {
+            flowSidebarWindow.hide()
+        }
+        emitFlowPanelStateChanged()
     })
 
     flowWindow.on('closed', () => {
-        flowSidebarView = null
+        if (flowSidebarWindow && !flowSidebarWindow.isDestroyed()) {
+            flowSidebarWindow.destroy()
+        }
+        flowSidebarWindow = null
         flowWindow = null
+        emitFlowPanelStateChanged()
     })
+
+    flowWindow.on('show', () => emitFlowPanelStateChanged())
+    flowWindow.on('hide', () => emitFlowPanelStateChanged())
 }
 
 function createTray() {
@@ -242,7 +661,7 @@ function createTray() {
             { label: `FlowKit — ${agentStatus}`, enabled: false },
             { type: 'separator' },
             { label: 'Open Dashboard', click: () => { mainWindow?.show(); mainWindow?.focus() } },
-            { label: 'Open Google Flow', click: () => openFlowWindow({ focus: true, reveal: true }) },
+            { label: 'Open Google Flow', click: () => { void openFlowWindow({ focus: true, reveal: true }) } },
             { type: 'separator' },
             { label: 'Quit', click: () => app.quit() }
         ])
@@ -260,21 +679,114 @@ function createTray() {
     })
 }
 
-function openFlowWindow(options: { focus?: boolean; reveal?: boolean } = {}) {
+function destroyFlowWindowsForAccountSwitch() {
+    const sidebar = flowSidebarWindow
+    flowSidebarWindow = null
+    if (sidebar && !sidebar.isDestroyed()) {
+        try { sidebar.removeAllListeners('close') } catch { }
+        try { sidebar.close() } catch { }
+        try { sidebar.destroy() } catch { }
+    }
+
+    const flow = flowWindow
+    flowWindow = null
+    if (flow && !flow.isDestroyed()) {
+        try { flow.removeAllListeners('close') } catch { }
+        try { flow.close() } catch { }
+        try { flow.destroy() } catch { }
+    }
+}
+
+async function openFlowWindow(options: { focus?: boolean; reveal?: boolean; accountId?: string; forceRecreate?: boolean } = {}) {
     console.log('[main] openFlowWindow invoked')
     const focus = options.focus === true
     const reveal = options.reveal !== false
+    const requestedAccount = getFlowAccountById(options.accountId)
+    const desiredPartition = requestedAccount.partition
+    const previousPartition = flowSessionPartition
+
+    try {
+        await prepareFlowRuntimeForAccount(requestedAccount.id)
+    } catch (err) {
+        console.error('[main] Failed to prepare Flow runtime:', err)
+        throw err
+    }
+
+    const sessionChanged = previousPartition !== '' && previousPartition !== desiredPartition
+    if (sessionChanged || options.forceRecreate) {
+        destroyFlowWindowsForAccountSwitch()
+    }
+
     if (flowWindow && !flowWindow.isDestroyed()) {
         if (!reveal) return
         if (!flowWindow.isVisible()) {
             if (!focus && typeof flowWindow.showInactive === 'function') flowWindow.showInactive()
             else flowWindow.show()
         }
+        createFlowSidebarWindow(true)
+        layoutFlowWindows()
         if (focus) flowWindow.focus()
         else if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus()
     } else {
-        createFlowWindow({ focusOnShow: focus, revealOnReady: reveal })
+        const activeAccount = getFlowAccountById(requestedAccount.id)
+        const flowSession = session.fromPartition(activeAccount.partition)
+        createFlowWindow(flowSession, activeAccount, { focusOnShow: focus, revealOnReady: reveal })
     }
+}
+
+async function setFlowPanelVisibility(visible: boolean, options?: { persist?: boolean; revealFlowIfNeeded?: boolean }) {
+    flowSidebarVisible = visible
+    if (options?.persist !== false) {
+        saveFlowUIConfig({
+            ...flowUIConfig,
+            sidebarVisible: visible,
+        })
+    }
+
+    if (!visible) {
+        if (flowSidebarWindow && !flowSidebarWindow.isDestroyed()) {
+            flowSidebarWindow.hide()
+        }
+        emitFlowPanelStateChanged()
+        return getFlowPanelStatePayload()
+    }
+
+    // Ensure extension/session is prepared before trying to show panel.
+    try {
+        await prepareFlowRuntimeForAccount(flowAccountsConfig.activeAccountId)
+    } catch (err) {
+        console.error('[main] Failed to prepare Flow runtime while showing panel:', err)
+    }
+
+    if ((!flowWindow || flowWindow.isDestroyed()) && options?.revealFlowIfNeeded) {
+        await openFlowWindow({
+            focus: false,
+            reveal: true,
+            accountId: flowAccountsConfig.activeAccountId,
+        })
+    }
+
+    if (flowWindow && !flowWindow.isDestroyed()) {
+        // If Flow window exists but hidden, reveal it to anchor sidebar layout.
+        if (!flowWindow.isVisible()) {
+            if (typeof flowWindow.showInactive === 'function') flowWindow.showInactive()
+            else flowWindow.show()
+        }
+        createFlowSidebarWindow(true)
+        layoutFlowWindows()
+        if (flowSidebarWindow && !flowSidebarWindow.isDestroyed() && !flowSidebarWindow.isVisible()) {
+            if (typeof flowSidebarWindow.showInactive === 'function') flowSidebarWindow.showInactive()
+            else flowSidebarWindow.show()
+        }
+    }
+    emitFlowPanelStateChanged()
+    return getFlowPanelStatePayload()
+}
+
+function getCurrentFlowSession(): Electron.Session {
+    const account = getFlowAccountById()
+    const partitionKey = flowSessionPartition || account.partition
+    return session.fromPartition(partitionKey)
 }
 
 function sleep(ms: number): Promise<void> {
@@ -320,11 +832,12 @@ async function waitForExtensionConnected(timeoutMs = 12000): Promise<boolean> {
 }
 
 async function requestExtensionReconnectViaSidebar(): Promise<boolean> {
-    if (!flowSidebarView || flowSidebarView.webContents.isDestroyed()) return false
-    const ready = await waitForWebContentsReady(flowSidebarView.webContents, 6000)
+    const sidebar = createFlowSidebarWindow(false)
+    if (!sidebar || sidebar.webContents.isDestroyed()) return false
+    const ready = await waitForWebContentsReady(sidebar.webContents, 6000)
     if (!ready) return false
     try {
-        const viaSidePanel = await flowSidebarView.webContents.executeJavaScript(`
+        const viaSidePanel = await sidebar.webContents.executeJavaScript(`
             new Promise((resolve) => {
                 try {
                     chrome.runtime.sendMessage({ type: 'RECONNECT' }, (resp) => {
@@ -439,12 +952,175 @@ function startLicenseEnforcer() {
     }, LICENSE_REVOKE_POLL_MS)
 }
 
+function listFlowAccountsPayload() {
+    return {
+        activeAccountId: flowAccountsConfig.activeAccountId,
+        accounts: flowAccountsConfig.accounts.map((account) => ({
+            id: account.id,
+            label: account.label,
+            email: account.email,
+            partition: account.partition,
+            createdAt: account.createdAt,
+            updatedAt: account.updatedAt,
+        })),
+    }
+}
+
+function createFlowAccount(payload?: { id?: string; label?: string; email?: string; setActive?: boolean }) {
+    const label = String(payload?.label ?? '').trim() || `Tài khoản ${flowAccountsConfig.accounts.length + 1}`
+    let id = normalizeFlowAccountId(payload?.id) || deriveFlowAccountId(label)
+    if (!id) id = `account-${flowAccountsConfig.accounts.length + 1}`
+    if (id === FLOW_ACCOUNT_DEFAULT_ID && flowAccountsConfig.accounts.some((a) => a.id === FLOW_ACCOUNT_DEFAULT_ID)) {
+        id = `account-${flowAccountsConfig.accounts.length + 1}`
+    }
+    while (flowAccountsConfig.accounts.some((a) => a.id === id)) {
+        const suffix = Math.floor(Math.random() * 9000) + 1000
+        id = `${id.slice(0, 30)}-${suffix}`
+    }
+    const createdAt = nowIso()
+    const nextAccount: FlowAccount = {
+        id,
+        label,
+        email: String(payload?.email ?? '').trim(),
+        partition: partitionForAccountId(id),
+        createdAt,
+        updatedAt: createdAt,
+    }
+    const shouldSetActive = payload?.setActive !== false
+    saveFlowAccountsConfig({
+        activeAccountId: shouldSetActive ? nextAccount.id : flowAccountsConfig.activeAccountId,
+        accounts: [...flowAccountsConfig.accounts, nextAccount],
+    })
+    return listFlowAccountsPayload()
+}
+
+function updateFlowAccount(payload?: { id?: string; label?: string; email?: string }) {
+    const id = normalizeFlowAccountId(payload?.id)
+    if (!id) throw new Error('ID tài khoản không hợp lệ')
+    const index = flowAccountsConfig.accounts.findIndex((a) => a.id === id)
+    if (index < 0) throw new Error('Không tìm thấy tài khoản')
+    const current = flowAccountsConfig.accounts[index]
+    const next: FlowAccount = {
+        ...current,
+        label: String(payload?.label ?? '').trim() || current.label,
+        email: String(payload?.email ?? '').trim(),
+        updatedAt: nowIso(),
+    }
+    const accounts = [...flowAccountsConfig.accounts]
+    accounts[index] = next
+    saveFlowAccountsConfig({ ...flowAccountsConfig, accounts })
+    return listFlowAccountsPayload()
+}
+
+async function clearFlowAccountSession(accountId?: string | null) {
+    const account = getFlowAccountById(accountId)
+    const ses = session.fromPartition(account.partition)
+    await ses.clearStorageData({
+        storages: ['cookies', 'serviceworkers', 'localstorage', 'indexeddb', 'cachestorage'],
+    })
+    await ses.clearCache()
+    await ses.clearAuthCache()
+    if (typeof ses.clearHostResolverCache === 'function') await ses.clearHostResolverCache()
+    if (typeof ses.flushStorageData === 'function') ses.flushStorageData()
+}
+
+async function deleteFlowAccount(accountId?: string | null) {
+    const id = normalizeFlowAccountId(accountId)
+    if (!id) throw new Error('ID tài khoản không hợp lệ')
+    if (flowAccountsConfig.accounts.length <= 1) {
+        throw new Error('Cần giữ ít nhất một tài khoản')
+    }
+    const target = flowAccountsConfig.accounts.find((a) => a.id === id)
+    if (!target) throw new Error('Không tìm thấy tài khoản')
+    const remaining = flowAccountsConfig.accounts.filter((a) => a.id !== id)
+    const nextActive = flowAccountsConfig.activeAccountId === id
+        ? remaining[0].id
+        : flowAccountsConfig.activeAccountId
+
+    if (flowSessionPartition === target.partition) {
+        destroyFlowWindowsForAccountSwitch()
+        flowSessionPartition = ''
+        flowExtensionId = null
+    }
+    await unloadExtensionForPartition(target.partition)
+    saveFlowAccountsConfig({ activeAccountId: nextActive, accounts: remaining })
+    return listFlowAccountsPayload()
+}
+
+async function setActiveFlowAccount(accountId?: string | null, options?: { openFlow?: boolean; focus?: boolean }) {
+    const account = getFlowAccountById(accountId)
+    saveFlowAccountsConfig({
+        ...flowAccountsConfig,
+        activeAccountId: account.id,
+    })
+    if (options?.openFlow) {
+        await openFlowWindow({
+            accountId: account.id,
+            reveal: true,
+            focus: options.focus ?? true,
+            forceRecreate: true,
+        })
+    }
+    return listFlowAccountsPayload()
+}
+
 // ─── IPC Handlers ────────────────────────────────────────────
 
-ipcMain.handle('open-flow-tab', (_event, payload?: { focus?: boolean; reveal?: boolean }) => openFlowWindow({
-    focus: payload?.focus,
-    reveal: payload?.reveal,
-}))
+ipcMain.handle('open-flow-tab', async (_event, payload?: { focus?: boolean; reveal?: boolean; accountId?: string }) => {
+    await openFlowWindow({
+        focus: payload?.focus,
+        reveal: payload?.reveal,
+        accountId: payload?.accountId,
+    })
+    return getFlowPanelStatePayload()
+})
+ipcMain.handle('flow-panel-get-state', () => getFlowPanelStatePayload())
+ipcMain.handle('flow-panel-set-visible', async (_event, payload?: { visible?: boolean; persist?: boolean; revealFlowIfNeeded?: boolean }) => {
+    return await setFlowPanelVisibility(Boolean(payload?.visible), {
+        persist: payload?.persist !== false,
+        revealFlowIfNeeded: payload?.revealFlowIfNeeded === true,
+    })
+})
+ipcMain.handle('flow-panel-toggle', async () => {
+    const currentlyVisible = isFlowSidebarActuallyVisible()
+    const nextVisible = !currentlyVisible
+    return await setFlowPanelVisibility(nextVisible, {
+        persist: true,
+        revealFlowIfNeeded: nextVisible,
+    })
+})
+ipcMain.handle('flow-accounts-list', () => listFlowAccountsPayload())
+ipcMain.handle('flow-accounts-create', (_event, payload?: { id?: string; label?: string; email?: string; setActive?: boolean }) =>
+    createFlowAccount(payload)
+)
+ipcMain.handle('flow-accounts-update', (_event, payload?: { id?: string; label?: string; email?: string }) =>
+    updateFlowAccount(payload)
+)
+ipcMain.handle('flow-accounts-delete', async (_event, accountId?: string) =>
+    await deleteFlowAccount(accountId)
+)
+ipcMain.handle('flow-accounts-set-active', async (_event, payload?: { id?: string; openFlow?: boolean; focus?: boolean }) =>
+    await setActiveFlowAccount(payload?.id, { openFlow: payload?.openFlow, focus: payload?.focus })
+)
+ipcMain.handle('flow-accounts-logout', async (_event, payload?: { id?: string; reopenFlow?: boolean; focus?: boolean }) => {
+    const account = getFlowAccountById(payload?.id)
+    if (flowSessionPartition === account.partition) {
+        destroyFlowWindowsForAccountSwitch()
+    }
+    await clearFlowAccountSession(account.id)
+    await unloadExtensionForPartition(account.partition)
+    flowSessionPartition = ''
+    flowExtensionId = null
+    if (payload?.reopenFlow !== false) {
+        await openFlowWindow({
+            accountId: account.id,
+            reveal: true,
+            focus: payload?.focus ?? true,
+            forceRecreate: true,
+        })
+    }
+    return listFlowAccountsPayload()
+})
 ipcMain.handle('get-app-info', () => ({
     name: app.getName(),
     version: app.getVersion(),
@@ -544,8 +1220,9 @@ ipcMain.on('agent-ready', () => {
 ipcMain.handle('reconnect-extension', async () => {
     try {
         // Ensure Flow window (and extension side panel) is alive.
-        openFlowWindow({ focus: false, reveal: false })
-        await waitForWebContentsReady(flowSidebarView?.webContents, 6000)
+        await openFlowWindow({ focus: false, reveal: false })
+        createFlowSidebarWindow(false)
+        await waitForWebContentsReady(flowSidebarWindow?.webContents, 6000)
         await waitForWebContentsReady(flowWindow?.webContents, 6000)
 
         for (let i = 0; i < 3; i += 1) {
@@ -583,14 +1260,15 @@ ipcMain.handle('reconnect-extension', async () => {
 
         // Fallback: reload extension via session
         if (flowExtensionId) {
-            const extHost = (session.defaultSession as any).extensions ?? session.defaultSession
+            const flowSession = getCurrentFlowSession()
+            const extHost = getExtensionsHost(flowSession)
             if (typeof extHost.reloadExtension === 'function') {
                 await extHost.reloadExtension(flowExtensionId)
                 // Ensure side panel points to the latest extension runtime.
-                if (flowSidebarView && !flowSidebarView.webContents.isDestroyed()) {
+                if (flowSidebarWindow && !flowSidebarWindow.webContents.isDestroyed()) {
                     const sidePanelUrl = `chrome-extension://${flowExtensionId}/side_panel.html`
-                    await flowSidebarView.webContents.loadURL(sidePanelUrl)
-                    await waitForWebContentsReady(flowSidebarView.webContents, 6000)
+                    await flowSidebarWindow.webContents.loadURL(sidePanelUrl)
+                    await waitForWebContentsReady(flowSidebarWindow.webContents, 6000)
                 }
                 const sent = await requestExtensionReconnectViaSidebar()
                 const connected = sent ? await waitForExtensionConnected(5000) : false
@@ -607,12 +1285,16 @@ ipcMain.handle('reconnect-extension', async () => {
 
 app.whenReady().then(async () => {
     // Send status while loading
-    await loadExtension()
+    try {
+        await prepareFlowRuntimeForAccount(flowAccountsConfig.activeAccountId)
+    } catch (err) {
+        console.error('[main] Failed to prepare default Flow runtime:', err)
+    }
     createMainWindow()
     createTray()
     // Keep Flow window available for captcha/token flows.
     try {
-        openFlowWindow({ focus: false, reveal: false })
+        await openFlowWindow({ focus: false, reveal: false, accountId: flowAccountsConfig.activeAccountId })
     } catch (err) {
         console.error('[main] Failed to auto-open Flow window:', err)
     }

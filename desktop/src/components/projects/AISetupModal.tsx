@@ -25,6 +25,16 @@ interface Props {
     onCreated: (projectId: string) => void
 }
 
+function normalizeInlineText(value: string): string {
+    return value.replace(/\s+/g, ' ').trim()
+}
+
+function projectNameFromTopic(topic: string): string {
+    const clean = normalizeInlineText(topic).replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    if (!clean) return ''
+    return clean.slice(0, 120)
+}
+
 type YouTubeMode = 'content' | 'style'
 
 interface YouTubeReferencePayload {
@@ -47,6 +57,17 @@ function keyStats(provider: ProviderType) {
     return { active, total: keys.length }
 }
 
+function formatEstimatedDuration(sceneCount: number): string {
+    const totalSeconds = Math.max(0, Math.floor(sceneCount * 8))
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+
+    if (hours > 0) return `${hours} giờ ${minutes} phút`
+    if (minutes > 0) return `${minutes} phút ${seconds} giây`
+    return `${seconds} giây`
+}
+
 // ─── Step 0: Research ─────────────────────────────────────────
 function ResearchStep({
     provider,
@@ -60,6 +81,8 @@ function ResearchStep({
     setOrientation,
     sceneCount,
     setSceneCount,
+    initialTopic,
+    onTopicChange,
     onSkip,
     onNext,
 }: {
@@ -69,9 +92,11 @@ function ResearchStep({
     materials: string[]
     orientation: string; setOrientation: (o: string) => void
     sceneCount: number; setSceneCount: (n: number) => void
+    initialTopic: string
+    onTopicChange: (topic: string) => void
     onSkip: () => void; onNext: (summary: string) => void
 }) {
-    const [topic, setTopic] = useState('')
+    const [topic, setTopic] = useState(initialTopic || '')
     const [loading, setLoading] = useState(false)
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState('')
@@ -80,6 +105,7 @@ function ResearchStep({
 
     const research = async () => {
         if (!topic.trim()) return
+        onTopicChange(topic.trim())
         setLoading(true); setError(''); setResult(null)
         try {
             try {
@@ -105,6 +131,7 @@ function ResearchStep({
 
     const useAsStory = () => {
         if (!result) return
+        onTopicChange(topic.trim())
         const story = `${result.summary}\n\nKey Facts:\n${result.key_facts.map((f: string) => `• ${f}`).join('\n')}\n\nAngle: ${result.suggested_story_angle}`
         onNext(story)
     }
@@ -114,7 +141,15 @@ function ResearchStep({
             <div className="flex gap-2">
                 <div className="flex flex-col gap-1.5 flex-1">
                     <label className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Chủ đề nghiên cứu</label>
-                    <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="VD: Trận Điện Biên Phủ 1954" className="input"
+                    <input
+                        value={topic}
+                        onChange={e => {
+                            const next = e.target.value
+                            setTopic(next)
+                            onTopicChange(next)
+                        }}
+                        placeholder="VD: Trận Điện Biên Phủ 1954"
+                        className="input"
                         onKeyDown={e => { if (e.key === 'Enter') research() }} />
                 </div>
             </div>
@@ -474,6 +509,7 @@ export default function AISetupModal({ onClose, onCreated }: Props) {
     const [provider, setProvider] = useState<ProviderType>(defaults.defaultProvider)
     const [materials, setMaterials] = useState<string[]>([])
     const [name, setName] = useState('')
+    const [researchKeyword, setResearchKeyword] = useState('')
     const [projectDescription, setProjectDescription] = useState('')
     const [projectStory, setProjectStory] = useState('')
     const [videoTitle, setVideoTitle] = useState('')
@@ -490,6 +526,20 @@ export default function AISetupModal({ onClose, onCreated }: Props) {
     const [error, setError] = useState('')
     const [statusMsg, setStatusMsg] = useState('')
     const [extracted, setExtracted] = useState<ExtractedProject | null>(null)
+
+    const applyResearchKeyword = (raw: string) => {
+        const nextKeyword = raw
+        const nextAutoName = projectNameFromTopic(nextKeyword)
+        const prevAutoName = projectNameFromTopic(researchKeyword)
+        setResearchKeyword(nextKeyword)
+        if (!nextAutoName) return
+        setName(prev => {
+            const trimmed = prev.trim()
+            if (!trimmed) return nextAutoName
+            if (trimmed === prevAutoName) return nextAutoName
+            return prev
+        })
+    }
 
     useEffect(() => {
         fetchAPI<{ id: string }[]>('/api/materials')
@@ -537,7 +587,13 @@ export default function AISetupModal({ onClose, onCreated }: Props) {
             setYoutubeMeta(yt)
             setYoutubeStatus(`Đã lấy transcript (${yt.transcript_chars} ký tự). Đang phân tích...`)
 
-            const lang = language === 'vi' ? 'Vietnamese' : language === 'en' ? 'English' : language
+            const lang = language === 'vi'
+                ? 'Vietnamese'
+                : language === 'en'
+                    ? 'English'
+                    : language === 'es'
+                        ? 'Spanish'
+                        : language
             const systemPrompt = `You are a senior documentary script analyst.
 Always return valid JSON only, no markdown.`
             const commonContext = `Language output: ${lang}
@@ -625,10 +681,14 @@ Return JSON:
         try {
             // ─── Step 1: Create project (CRITICAL — abort if fails) ──────
             setStatusMsg('Đang tạo dự án...')
+            const defaultProjectName =
+                projectNameFromTopic(researchKeyword)
+                || (youtubeMeta?.title ? normalizeInlineText(youtubeMeta.title).slice(0, 120) : '')
+            const finalProjectName = name.trim() || defaultProjectName || 'Dự án chưa đặt tên'
             const proj = await fetchAPI<{ id: string }>('/api/projects', {
                 method: 'POST',
                 body: JSON.stringify({
-                    name: name.trim() || 'Dự án chưa đặt tên',
+                    name: finalProjectName,
                     description: projectDescription.trim() || null,
                     story: projectStory.trim() || null,
                     material, language, orientation,
@@ -648,7 +708,7 @@ Return JSON:
                 method: 'POST',
                 body: JSON.stringify({
                     project_id: proj.id,
-                    title: videoTitle.trim() || `${name.trim() || 'Episode'} 1`,
+                    title: videoTitle.trim() || `${finalProjectName} — Episode 1`,
                     description: story.trim() || extracted.description || projectStory.trim() || null,
                     display_order: 0,
                     orientation,
@@ -749,6 +809,8 @@ Return JSON:
                     material={material} setMaterial={setMaterial} materials={materials}
                     orientation={orientation} setOrientation={setOrientation}
                     sceneCount={sceneCount} setSceneCount={setSceneCount}
+                    initialTopic={researchKeyword}
+                    onTopicChange={applyResearchKeyword}
                     onSkip={() => setStep('story')}
                     onNext={researchSummary => {
                         setProjectStory(prev => prev ? `${prev}\n\n---\n${researchSummary}` : researchSummary)
@@ -835,6 +897,8 @@ function SettingsGrid({
     sceneCount: number
     setSceneCount: (n: number) => void
 }) {
+    const estimatedDuration = formatEstimatedDuration(sceneCount)
+
     return (
         <div className="grid grid-cols-2 gap-3">
             <Field label="Nhà cung cấp AI">
@@ -860,6 +924,7 @@ function SettingsGrid({
                 <select value={language} onChange={e => setLanguage(e.target.value)} className="input">
                     <option value="vi">Tiếng Việt</option>
                     <option value="en">English</option>
+                    <option value="es">Español</option>
                     <option value="zh">Chinese</option>
                     <option value="ja">Japanese</option>
                     <option value="ko">Korean</option>
@@ -892,6 +957,9 @@ function SettingsGrid({
                                 {n}
                             </button>
                         ))}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--muted)' }}>
+                        Thời lượng ước tính: ~ {estimatedDuration} (8 giây/cảnh)
                     </div>
                 </div>
             </Field>

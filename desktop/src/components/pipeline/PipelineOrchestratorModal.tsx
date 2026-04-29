@@ -224,7 +224,7 @@ export default function PipelineOrchestratorModal({
         .filter((s) => s.upscale_status !== "COMPLETED")
         .forEach((s) =>
           requests.push({
-            type: "UPSCALE_VIDEO",
+            type: "UPSCALE_VIDEO_LOCAL",
             project_id: projectId,
             video_id: videoId,
             scene_id: s.id,

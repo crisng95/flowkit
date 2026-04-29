@@ -32,6 +32,48 @@ def _extract_uuid_from_url(url: str) -> str:
     return match.group(1) if match else ""
 
 
+def _is_direct_media_url(url: str | None) -> bool:
+    if not isinstance(url, str):
+        return False
+    low = url.lower()
+    if not low.startswith("http"):
+        return False
+    if "media.getmediaurlredirect" in low:
+        return False
+    if low.startswith("https://flow-content.google/"):
+        return True
+    if low.startswith("https://storage.googleapis.com/"):
+        return True
+    if "googleusercontent.com/" in low:
+        return True
+    return False
+
+
+def _collect_media_urls(node: object, out: list[str]) -> None:
+    if isinstance(node, dict):
+        for key in ("fifeUrl", "servingUri", "url", "imageUri", "videoUri"):
+            val = node.get(key)
+            if isinstance(val, str) and val.startswith("http"):
+                out.append(val)
+        for val in node.values():
+            _collect_media_urls(val, out)
+        return
+    if isinstance(node, list):
+        for item in node:
+            _collect_media_urls(item, out)
+
+
+def _pick_best_media_url(node: object) -> str:
+    candidates: list[str] = []
+    _collect_media_urls(node, candidates)
+    if not candidates:
+        return ""
+    for url in candidates:
+        if _is_direct_media_url(url):
+            return url
+    return candidates[0]
+
+
 def _extract_media_id(result: dict, req_type: str) -> str:
     """Extract the UUID-format mediaId from API response.
 
@@ -62,7 +104,7 @@ def _extract_media_id(result: dict, req_type: str) -> str:
                 logger.warning("media[0].name is not UUID format: %s", name[:30])
             return None
 
-    if req_type in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO"):
+    if req_type in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO", "UPSCALE_VIDEO_LOCAL"):
         ops = data.get("operations", [])
         if ops:
             video_meta = ops[0].get("operation", {}).get("metadata", {}).get("video", {})
@@ -95,17 +137,22 @@ def _extract_output_url(result: dict, req_type: str) -> str:
         media = data.get("media", [])
         if media:
             gen = media[0].get("image", {}).get("generatedImage", {})
-            return gen.get("fifeUrl", gen.get("imageUri", gen.get("encodedImage", "")))
+            picked = _pick_best_media_url(gen)
+            if picked:
+                return picked
 
-    if req_type in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO"):
+    if req_type in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO", "UPSCALE_VIDEO_LOCAL"):
         ops = data.get("operations", [])
         if ops:
             video_meta = ops[0].get("operation", {}).get("metadata", {}).get("video", {})
-            url = video_meta.get("fifeUrl", "")
-            if url:
-                return url
+            picked = _pick_best_media_url(video_meta)
+            if picked:
+                return picked
             # Inline rawBytes — no URL, check if saved locally
             if ops[0].get("rawBytes") or ops[0].get("mediaGenerationId"):
                 return ""  # URL will be set by _save_raw_bytes in operations.py
 
+    picked = _pick_best_media_url(data)
+    if picked:
+        return picked
     return data.get("videoUri", data.get("imageUri", ""))

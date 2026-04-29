@@ -1,0 +1,12 @@
+name = "flowkit-license"
+main = "src/index.ts"
+compatibility_date = "2026-04-21"
+account_id = "cf907123cee7dcfd4737e29c64a9b356"
+
+[[d1_databases]]
+binding = "LICENSE_DB"
+database_name = "flowkit_license"
+database_id = "70c14ac4-7a18-44ee-b9d1-bdead2f3090b"
+
+[vars]
+CORS_ORIGIN = "*"

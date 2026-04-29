@@ -8,6 +8,7 @@ interface StageNodeProps {
   completed: number
   total: number
   status: StageStatus
+  failedCount?: number
   isExpanded: boolean
   onClick: () => void
 }
@@ -19,9 +20,28 @@ const STATUS_COLORS: Record<StageStatus, string> = {
   failed: 'var(--red)',
 }
 
-export default function StageNode({ name, icon: Icon, completed, total, status, isExpanded, onClick }: StageNodeProps) {
+export default function StageNode({
+  name,
+  icon: Icon,
+  completed,
+  total,
+  status,
+  failedCount = 0,
+  isExpanded,
+  onClick,
+}: StageNodeProps) {
   const pct = total === 0 ? 0 : Math.round((completed / total) * 100)
   const borderColor = STATUS_COLORS[status]
+  const pendingCount = Math.max(0, total - completed - failedCount)
+  const statusText = (
+    status === 'failed'
+      ? `${failedCount} lỗi`
+      : status === 'completed'
+        ? `${pct}% hoàn tất`
+        : status === 'processing'
+          ? `${completed}/${total} đã xong`
+          : `${pendingCount} đang chờ`
+  )
 
   return (
     <button
@@ -61,9 +81,7 @@ export default function StageNode({ name, icon: Icon, completed, total, status, 
         />
       </div>
 
-      <div className="text-xs" style={{ color: 'var(--muted)' }}>
-        {pct}% {status}
-      </div>
+      <div className="text-xs" style={{ color: 'var(--muted)' }}>{statusText}</div>
     </button>
   )
 }

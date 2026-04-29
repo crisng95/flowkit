@@ -47,3 +47,24 @@ window.addEventListener('TRPC_MEDIA_URLS', (e) => {
     body,
   }).catch(() => {});
 });
+
+window.addEventListener('FLOW_AUTH_TOKEN', (e) => {
+  const token = e.detail?.token;
+  if (!token) return;
+  chrome.runtime.sendMessage({
+    type: 'FLOW_AUTH_TOKEN',
+    token,
+  }).catch(() => {});
+});
+
+function sendFlowHeartbeat() {
+  chrome.runtime.sendMessage({
+    type: 'FLOW_TAB_HEARTBEAT',
+    url: window.location.href,
+  }).catch(() => {});
+}
+
+sendFlowHeartbeat();
+window.addEventListener('focus', sendFlowHeartbeat);
+window.addEventListener('visibilitychange', sendFlowHeartbeat);
+setInterval(sendFlowHeartbeat, 15000);

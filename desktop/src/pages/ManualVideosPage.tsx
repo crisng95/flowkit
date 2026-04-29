@@ -104,6 +104,10 @@ interface VideoRow {
   startFilePath: string;
   endMediaId: string;
   endFilePath: string;
+  referenceMediaId1: string;
+  referenceFilePath1: string;
+  referenceMediaId2: string;
+  referenceFilePath2: string;
   operations: Array<Record<string, unknown>>;
   status: RowStatus;
   mediaId: string | null;
@@ -264,6 +268,10 @@ function createRow(
     startFilePath: "",
     endMediaId: "",
     endFilePath: "",
+    referenceMediaId1: "",
+    referenceFilePath1: "",
+    referenceMediaId2: "",
+    referenceFilePath2: "",
     operations: [],
     status: "IDLE",
     mediaId: null,
@@ -435,6 +443,10 @@ export default function ManualVideosPage() {
   const [singleStartFilePath, setSingleStartFilePath] = useState("");
   const [singleEndMediaId, setSingleEndMediaId] = useState("");
   const [singleEndFilePath, setSingleEndFilePath] = useState("");
+  const [singleReferenceMediaId1, setSingleReferenceMediaId1] = useState("");
+  const [singleReferenceFilePath1, setSingleReferenceFilePath1] = useState("");
+  const [singleReferenceMediaId2, setSingleReferenceMediaId2] = useState("");
+  const [singleReferenceFilePath2, setSingleReferenceFilePath2] = useState("");
   const [bulkPrompts, setBulkPrompts] = useState("");
   const [rows, setRows] = useState<VideoRow[]>([]);
   const [resolvingContext, setResolvingContext] = useState(false);
@@ -557,10 +569,17 @@ export default function ManualVideosPage() {
       singleGenerationMode,
     );
     row.style = singleStyle.trim();
-    row.startMediaId = singleStartMediaId.trim();
-    row.startFilePath = singleStartFilePath.trim();
-    row.endMediaId = singleEndMediaId.trim();
-    row.endFilePath = singleEndFilePath.trim();
+    if (singleGenerationMode === "reference_frame_2_video") {
+      row.referenceMediaId1 = singleReferenceMediaId1.trim();
+      row.referenceFilePath1 = singleReferenceFilePath1.trim();
+      row.referenceMediaId2 = singleReferenceMediaId2.trim();
+      row.referenceFilePath2 = singleReferenceFilePath2.trim();
+    } else {
+      row.startMediaId = singleStartMediaId.trim();
+      row.startFilePath = singleStartFilePath.trim();
+      row.endMediaId = singleEndMediaId.trim();
+      row.endFilePath = singleEndFilePath.trim();
+    }
     setRows((prev) => [...prev, row]);
     setSinglePrompt("");
     setSingleStyle("");
@@ -568,6 +587,10 @@ export default function ManualVideosPage() {
     setSingleStartFilePath("");
     setSingleEndMediaId("");
     setSingleEndFilePath("");
+    setSingleReferenceMediaId1("");
+    setSingleReferenceFilePath1("");
+    setSingleReferenceMediaId2("");
+    setSingleReferenceFilePath2("");
   };
 
   const pickLocalImagePath = async (): Promise<string | null> => {
@@ -579,24 +602,45 @@ export default function ManualVideosPage() {
     return picker();
   };
 
-  const pickImageFile = async (rowId: string, target: "start" | "end") => {
+  const pickImageFile = async (
+    rowId: string,
+    target: "start" | "end" | "ref1" | "ref2",
+  ) => {
     const filePath = await pickLocalImagePath();
     if (!filePath) return;
     if (target === "start") {
       updateRow(rowId, { startFilePath: filePath, status: "IDLE" });
-    } else {
-      updateRow(rowId, { endFilePath: filePath, status: "IDLE" });
+      return;
     }
+    if (target === "end") {
+      updateRow(rowId, { endFilePath: filePath, status: "IDLE" });
+      return;
+    }
+    if (target === "ref1") {
+      updateRow(rowId, { referenceFilePath1: filePath, status: "IDLE" });
+      return;
+    }
+    updateRow(rowId, { referenceFilePath2: filePath, status: "IDLE" });
   };
 
-  const pickSingleImageFile = async (target: "start" | "end") => {
+  const pickSingleImageFile = async (
+    target: "start" | "end" | "ref1" | "ref2",
+  ) => {
     const filePath = await pickLocalImagePath();
     if (!filePath) return;
     if (target === "start") {
       setSingleStartFilePath(filePath);
-    } else {
-      setSingleEndFilePath(filePath);
+      return;
     }
+    if (target === "end") {
+      setSingleEndFilePath(filePath);
+      return;
+    }
+    if (target === "ref1") {
+      setSingleReferenceFilePath1(filePath);
+      return;
+    }
+    setSingleReferenceFilePath2(filePath);
   };
 
   const uploadLocalImage = async (
@@ -707,21 +751,40 @@ export default function ManualVideosPage() {
     try {
       let startMediaId = row.startMediaId.trim();
       let endMediaId = row.endMediaId.trim();
+      let referenceMediaId1 = row.referenceMediaId1.trim();
+      let referenceMediaId2 = row.referenceMediaId2.trim();
 
-      if (!startMediaId && row.startFilePath.trim()) {
-        startMediaId = await uploadLocalImage(
-          row.startFilePath.trim(),
-          ctx.project_id,
-        );
-        updateRow(id, { startMediaId });
-      }
+      if (row.generationMode === "reference_frame_2_video") {
+        if (!referenceMediaId1 && row.referenceFilePath1.trim()) {
+          referenceMediaId1 = await uploadLocalImage(
+            row.referenceFilePath1.trim(),
+            ctx.project_id,
+          );
+          updateRow(id, { referenceMediaId1 });
+        }
+        if (!referenceMediaId2 && row.referenceFilePath2.trim()) {
+          referenceMediaId2 = await uploadLocalImage(
+            row.referenceFilePath2.trim(),
+            ctx.project_id,
+          );
+          updateRow(id, { referenceMediaId2 });
+        }
+      } else {
+        if (!startMediaId && row.startFilePath.trim()) {
+          startMediaId = await uploadLocalImage(
+            row.startFilePath.trim(),
+            ctx.project_id,
+          );
+          updateRow(id, { startMediaId });
+        }
 
-      if (!endMediaId && row.endFilePath.trim()) {
-        endMediaId = await uploadLocalImage(
-          row.endFilePath.trim(),
-          ctx.project_id,
-        );
-        updateRow(id, { endMediaId });
+        if (!endMediaId && row.endFilePath.trim()) {
+          endMediaId = await uploadLocalImage(
+            row.endFilePath.trim(),
+            ctx.project_id,
+          );
+          updateRow(id, { endMediaId });
+        }
       }
 
       if (row.generationMode === "frame_2_video" && !startMediaId) {
@@ -752,19 +815,19 @@ export default function ManualVideosPage() {
 
       if (
         row.generationMode === "reference_frame_2_video" &&
-        !startMediaId &&
-        !endMediaId
+        !referenceMediaId1 &&
+        !referenceMediaId2
       ) {
         updateRow(id, {
           status: "FAILED",
           error:
-            "Mode Ảnh tham chiếu cần ít nhất 1 ảnh tham chiếu (start hoặc end)",
+            "Mode Ảnh tham chiếu cần ít nhất 1 ảnh tham chiếu (ref 1 hoặc ref 2)",
         });
         return;
       }
 
       if (row.generationMode === "reference_frame_2_video") {
-        const references = [startMediaId, endMediaId].filter(
+        const references = [referenceMediaId1, referenceMediaId2].filter(
           Boolean,
         ) as string[];
         const sceneId = `manual-${row.id}`;
@@ -801,8 +864,8 @@ export default function ManualVideosPage() {
           error: summary.failed
             ? (summary.error ?? "Reference video generation failed")
             : null,
-          startMediaId: startMediaId || row.startMediaId,
-          endMediaId: endMediaId || row.endMediaId,
+          referenceMediaId1: referenceMediaId1 || row.referenceMediaId1,
+          referenceMediaId2: referenceMediaId2 || row.referenceMediaId2,
         });
 
         if (nextStatus === "SUBMITTED" && operations.length > 0) {
@@ -920,16 +983,36 @@ export default function ManualVideosPage() {
   };
 
   const singleStartProvided = Boolean(
-    singleStartMediaId.trim() || singleStartFilePath.trim(),
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceMediaId1.trim() || singleReferenceFilePath1.trim()
+      : singleStartMediaId.trim() || singleStartFilePath.trim(),
   );
   const singleEndProvided = Boolean(
-    singleEndMediaId.trim() || singleEndFilePath.trim(),
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceMediaId2.trim() || singleReferenceFilePath2.trim()
+      : singleEndMediaId.trim() || singleEndFilePath.trim(),
   );
   const singleDraftError = getModeValidationError(
     singleGenerationMode,
     singleStartProvided,
     singleEndProvided,
   );
+  const singlePrimaryMediaId =
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceMediaId1
+      : singleStartMediaId;
+  const singlePrimaryFilePath =
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceFilePath1
+      : singleStartFilePath;
+  const singleSecondaryMediaId =
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceMediaId2
+      : singleEndMediaId;
+  const singleSecondaryFilePath =
+    singleGenerationMode === "reference_frame_2_video"
+      ? singleReferenceFilePath2
+      : singleEndFilePath;
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -1144,11 +1227,11 @@ export default function ManualVideosPage() {
             value={inputMode}
             onValueChange={(v) => setInputMode(v as "single" | "multiple")}
           >
-            <TabsList className="w-full">
-              <TabsTrigger value="single" className="flex-1">
+            <TabsList>
+              <TabsTrigger value="single" className="text-sm font-medium">
                 Đơn (Single)
               </TabsTrigger>
-              <TabsTrigger value="multiple" className="flex-1">
+              <TabsTrigger value="multiple" className="text-sm font-medium">
                 Hàng loạt (Multiple)
               </TabsTrigger>
             </TabsList>
@@ -1175,7 +1258,23 @@ export default function ManualVideosPage() {
                         if (next === "frame_2_video") {
                           setSingleEndMediaId("");
                           setSingleEndFilePath("");
+                          setSingleReferenceMediaId1("");
+                          setSingleReferenceFilePath1("");
+                          setSingleReferenceMediaId2("");
+                          setSingleReferenceFilePath2("");
+                          return;
                         }
+                        if (next === "start_end_frame_2_video") {
+                          setSingleReferenceMediaId1("");
+                          setSingleReferenceFilePath1("");
+                          setSingleReferenceMediaId2("");
+                          setSingleReferenceFilePath2("");
+                          return;
+                        }
+                        setSingleStartMediaId("");
+                        setSingleStartFilePath("");
+                        setSingleEndMediaId("");
+                        setSingleEndFilePath("");
                       }}
                     >
                       <SelectTrigger>
@@ -1241,8 +1340,14 @@ export default function ManualVideosPage() {
                   </Label>
                   <div className="flex gap-2">
                     <Input
-                      value={singleStartMediaId}
-                      onChange={(e) => setSingleStartMediaId(e.target.value)}
+                      value={singlePrimaryMediaId}
+                      onChange={(e) => {
+                        if (singleGenerationMode === "reference_frame_2_video") {
+                          setSingleReferenceMediaId1(e.target.value);
+                          return;
+                        }
+                        setSingleStartMediaId(e.target.value);
+                      }}
                       placeholder={
                         singleGenerationMode === "reference_frame_2_video"
                           ? "UUID media_id ảnh tham chiếu 1"
@@ -1253,7 +1358,11 @@ export default function ManualVideosPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        void pickSingleImageFile("start");
+                        void pickSingleImageFile(
+                          singleGenerationMode === "reference_frame_2_video"
+                            ? "ref1"
+                            : "start",
+                        );
                       }}
                     >
                       <Upload size={12} />
@@ -1262,9 +1371,9 @@ export default function ManualVideosPage() {
                         : "Ảnh đầu"}
                     </Button>
                   </div>
-                  {singleStartFilePath && (
+                  {singlePrimaryFilePath && (
                     <div className="text-xs text-[hsl(var(--muted-foreground))] break-all">
-                      File: {singleStartFilePath}
+                      File: {singlePrimaryFilePath}
                     </div>
                   )}
                 </div>
@@ -1279,8 +1388,14 @@ export default function ManualVideosPage() {
                   </Label>
                   <div className="flex gap-2">
                     <Input
-                      value={singleEndMediaId}
-                      onChange={(e) => setSingleEndMediaId(e.target.value)}
+                      value={singleSecondaryMediaId}
+                      onChange={(e) => {
+                        if (singleGenerationMode === "reference_frame_2_video") {
+                          setSingleReferenceMediaId2(e.target.value);
+                          return;
+                        }
+                        setSingleEndMediaId(e.target.value);
+                      }}
                       disabled={singleGenerationMode === "frame_2_video"}
                       placeholder={
                         singleGenerationMode === "start_end_frame_2_video"
@@ -1295,7 +1410,11 @@ export default function ManualVideosPage() {
                       size="sm"
                       disabled={singleGenerationMode === "frame_2_video"}
                       onClick={() => {
-                        void pickSingleImageFile("end");
+                        void pickSingleImageFile(
+                          singleGenerationMode === "reference_frame_2_video"
+                            ? "ref2"
+                            : "end",
+                        );
                       }}
                     >
                       <Upload size={12} />
@@ -1304,9 +1423,9 @@ export default function ManualVideosPage() {
                         : "Ảnh cuối"}
                     </Button>
                   </div>
-                  {singleEndFilePath && (
+                  {singleSecondaryFilePath && (
                     <div className="text-xs text-[hsl(var(--muted-foreground))] break-all">
-                      File: {singleEndFilePath}
+                      File: {singleSecondaryFilePath}
                     </div>
                   )}
                 </div>
@@ -1346,6 +1465,10 @@ export default function ManualVideosPage() {
                       setSingleStartFilePath("");
                       setSingleEndMediaId("");
                       setSingleEndFilePath("");
+                      setSingleReferenceMediaId1("");
+                      setSingleReferenceFilePath1("");
+                      setSingleReferenceMediaId2("");
+                      setSingleReferenceFilePath2("");
                     }}
                     disabled={
                       !singlePrompt &&
@@ -1353,7 +1476,11 @@ export default function ManualVideosPage() {
                       !singleStartMediaId &&
                       !singleStartFilePath &&
                       !singleEndMediaId &&
-                      !singleEndFilePath
+                      !singleEndFilePath &&
+                      !singleReferenceMediaId1 &&
+                      !singleReferenceFilePath1 &&
+                      !singleReferenceMediaId2 &&
+                      !singleReferenceFilePath2
                     }
                   >
                     Xóa nội dung single
@@ -1423,13 +1550,34 @@ export default function ManualVideosPage() {
       <div className="flex flex-col gap-3 overflow-y-auto pr-1">
         {rows.length === 0 && (
           <div className="text-xs text-[hsl(var(--muted-foreground))]">
-            Chưa có item nào. Thêm prompt trước, rồi nhập start media_id hoặc
-            chọn ảnh đầu.
+            Chưa có item nào. Thêm prompt trước, rồi nhập media theo mode
+            (start/end hoặc ref1/ref2).
           </div>
         )}
 
-        {rows.map((row, idx) => (
-          <Card key={row.id}>
+        {rows.map((row, idx) => {
+          const usesReferenceInputs =
+            row.generationMode === "reference_frame_2_video";
+          const rowPrimaryMediaId = usesReferenceInputs
+            ? row.referenceMediaId1
+            : row.startMediaId;
+          const rowPrimaryFilePath = usesReferenceInputs
+            ? row.referenceFilePath1
+            : row.startFilePath;
+          const rowSecondaryMediaId = usesReferenceInputs
+            ? row.referenceMediaId2
+            : row.endMediaId;
+          const rowSecondaryFilePath = usesReferenceInputs
+            ? row.referenceFilePath2
+            : row.endFilePath;
+          const rowValidationError = getModeValidationError(
+            row.generationMode,
+            Boolean(rowPrimaryMediaId.trim() || rowPrimaryFilePath.trim()),
+            Boolean(rowSecondaryMediaId.trim() || rowSecondaryFilePath.trim()),
+          );
+
+          return (
+            <Card key={row.id}>
             <CardContent className="p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold">#{idx + 1}</span>
@@ -1458,13 +1606,7 @@ export default function ManualVideosPage() {
                   disabled={
                     row.status === "UPLOADING" ||
                     !row.prompt.trim() ||
-                    !!getModeValidationError(
-                      row.generationMode,
-                      Boolean(
-                        row.startMediaId.trim() || row.startFilePath.trim(),
-                      ),
-                      Boolean(row.endMediaId.trim() || row.endFilePath.trim()),
-                    )
+                    !!rowValidationError
                   }
                 >
                   <Video size={12} />
@@ -1515,12 +1657,36 @@ export default function ManualVideosPage() {
                           value={row.generationMode}
                           onValueChange={(value) => {
                             const next = value as GenerationMode;
+                            if (next === "frame_2_video") {
+                              updateRow(row.id, {
+                                generationMode: next,
+                                endMediaId: "",
+                                endFilePath: "",
+                                referenceMediaId1: "",
+                                referenceFilePath1: "",
+                                referenceMediaId2: "",
+                                referenceFilePath2: "",
+                                status: "IDLE",
+                              });
+                              return;
+                            }
+                            if (next === "start_end_frame_2_video") {
+                              updateRow(row.id, {
+                                generationMode: next,
+                                referenceMediaId1: "",
+                                referenceFilePath1: "",
+                                referenceMediaId2: "",
+                                referenceFilePath2: "",
+                                status: "IDLE",
+                              });
+                              return;
+                            }
                             updateRow(row.id, {
                               generationMode: next,
-                              endMediaId:
-                                next === "frame_2_video" ? "" : row.endMediaId,
-                              endFilePath:
-                                next === "frame_2_video" ? "" : row.endFilePath,
+                              startMediaId: "",
+                              startFilePath: "",
+                              endMediaId: "",
+                              endFilePath: "",
                               status: "IDLE",
                             });
                           }}
@@ -1598,10 +1764,12 @@ export default function ManualVideosPage() {
                       </Label>
                       <div className="flex gap-2">
                         <Input
-                          value={row.startMediaId}
+                          value={rowPrimaryMediaId}
                           onChange={(e) =>
                             updateRow(row.id, {
-                              startMediaId: e.target.value,
+                              ...(usesReferenceInputs
+                                ? { referenceMediaId1: e.target.value }
+                                : { startMediaId: e.target.value }),
                               status: "IDLE",
                             })
                           }
@@ -1615,7 +1783,10 @@ export default function ManualVideosPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            void pickImageFile(row.id, "start");
+                            void pickImageFile(
+                              row.id,
+                              usesReferenceInputs ? "ref1" : "start",
+                            );
                           }}
                         >
                           <Upload size={12} />
@@ -1624,9 +1795,9 @@ export default function ManualVideosPage() {
                             : "Ảnh đầu"}
                         </Button>
                       </div>
-                      {row.startFilePath && (
+                      {rowPrimaryFilePath && (
                         <div className="text-xs text-[hsl(var(--muted-foreground))] break-all">
-                          File: {row.startFilePath}
+                          File: {rowPrimaryFilePath}
                         </div>
                       )}
                     </div>
@@ -1641,11 +1812,13 @@ export default function ManualVideosPage() {
                       </Label>
                       <div className="flex gap-2">
                         <Input
-                          value={row.endMediaId}
+                          value={rowSecondaryMediaId}
                           disabled={row.generationMode === "frame_2_video"}
                           onChange={(e) =>
                             updateRow(row.id, {
-                              endMediaId: e.target.value,
+                              ...(usesReferenceInputs
+                                ? { referenceMediaId2: e.target.value }
+                                : { endMediaId: e.target.value }),
                               status: "IDLE",
                             })
                           }
@@ -1662,7 +1835,10 @@ export default function ManualVideosPage() {
                           size="sm"
                           disabled={row.generationMode === "frame_2_video"}
                           onClick={() => {
-                            void pickImageFile(row.id, "end");
+                            void pickImageFile(
+                              row.id,
+                              usesReferenceInputs ? "ref2" : "end",
+                            );
                           }}
                         >
                           <Upload size={12} />
@@ -1671,31 +1847,17 @@ export default function ManualVideosPage() {
                             : "Ảnh cuối"}
                         </Button>
                       </div>
-                      {row.endFilePath && (
+                      {rowSecondaryFilePath && (
                         <div className="text-xs text-[hsl(var(--muted-foreground))] break-all">
-                          File: {row.endFilePath}
+                          File: {rowSecondaryFilePath}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {getModeValidationError(
-                    row.generationMode,
-                    Boolean(
-                      row.startMediaId.trim() || row.startFilePath.trim(),
-                    ),
-                    Boolean(row.endMediaId.trim() || row.endFilePath.trim()),
-                  ) && (
+                  {rowValidationError && (
                     <div className="text-xs rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
-                      {getModeValidationError(
-                        row.generationMode,
-                        Boolean(
-                          row.startMediaId.trim() || row.startFilePath.trim(),
-                        ),
-                        Boolean(
-                          row.endMediaId.trim() || row.endFilePath.trim(),
-                        ),
-                      )}
+                      {rowValidationError}
                     </div>
                   )}
                 </>
@@ -1751,7 +1913,8 @@ export default function ManualVideosPage() {
               )}
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

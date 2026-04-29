@@ -33,7 +33,19 @@ interface ProjectStatus {
     }
     queue: { pending: number; processing: number; failed: number }
     characters: Array<{ id: string; name: string; entity_type: string; ready: boolean; media_id: string | null }>
-    scenes: Array<{ id: string; display_order: number; prompt: string | null; image_status: string; video_status: string; upscale_status: string }>
+    scenes: Array<{
+        id: string
+        display_order: number
+        prompt: string | null
+        narrator_text?: string | null
+        image_status: string
+        video_status: string
+        upscale_status: string
+        tts_status?: string
+        tts_audio_path?: string | null
+        download_ready?: boolean
+        download_path?: string | null
+    }>
     suggested_next_action: string
 }
 
@@ -159,7 +171,9 @@ export default function StatusDashboard() {
                                 <th className="text-left px-3 py-2">Prompt</th>
                                 <th className="text-left px-3 py-2">Ảnh</th>
                                 <th className="text-left px-3 py-2">Video</th>
+                                <th className="text-left px-3 py-2">TTS</th>
                                 <th className="text-left px-3 py-2">Upscale</th>
+                                <th className="text-left px-3 py-2">Local</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -169,7 +183,9 @@ export default function StatusDashboard() {
                                     <td className="px-3 py-2" style={{ color: 'var(--text)' }}>{(s.prompt ?? '').slice(0, 72)}</td>
                                     <td className="px-3 py-2">{s.image_status}</td>
                                     <td className="px-3 py-2">{s.video_status}</td>
+                                    <td className="px-3 py-2" title={s.tts_audio_path ?? ''}>{s.tts_status ?? ((s.narrator_text ?? '').trim() ? 'PENDING' : 'SKIPPED')}</td>
                                     <td className="px-3 py-2">{s.upscale_status}</td>
+                                    <td className="px-3 py-2" title={s.download_path ?? ''}>{s.download_ready ? 'READY' : '-'}</td>
                                 </tr>
                             ))}
                         </tbody>

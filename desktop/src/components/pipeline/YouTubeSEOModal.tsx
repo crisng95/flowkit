@@ -53,7 +53,13 @@ export default function YouTubeSEOModal({ projectId, videoId, onClose }: Props) 
                 fetchAPI<any[]>(`/api/scenes?video_id=${videoId}`),
             ])
 
-            const lang = language === 'vi' ? 'Vietnamese' : language === 'en' ? 'English' : language
+            const lang = language === 'vi'
+                ? 'Vietnamese'
+                : language === 'en'
+                    ? 'English'
+                    : language === 'es'
+                        ? 'Spanish'
+                        : language
             const narratorTexts = scenes.slice(0, 5).map(s => s.narrator_text).filter(Boolean).join(' ')
 
             const prompt = `Generate YouTube SEO metadata for this documentary video.
@@ -114,6 +120,7 @@ Return JSON:
                         <select value={language} onChange={e => setLanguage(e.target.value)} className="input">
                             <option value="vi">Vietnamese</option>
                             <option value="en">English</option>
+                            <option value="es">Spanish</option>
                             <option value="zh">Chinese</option>
                         </select>
                     </div>

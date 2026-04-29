@@ -11,6 +11,8 @@ import {
     ShieldAlert,
     Copy,
     RefreshCw,
+    Eye,
+    EyeOff,
     Minus,
     Square,
     X,
@@ -181,9 +183,18 @@ function Layout() {
     const { isConnected } = useWebSocket()
     const { connected: extensionConnected } = useExtensionStatus()
     const [appVersion, setAppVersion] = useState('0.2.0')
+    const [flowPanelVisible, setFlowPanelVisible] = useState(true)
     const location = useLocation()
 
     const openFlowTab = () => window.electron?.openFlowTab({ focus: true, reveal: true })
+    const toggleFlowPanel = async () => {
+        try {
+            const next = await window.electron?.toggleFlowPanel?.()
+            if (next) setFlowPanelVisible(Boolean(next.visible))
+        } catch {
+            // no-op
+        }
+    }
 
     useEffect(() => {
         window.electron?.getAppInfo?.()
@@ -191,6 +202,23 @@ function Layout() {
                 if (info?.version) setAppVersion(info.version)
             })
             .catch(() => { })
+    }, [])
+
+    useEffect(() => {
+        let mounted = true
+        window.electron?.getFlowPanelState?.()
+            .then((state) => {
+                if (!mounted || !state) return
+                setFlowPanelVisible(Boolean(state.visible))
+            })
+            .catch(() => { })
+        const unsub = window.electron?.onFlowPanelStateChanged?.((state) => {
+            setFlowPanelVisible(Boolean(state?.visible))
+        })
+        return () => {
+            mounted = false
+            unsub?.()
+        }
     }, [])
 
     useEffect(() => {
@@ -243,6 +271,14 @@ function Layout() {
                         <Globe size={12} />
                         Mở Google Flow
                     </Button>
+                    <Button
+                        onClick={() => void toggleFlowPanel()}
+                        variant={flowPanelVisible ? 'secondary' : 'outline'}
+                        className="w-full gap-1.5 mt-2"
+                    >
+                        {flowPanelVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+                        {flowPanelVisible ? 'Ẩn Extension Panel' : 'Hiện Extension Panel'}
+                    </Button>
                 </div>
             </aside>
 
@@ -260,6 +296,9 @@ function Layout() {
                         <div className="flex items-center gap-1.5">
                             <Badge variant={extensionConnected ? 'success' : 'destructive'}>
                                 {extensionConnected ? 'Extension kết nối' : 'Extension mất kết nối'}
+                            </Badge>
+                            <Badge variant={flowPanelVisible ? 'secondary' : 'outline'}>
+                                {flowPanelVisible ? 'Panel: Hiện' : 'Panel: Ẩn'}
                             </Badge>
                             <Badge variant={isConnected ? 'secondary' : 'destructive'}>
                                 {isConnected ? 'Realtime ổn' : 'Realtime lỗi'}

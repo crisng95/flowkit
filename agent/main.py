@@ -23,6 +23,8 @@ from agent.api.materials import router as materials_router
 from agent.api.music import router as music_router
 from agent.api.models import router as models_router
 from agent.api.active_project import router as active_project_router
+from agent.api.youtube import router as youtube_router
+from agent.api.workflows import router as workflows_router
 from agent.worker.processor import get_worker_controller
 from agent.services.flow_client import get_flow_client
 from agent.services.event_bus import event_bus
@@ -33,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 # ─── WebSocket Server for Extension ─────────────────────────
+_ws_listener_active = False
 
 async def ws_handler(websocket):
     """Handle a Chrome extension WebSocket connection."""
@@ -55,15 +58,31 @@ async def ws_handler(websocket):
     except websockets.ConnectionClosed:
         pass
     finally:
-        client.clear_extension()
+        client.clear_extension(websocket)
         logger.info("Extension disconnected")
 
 
 async def run_ws_server():
-    """Run WebSocket server for extension connections."""
-    async with websockets.serve(ws_handler, WS_HOST, WS_PORT):
-        logger.info("WebSocket server listening on ws://%s:%d", WS_HOST, WS_PORT)
-        await asyncio.Future()  # run forever
+    """Run WebSocket server for extension connections.
+
+    Keep retrying so temporary bind/runtime errors don't leave the extension
+    permanently disconnected while API server is still alive.
+    """
+    global _ws_listener_active
+    retry_delay_sec = 2
+    while True:
+        try:
+            async with websockets.serve(ws_handler, WS_HOST, WS_PORT):
+                _ws_listener_active = True
+                logger.info("WebSocket server listening on ws://%s:%d", WS_HOST, WS_PORT)
+                await asyncio.Future()  # run forever until cancelled
+        except asyncio.CancelledError:
+            _ws_listener_active = False
+            raise
+        except Exception as e:
+            _ws_listener_active = False
+            logger.exception("WS server crashed (%s). Retrying in %ss", e, retry_delay_sec)
+            await asyncio.sleep(retry_delay_sec)
 
 
 # ─── FastAPI App ─────────────────────────────────────────────
@@ -71,6 +90,21 @@ async def run_ws_server():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+
+    # One-time hygiene: drop unstable redirect URLs persisted from older builds.
+    from agent.db import crud as db_crud
+    try:
+        cleaned = await db_crud.clear_redirect_media_urls()
+        slots = int(cleaned.get("scene_slots_cleared", 0))
+        chars = int(cleaned.get("characters_cleared", 0))
+        if slots or chars:
+            logger.info(
+                "Startup URL cleanup: cleared %d scene URL slots and %d character refs (redirect URLs)",
+                slots,
+                chars,
+            )
+    except Exception as e:
+        logger.warning("Startup URL cleanup failed: %s", e)
 
     # Load custom materials from DB into in-memory registry
     from agent.db.crud import list_materials as db_list_materials
@@ -90,9 +124,13 @@ async def lifespan(app: FastAPI):
 
     controller = get_worker_controller()
 
-    # SIGTERM handler for graceful shutdown
+    # SIGTERM handler for graceful shutdown.
+    # Windows event loop does not implement add_signal_handler().
     loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    try:
+        loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    except (NotImplementedError, RuntimeError, ValueError):
+        logger.info("SIGTERM handler not supported on this platform/event loop; skip signal hook.")
 
     # Start background tasks
     ws_task = asyncio.create_task(run_ws_server())
@@ -128,6 +166,8 @@ app.include_router(reviews_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(materials_router, prefix="/api")
 app.include_router(music_router, prefix="/api")
+app.include_router(youtube_router, prefix="/api")
+app.include_router(workflows_router, prefix="/api")
 app.include_router(models_router)
 app.include_router(active_project_router)
 
@@ -164,10 +204,16 @@ async def ext_callback(request: Request):
 @app.get("/health")
 async def health():
     client = get_flow_client()
+    ext_status = await client.get_extension_status()
+    runtime_connected = bool(ext_status.get("runtime_connected"))
     return {
         "status": "ok",
         "version": "0.2.0",
-        "extension_connected": client.connected,
+        "extension_connected": runtime_connected,
+        "extension_ws_connected": client.connected,
+        "extension_state": ext_status.get("state"),
+        "extension_manual_disconnect": ext_status.get("manual_disconnect"),
+        "ws_server_listening": _ws_listener_active,
         "ws": client.ws_stats,
     }
 
@@ -180,7 +226,7 @@ async def dashboard_ws(websocket: WebSocket):
     # Reject cross-origin connections (only allow localhost)
     origin = (websocket.headers.get("origin") or "").lower()
     if origin and not any(origin.startswith(p) for p in (
-        "http://127.0.0.1", "http://localhost", "chrome-extension://",
+        "http://127.0.0.1", "http://localhost", "chrome-extension://", "file://",
     )):
         await websocket.close(code=4003, reason="Origin not allowed")
         return
@@ -192,13 +238,14 @@ async def dashboard_ws(websocket: WebSocket):
         client = get_flow_client()
         controller = get_worker_controller()
         from agent.db import crud
+        ext_status = await client.get_extension_status()
         pending_requests = await crud.list_requests(status="PENDING")
         processing_requests = await crud.list_requests(status="PROCESSING")
         snapshot = {
             "type": "snapshot",
             "health": {
                 "status": "ok",
-                "extension_connected": client.connected,
+                "extension_connected": bool(ext_status.get("runtime_connected")),
             },
             "requests": pending_requests + processing_requests,
             "worker": {

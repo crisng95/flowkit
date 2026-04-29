@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Trash2, RefreshCw, Film, Image, Save, ChevronDown, ChevronUp, Upload } from 'lucide-react'
+import { Plus, Trash2, RefreshCw, Film, Image, Save, ChevronDown, ChevronUp, Upload, Play } from 'lucide-react'
 import { fetchAPI, patchAPI } from '../api/client'
 import type { Project, Character, Video, ChainType, StatusType } from '../types'
 import EditableText from '../components/projects/EditableText'
@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Label } from '../components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Separator } from '../components/ui/separator'
+import { Dialog, DialogContent } from '../components/ui/dialog'
 import { normalizeOrientation, orientationAspect, orientationPrefix, resolveMediaUrl, sceneStatus, sceneUrl } from '../lib/orientation'
 import { cn } from '../lib/utils'
 
@@ -217,6 +218,7 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
   const [showAdd, setShowAdd] = useState(false)
   const [uploadingCharacterId, setUploadingCharacterId] = useState<string | null>(null)
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null)
   const [charReqState, setCharReqState] = useState<Record<string, CharReqState>>({})
   const [refBatch, setRefBatch] = useState<{
     pending: number
@@ -228,6 +230,7 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
   } | null>(null)
   const previewResolving = useRef<Set<string>>(new Set())
   const previewRefreshFailedAt = useRef<Map<string, number>>(new Map())
+  const autoRefreshTriggeredRef = useRef<Set<string>>(new Set())
   const PREVIEW_RETRY_DELAY_MS = 45_000
   const normalizedOrientation = normalizeOrientation(orientation)
   const busyCharacterIds = new Set(
@@ -240,8 +243,25 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
   const ensureFlowTabReadyForMedia = useCallback(async () => {
     const hasFlowTab = async () => {
       try {
-        const runtime = await fetchAPI<{ flow_tab_id?: number | null; flow_tab_url?: string | null }>('/api/flow/status')
-        return ((runtime.flow_tab_id !== null && runtime.flow_tab_id !== undefined) || !!runtime.flow_tab_url)
+        const runtime = await fetchAPI<{
+          runtime_connected?: boolean
+          agent_connected?: boolean
+          connected?: boolean
+          state?: string
+          flow_tab_id?: number | null
+          flow_tab_url?: string | null
+        }>('/api/flow/status')
+        const connected = Boolean(
+          runtime.runtime_connected
+          ?? runtime.agent_connected
+          ?? runtime.connected,
+        )
+        const hasTab = (
+          (runtime.flow_tab_id !== null && runtime.flow_tab_id !== undefined)
+          || !!runtime.flow_tab_url
+        )
+        const stateReady = String(runtime.state || '').toLowerCase() !== 'off'
+        return connected && hasTab && stateReady
       } catch {
         return false
       }
@@ -249,8 +269,13 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
     if (await hasFlowTab()) return true
     await window.electron?.openFlowTab?.({ focus: false, reveal: false })
     await window.electron?.reconnectExtension?.()
-    await new Promise(r => setTimeout(r, 1200))
-    return await hasFlowTab()
+    for (let i = 0; i < 8; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r => setTimeout(r, 650))
+      // eslint-disable-next-line no-await-in-loop
+      if (await hasFlowTab()) return true
+    }
+    return false
   }, [])
 
   const loadRefRequestState = useCallback(async () => {
@@ -293,10 +318,31 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
         }
       }
       setCharReqState(byChar)
+
+      // Auto-refresh character list when ref generation has just completed,
+      // so thumbnail/media_id appears immediately without manual reload.
+      const waitingIds = characters
+        .filter(ch => !ch.media_id)
+        .map(ch => ch.id)
+      const completedNow = waitingIds.filter(cid => byChar[cid]?.status === 'COMPLETED')
+      let shouldRefresh = false
+      for (const cid of completedNow) {
+        if (autoRefreshTriggeredRef.current.has(cid)) continue
+        autoRefreshTriggeredRef.current.add(cid)
+        shouldRefresh = true
+      }
+      for (const ch of characters) {
+        if (ch.media_id) autoRefreshTriggeredRef.current.delete(ch.id)
+      }
+      if (shouldRefresh) {
+        onRefresh()
+        // Safety re-check: some backends commit request status before media_id patch.
+        setTimeout(() => { onRefresh() }, 900)
+      }
     } catch {
       // Non-blocking; keep last known UI state.
     }
-  }, [projectId])
+  }, [characters, onRefresh, projectId])
 
   const genRefs = async () => {
     const missing = characters.filter(c => !c.media_id && !busyCharacterIds.has(c.id))
@@ -359,9 +405,14 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
         }
       }
 
+      const persistableReferenceUrl =
+        typeof referenceUrl === 'string' && /\/api\/flow\/local-media\?path=/.test(referenceUrl)
+          ? referenceUrl
+          : null
+
       await patchAPI(`/api/characters/${ch.id}`, {
         media_id: uploaded.media_id,
-        reference_image_url: referenceUrl ?? null,
+        reference_image_url: persistableReferenceUrl,
       })
       if (referenceUrl) {
         setPreviewUrls(prev => ({ ...prev, [ch.id]: referenceUrl as string }))
@@ -395,8 +446,10 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
       if (url) {
         setPreviewUrls(prev => ({ ...prev, [ch.id]: url }))
         previewRefreshFailedAt.current.delete(ch.id)
-        // Persist URL so future app restarts still have a valid preview link.
-        void patchAPI(`/api/characters/${ch.id}`, { reference_image_url: url }).catch(() => { })
+        if (/\/api\/flow\/local-media\?path=/.test(url)) {
+          // Persist only stable local URLs (avoid storing expiring signed URLs).
+          void patchAPI(`/api/characters/${ch.id}`, { reference_image_url: url }).catch(() => { })
+        }
       }
       return url
     } catch {
@@ -417,8 +470,38 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
     previewRefreshFailedAt.current.clear()
   }, [projectId])
 
-  // NOTE: Disable bulk auto-refresh on mount to avoid spamming Flow read_media.
-  // Character preview URL refresh is now user-driven (manual refresh / image onError).
+  useEffect(() => {
+    if (!characters.length) return
+    let cancelled = false
+    const now = Date.now()
+    const candidates = characters
+      .filter((ch) => {
+        if (!ch.media_id) return false
+        const current = resolveMediaUrl(previewUrls[ch.id] || ch.reference_image_url)
+        if (!current) return true
+        return needsMediaUrlRefresh(current, now)
+      })
+      .slice(0, 6)
+    if (!candidates.length) return
+
+    const run = async () => {
+      const queue = [...candidates]
+      const workers = new Array(Math.min(2, queue.length)).fill(0).map(async () => {
+        while (queue.length && !cancelled) {
+          const next = queue.shift()
+          if (!next) break
+          // eslint-disable-next-line no-await-in-loop
+          await refreshCharacterPreview(next)
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(r => setTimeout(r, 220))
+        }
+      })
+      await Promise.all(workers)
+    }
+    void run()
+
+    return () => { cancelled = true }
+  }, [characters, previewUrls, refreshCharacterPreview])
 
   return (
     <div className="flex flex-col gap-3">
@@ -452,58 +535,110 @@ function CharactersTab({ projectId, orientation, characters, onRefresh }: {
           <div><Button size="sm" onClick={() => setShowAdd(true)}><Plus size={11} /> Thêm thực thể đầu tiên</Button></div>
         </div>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
-          {characters.map(ch => (
-            <Card key={ch.id} className="flex flex-col">
-              <CardContent className="p-3 flex flex-col gap-2">
-                <div className="rounded overflow-hidden aspect-square bg-[hsl(var(--muted))]">
-                  {resolveMediaUrl(previewUrls[ch.id] || ch.reference_image_url)
-                    ? <img
-                      src={resolveMediaUrl(previewUrls[ch.id] || ch.reference_image_url) ?? ''}
-                      alt={ch.name}
-                      className="w-full h-full object-cover"
-                      onError={() => { void refreshCharacterPreview(ch) }}
-                    />
-                    : <div className="w-full h-full flex items-center justify-center text-xs text-[hsl(var(--muted-foreground))]">{ch.entity_type}</div>
-                  }
-                </div>
-                <div className="font-semibold text-xs">{ch.name}</div>
-                <Badge variant="outline">{ch.entity_type}</Badge>
-                <EditableText value={ch.description ?? ''} onSave={v => patchChar(ch.id, 'description', v)} multiline className="text-xs" placeholder="Mô tả..." />
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className={cn('inline-block w-2 h-2 rounded-full', ch.media_id ? 'bg-green-500' : 'bg-red-500')} />
-                  <span className={ch.media_id ? 'text-green-600' : 'text-red-500'}>{ch.media_id ? 'Sẵn sàng' : 'Thiếu'}</span>
-                </div>
-                {charReqState[ch.id] && (charReqState[ch.id].status === 'PENDING' || charReqState[ch.id].status === 'PROCESSING' || charReqState[ch.id].status === 'FAILED') && (
-                  <div className={cn(
-                    'text-[10px]',
-                    charReqState[ch.id].status === 'FAILED' ? 'text-red-600' : 'text-amber-600',
-                  )}>
-                    {charReqState[ch.id].status === 'PROCESSING' && 'Đang tạo ảnh ref...'}
-                    {charReqState[ch.id].status === 'PENDING' && 'Đang xếp hàng tạo ảnh ref...'}
-                    {charReqState[ch.id].status === 'FAILED' && `Ref lỗi: ${charReqState[ch.id].error || 'Lỗi không xác định'}`}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-1">
-                  <Button variant="outline" size="sm" onClick={() => uploadReference(ch)} disabled={uploadingCharacterId === ch.id}>
-                    {uploadingCharacterId === ch.id ? <RefreshCw size={10} className="animate-spin" /> : <Upload size={10} />}
-                    {uploadingCharacterId === ch.id ? 'Đang upload...' : 'Ref'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => regenChar(ch.id)}
-                    disabled={busyCharacterIds.has(ch.id)}
-                    title={busyCharacterIds.has(ch.id) ? 'Đang xử lý ảnh ref, vui lòng chờ...' : 'Tạo lại ảnh ref'}
-                  >
-                    <RefreshCw size={10} className={busyCharacterIds.has(ch.id) ? 'animate-spin' : ''} />
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => removeChar(ch.id)}><Trash2 size={10} /></Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] text-xs">
+              <thead className="bg-[hsl(var(--muted)/0.35)] text-[hsl(var(--muted-foreground))]">
+                <tr>
+                  <th className="text-left font-semibold px-3 py-2 w-[150px]">Ảnh ref</th>
+                  <th className="text-left font-semibold px-3 py-2 w-[180px]">Tên</th>
+                  <th className="text-left font-semibold px-3 py-2 w-[120px]">Loại</th>
+                  <th className="text-left font-semibold px-3 py-2">Mô tả (gọn)</th>
+                  <th className="text-left font-semibold px-3 py-2 w-[200px]">Trạng thái</th>
+                  <th className="text-left font-semibold px-3 py-2 w-[220px]">Tác vụ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {characters.map(ch => {
+                  const preview = resolveMediaUrl(previewUrls[ch.id] || ch.reference_image_url)
+                  const req = charReqState[ch.id]
+                  const busy = busyCharacterIds.has(ch.id)
+                  return (
+                    <tr key={ch.id} className="border-t border-[hsl(var(--border))] align-top">
+                      <td className="px-3 py-2">
+                        <div className="w-[128px] h-[84px] rounded border bg-[hsl(var(--muted)/0.45)] overflow-hidden flex items-center justify-center">
+                          {preview ? (
+                            <img
+                              src={preview}
+                              alt={ch.name}
+                              className="max-w-full max-h-full object-contain cursor-zoom-in"
+                              onClick={() => setPreviewImage({ url: preview, name: ch.name })}
+                              onError={() => { void refreshCharacterPreview(ch) }}
+                            />
+                          ) : (
+                            <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{ch.entity_type}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 font-semibold text-[hsl(var(--foreground))]">{ch.name}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant="outline">{ch.entity_type}</Badge>
+                      </td>
+                      <td className="px-3 py-2">
+                        <EditableText
+                          value={ch.description ?? ''}
+                          onSave={v => patchChar(ch.id, 'description', v)}
+                          className="block max-w-[460px] truncate text-[hsl(var(--muted-foreground))]"
+                          placeholder="Mô tả..."
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn('inline-block w-2 h-2 rounded-full', ch.media_id ? 'bg-green-500' : 'bg-red-500')} />
+                            <span className={ch.media_id ? 'text-green-600' : 'text-red-500'}>
+                              {ch.media_id ? 'Sẵn sàng' : 'Thiếu'}
+                            </span>
+                          </div>
+                          {req && (req.status === 'PENDING' || req.status === 'PROCESSING' || req.status === 'FAILED') && (
+                            <div className={cn('text-[10px]', req.status === 'FAILED' ? 'text-red-600' : 'text-amber-600')}>
+                              {req.status === 'PROCESSING' && 'Đang tạo ảnh ref...'}
+                              {req.status === 'PENDING' && 'Đang xếp hàng tạo ảnh ref...'}
+                              {req.status === 'FAILED' && `Ref lỗi: ${req.error || 'Lỗi không xác định'}`}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <Button variant="outline" size="sm" onClick={() => uploadReference(ch)} disabled={uploadingCharacterId === ch.id}>
+                            {uploadingCharacterId === ch.id ? <RefreshCw size={10} className="animate-spin" /> : <Upload size={10} />}
+                            {uploadingCharacterId === ch.id ? 'Đang upload...' : 'Ref'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => regenChar(ch.id)}
+                            disabled={busy}
+                            title={busy ? 'Đang xử lý ảnh ref, vui lòng chờ...' : 'Tạo lại ảnh ref'}
+                          >
+                            <RefreshCw size={10} className={busy ? 'animate-spin' : ''} />
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => removeChar(ch.id)}>
+                            <Trash2 size={10} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      {previewImage && (
+        <Dialog open onOpenChange={() => setPreviewImage(null)}>
+          <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-0">
+            <div className="flex flex-col gap-2 p-3">
+              <div className="text-xs text-white/80">{previewImage.name}</div>
+              <div className="flex items-center justify-center min-h-[55vh] max-h-[86vh]">
+                <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[82vh] object-contain" />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {showAdd && (
@@ -522,6 +657,16 @@ function VideosTab({ projectId, project, videos, sceneCountByVideo, onRefresh, o
   projectId: string; project: Project; videos: Video[]; sceneCountByVideo: Record<string, number>; onRefresh: () => void; onOpenVideo: (v: Video) => void
 }) {
   const [showCreate, setShowCreate] = useState(false)
+  const normalizedVideoStatus = (raw?: string | null) => (raw || '').trim().toUpperCase()
+
+  const renderVideoStatus = (raw?: string | null) => {
+    const status = normalizedVideoStatus(raw)
+    if (!status || status === 'DRAFT') return null
+    if (status === 'PROCESSING') return <Badge variant="warning">Đang xử lý</Badge>
+    if (status === 'COMPLETED') return <Badge variant="success">Hoàn tất</Badge>
+    if (status === 'FAILED') return <Badge variant="destructive">Lỗi</Badge>
+    return <Badge variant="secondary">{status}</Badge>
+  }
 
   const patchVideo = async (vid: string, field: string, value: string) => {
     const trimmed = value.trim()
@@ -556,17 +701,32 @@ function VideosTab({ projectId, project, videos, sceneCountByVideo, onRefresh, o
       ) : (
         <div className="flex flex-col gap-2">
           {videos.map(v => (
-            <Card key={v.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                <EditableText value={v.title} onSave={value => patchVideo(v.id, 'title', value)} className="font-semibold text-sm" placeholder="Tiêu đề video..." />
-                <EditableText value={v.description ?? ''} onSave={value => patchVideo(v.id, 'description', value)} className="text-xs" placeholder="Mô tả..." />
-              </div>
-              <Badge variant="secondary">{v.status}</Badge>
-              <span className="text-xs text-[hsl(var(--muted-foreground))] hidden sm:block">
-                #{v.display_order} · {sceneCountByVideo[v.id] ?? 0} cảnh · {orientationToAspect(v.orientation ?? project.orientation)}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => onOpenVideo(v)}>Mở</Button>
-              <Button variant="destructive" size="sm" onClick={() => deleteVideo(v.id)}><Trash2 size={10} /></Button>
+            <Card key={v.id} className="group border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.35)] transition-colors">
+              <CardContent className="flex items-center gap-3 px-4 py-3">
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <EditableText value={v.title} onSave={value => patchVideo(v.id, 'title', value)} className="font-semibold text-sm" placeholder="Tiêu đề video..." />
+                  <EditableText value={v.description ?? ''} onSave={value => patchVideo(v.id, 'description', value)} className="text-xs" placeholder="Mô tả..." />
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                    <span>#{v.display_order}</span>
+                    <span>•</span>
+                    <span>{sceneCountByVideo[v.id] ?? 0} cảnh</span>
+                    <span>•</span>
+                    <span>{orientationToAspect(v.orientation ?? project.orientation)}</span>
+                    {renderVideoStatus(v.status)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 shadow-none"
+                    onClick={() => onOpenVideo(v)}
+                  >
+                    <Play size={11} />
+                    Mở video
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => deleteVideo(v.id)}><Trash2 size={10} /></Button>
+                </div>
+              </CardContent>
             </Card>
           ))}
         </div>

@@ -52,7 +52,13 @@ async function generateNarratorText(
     videoStory: string,
     provider: ProviderType
 ): Promise<string> {
-    const lang = language === 'vi' ? 'Vietnamese' : language === 'en' ? 'English' : language
+    const lang = language === 'vi'
+        ? 'Vietnamese'
+        : language === 'en'
+            ? 'English'
+            : language === 'es'
+                ? 'Spanish'
+                : language
     const characterText = scene.character_names?.join(', ') || 'none'
     const prompt = `Write narrator text in ${lang} for this documentary scene.
 
@@ -145,6 +151,7 @@ export default function GenNarratorModal({ videoId, projectId, onClose }: Props)
                         <select value={language} onChange={e => setLanguage(e.target.value)} className="input">
                             <option value="vi">Vietnamese</option>
                             <option value="en">English</option>
+                            <option value="es">Spanish</option>
                             <option value="zh">Chinese</option>
                             <option value="ja">Japanese</option>
                         </select>

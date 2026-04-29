@@ -18,7 +18,7 @@
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
 
-  --muted: 210 40% 96%;
+  --muted: 210 40% 90%;
   --muted-foreground: 215 16% 47%;
 
   --accent: 210 40% 96%;
@@ -62,7 +62,10 @@
   --input-base: hsl(var(--input));
   --ring-base: hsl(var(--ring));
   --text: hsl(var(--foreground));
+  /* Legacy text-color alias — used by many components as `var(--muted)` for gray text */
   --muted: hsl(var(--muted-foreground));
+  /* Tab/pill background alias — distinct from the legacy text alias */
+  --muted-bg: hsl(210 40% 90%);
   --accent-dim: #1f2937;
   --accent-soft: #eef2ff;
   --green: #16a34a;
@@ -84,6 +87,14 @@
 .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
   --tw-shadow: none;
   --tw-shadow-colored: none;
+  box-shadow: none;
+}
+
+/* ─── Shadcn Tabs active trigger ────────────────────────────── */
+[role="tab"][data-state="active"] {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
   box-shadow: none;
 }
 

@@ -3,7 +3,7 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from agent import config
 
@@ -32,6 +32,31 @@ def _reload_config(data: dict):
     config.UPSCALE_MODELS.update(data["upscale_models"])
     config.IMAGE_MODELS.clear()
     config.IMAGE_MODELS.update(data["image_models"])
+
+
+def _validate_video_models(data: dict):
+    """Reject explicit aspect/model mismatches (portrait mapped to landscape key and vice-versa)."""
+    video_models = data.get("video_models") or {}
+    for tier, gen_types in video_models.items():
+        if not isinstance(gen_types, dict):
+            continue
+        for gen_type, ratios in gen_types.items():
+            if not isinstance(ratios, dict):
+                continue
+            for ratio_key, model_key in ratios.items():
+                if not isinstance(model_key, str):
+                    continue
+                low = model_key.lower()
+                if ratio_key == "VIDEO_ASPECT_RATIO_PORTRAIT" and "landscape" in low and "portrait" not in low:
+                    raise HTTPException(
+                        400,
+                        f"Invalid model mapping: {tier}/{gen_type}/{ratio_key} uses landscape model key '{model_key}'",
+                    )
+                if ratio_key == "VIDEO_ASPECT_RATIO_LANDSCAPE" and "portrait" in low and "landscape" not in low:
+                    raise HTTPException(
+                        400,
+                        f"Invalid model mapping: {tier}/{gen_type}/{ratio_key} uses portrait model key '{model_key}'",
+                    )
 
 
 @router.get("")
@@ -74,6 +99,7 @@ async def patch_models(body: dict):
                         current[section][tier][gen_type] = {}
                     current[section][tier][gen_type].update(ratios)
 
+    _validate_video_models(current)
     _write_models(current)
     _reload_config(current)
     logger.info("Models updated and hot-reloaded: %s", list(body.keys()))

@@ -44,6 +44,7 @@ jobs:
       - name: Bundle Python agent with PyInstaller
         shell: bash
         run: |
+          rm -rf desktop/resources/agent
           mkdir -p desktop/resources/agent
           pyinstaller \
             --noconfirm \
@@ -65,6 +66,10 @@ jobs:
             --hidden-import uvicorn.lifespan.on \
             --hidden-import websockets \
             agent/main.py
+          if [ -f desktop/resources/agent/flowkit-agent ] && [ ! -f desktop/resources/agent/flowkit-agent.exe ]; then
+            mv desktop/resources/agent/flowkit-agent desktop/resources/agent/flowkit-agent.exe
+          fi
+          test -f desktop/resources/agent/flowkit-agent.exe
 
       - name: Bundle ffmpeg + ffprobe binaries
         shell: pwsh

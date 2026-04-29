@@ -5,7 +5,7 @@ import {
     type APIKey, type ProviderType, type GeneralSettings,
 } from '../api/ai-service'
 import { fetchAPI } from '../api/client'
-import type { LicenseCheckResult, LicenseStatus } from '../electron'
+import type { FlowAccount, FlowAccountsPayload, LicenseCheckResult, LicenseStatus } from '../electron'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Textarea } from '../components/ui/textarea'
@@ -18,7 +18,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select'
 
-type Tab = 'gemini' | 'claude' | 'openai' | 'general' | 'models' | 'materials' | 'tts' | 'license'
+type Tab = 'gemini' | 'claude' | 'openai' | 'general' | 'flow' | 'models' | 'materials' | 'tts' | 'license'
 
 const PROVIDERS: { id: ProviderType; label: string; color: string; docUrl: string; placeholder: string }[] = [
     { id: 'gemini', label: 'Gemini', color: '#4285f4', docUrl: 'https://aistudio.google.com/apikey', placeholder: 'AIzaSy...' },
@@ -29,6 +29,7 @@ const PROVIDERS: { id: ProviderType; label: string; color: string; docUrl: strin
 const FALLBACK_MATERIALS = ['realistic', '3d_pixar', 'anime', 'watercolor', 'cinematic']
 const LANGUAGES = [
     { code: 'vi', label: 'Tiếng Việt' }, { code: 'en', label: 'Tiếng Anh' },
+    { code: 'es', label: 'Tiếng Tây Ban Nha' },
     { code: 'zh', label: 'Tiếng Trung' }, { code: 'ja', label: 'Tiếng Nhật' }, { code: 'ko', label: 'Tiếng Hàn' },
 ]
 
@@ -818,6 +819,302 @@ function TTSPanel() {
     )
 }
 
+// ─── Flow Accounts Panel ─────────────────────────────────────
+function FlowAccountsPanel() {
+    const hasBridge = Boolean(
+        window.electron?.flowAccountsList
+        && window.electron?.flowAccountsCreate
+        && window.electron?.flowAccountsSetActive
+        && window.electron?.flowAccountsLogout
+    )
+
+    const [payload, setPayload] = useState<FlowAccountsPayload | null>(null)
+    const [drafts, setDrafts] = useState<Record<string, { label: string; email: string }>>({})
+    const [newLabel, setNewLabel] = useState('')
+    const [newEmail, setNewEmail] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [busyId, setBusyId] = useState('')
+    const [panelVisible, setPanelVisible] = useState(true)
+    const [error, setError] = useState('')
+    const [info, setInfo] = useState('')
+
+    const hydrate = (next: FlowAccountsPayload) => {
+        setPayload(next)
+        setDrafts(() => {
+            const mapped: Record<string, { label: string; email: string }> = {}
+            next.accounts.forEach((item) => {
+                mapped[item.id] = { label: item.label, email: item.email }
+            })
+            return mapped
+        })
+    }
+
+    const loadAccounts = async () => {
+        if (!window.electron?.flowAccountsList) return
+        setLoading(true)
+        setError('')
+        try {
+            const next = await window.electron.flowAccountsList()
+            hydrate(next)
+        } catch (e: any) {
+            setError(e?.message ?? 'Không tải được danh sách tài khoản Flow')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        if (!hasBridge) return
+        void loadAccounts()
+    }, [hasBridge])
+
+    useEffect(() => {
+        window.electron?.getFlowPanelState?.()
+            .then((state) => setPanelVisible(Boolean(state?.visible)))
+            .catch(() => { })
+        return window.electron?.onFlowPanelStateChanged?.((state) => {
+            setPanelVisible(Boolean(state?.visible))
+        })
+    }, [])
+
+    const runAction = async (id: string, action: () => Promise<FlowAccountsPayload>, successMessage: string) => {
+        setBusyId(id)
+        setError('')
+        setInfo('')
+        try {
+            const next = await action()
+            hydrate(next)
+            setInfo(successMessage)
+        } catch (e: any) {
+            setError(e?.message ?? 'Thao tác thất bại')
+        } finally {
+            setBusyId('')
+        }
+    }
+
+    const createAccount = async () => {
+        if (!window.electron?.flowAccountsCreate) return
+        const label = newLabel.trim()
+        if (!label) {
+            setError('Nhập tên tài khoản trước khi thêm.')
+            return
+        }
+        setBusyId('__create__')
+        setError('')
+        setInfo('')
+        try {
+            const next = await window.electron.flowAccountsCreate({
+                label,
+                email: newEmail.trim(),
+                setActive: true,
+            })
+            hydrate(next)
+            setNewLabel('')
+            setNewEmail('')
+            setInfo('Đã thêm tài khoản và chuyển sang profile mới.')
+        } catch (e: any) {
+            setError(e?.message ?? 'Không tạo được tài khoản Flow')
+        } finally {
+            setBusyId('')
+        }
+    }
+
+    const saveAccount = async (account: FlowAccount) => {
+        if (!window.electron?.flowAccountsUpdate) return
+        const draft = drafts[account.id] ?? { label: account.label, email: account.email }
+        await runAction(
+            account.id,
+            () => window.electron!.flowAccountsUpdate({
+                id: account.id,
+                label: draft.label.trim() || account.label,
+                email: draft.email.trim(),
+            }),
+            'Đã cập nhật thông tin tài khoản.',
+        )
+    }
+
+    const openFlow = async (accountId: string) => {
+        try {
+            await window.electron?.openFlowTab?.({ focus: true, reveal: true, accountId })
+            setInfo('Đã mở Google Flow theo tài khoản đã chọn.')
+        } catch (e: any) {
+            setError(e?.message ?? 'Không mở được Google Flow')
+        }
+    }
+
+    if (!hasBridge) {
+        return (
+            <Card>
+                <CardContent className="p-4">
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                        Tính năng quản lý tài khoản Flow chỉ hỗ trợ trong bản Electron app.
+                    </p>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-4 max-w-3xl">
+            <Card>
+                <CardContent className="p-4 flex flex-col gap-3">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Hồ Sơ Tài Khoản Google Flow</div>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                        Mỗi tài khoản dùng một session riêng (cookie/cache riêng). App không lưu mật khẩu Google; chỉ lưu profile để chuyển nhanh.
+                    </p>
+                    {error && <div className="text-xs p-2 rounded bg-red-50 text-red-600">{error}</div>}
+                    {info && <div className="text-xs p-2 rounded bg-green-50 text-green-700">{info}</div>}
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,auto] gap-2">
+                        <Input
+                            value={newLabel}
+                            onChange={(e) => setNewLabel(e.target.value)}
+                            placeholder="Tên tài khoản (ví dụ: Team A)"
+                            className="text-xs"
+                        />
+                        <Input
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            placeholder="Email Google (tuỳ chọn)"
+                            className="text-xs"
+                        />
+                        <Button onClick={() => void createAccount()} disabled={busyId === '__create__'} className="gap-1.5">
+                            <Plus size={12} /> {busyId === '__create__' ? 'Đang thêm...' : 'Thêm tài khoản'}
+                        </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => void loadAccounts()} disabled={loading}>
+                            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Tải lại
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                                try {
+                                    const next = await window.electron?.toggleFlowPanel?.()
+                                    if (next) setPanelVisible(Boolean(next.visible))
+                                } catch {
+                                    // no-op
+                                }
+                            }}
+                        >
+                            {panelVisible ? 'Ẩn Extension Panel' : 'Hiện Extension Panel'}
+                        </Button>
+                        <Badge variant="secondary">{payload?.accounts.length ?? 0} profiles</Badge>
+                        <Badge variant={panelVisible ? 'success' : 'outline'}>
+                            {panelVisible ? 'Panel đang hiển thị' : 'Panel đang ẩn'}
+                        </Badge>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <div className="flex flex-col gap-2">
+                {(payload?.accounts ?? []).map((account) => {
+                    const isActive = payload?.activeAccountId === account.id
+                    const draft = drafts[account.id] ?? { label: account.label, email: account.email }
+                    return (
+                        <Card key={account.id} className={isActive ? 'border-[hsl(var(--primary))]' : ''}>
+                            <CardContent className="p-3 flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant={isActive ? 'success' : 'outline'}>
+                                        {isActive ? 'Đang dùng' : 'Chưa dùng'}
+                                    </Badge>
+                                    <span className="text-xs text-[hsl(var(--muted-foreground))] font-mono">{account.id}</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <Input
+                                        value={draft.label}
+                                        onChange={(e) => setDrafts((prev) => ({ ...prev, [account.id]: { ...draft, label: e.target.value } }))}
+                                        className="text-xs"
+                                        placeholder="Tên tài khoản"
+                                    />
+                                    <Input
+                                        value={draft.email}
+                                        onChange={(e) => setDrafts((prev) => ({ ...prev, [account.id]: { ...draft, email: e.target.value } }))}
+                                        className="text-xs"
+                                        placeholder="Email (tuỳ chọn)"
+                                    />
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant={isActive ? 'secondary' : 'default'}
+                                        disabled={busyId === account.id}
+                                        onClick={() => void runAction(
+                                            account.id,
+                                            () => window.electron!.flowAccountsSetActive({ id: account.id, openFlow: true, focus: true }),
+                                            'Đã chuyển tài khoản Flow đang hoạt động.',
+                                        )}
+                                    >
+                                        {isActive ? 'Đang hoạt động' : 'Dùng tài khoản này'}
+                                    </Button>
+                                    {!isActive && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={busyId === account.id}
+                                            onClick={() => void runAction(
+                                                account.id,
+                                                () => window.electron!.flowAccountsSetActive({ id: account.id, openFlow: false, focus: false }),
+                                                'Đã đặt tài khoản mặc định cho toàn ứng dụng.',
+                                            )}
+                                        >
+                                            Đặt mặc định
+                                        </Button>
+                                    )}
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busyId === account.id}
+                                        onClick={() => void saveAccount(account)}
+                                        className="gap-1.5"
+                                    >
+                                        <Save size={11} /> Lưu thông tin
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busyId === account.id}
+                                        onClick={() => void openFlow(account.id)}
+                                    >
+                                        Mở Flow
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busyId === account.id}
+                                        onClick={() => void runAction(
+                                            account.id,
+                                            () => window.electron!.flowAccountsLogout({ id: account.id, reopenFlow: true, focus: true }),
+                                            'Đã đăng xuất profile. Flow sẽ mở màn hình đăng nhập lại.',
+                                        )}
+                                    >
+                                        Đăng xuất
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        disabled={busyId === account.id || (payload?.accounts.length ?? 0) <= 1}
+                                        onClick={() => {
+                                            if (!confirm(`Xóa profile '${draft.label || account.id}'?`)) return
+                                            void runAction(
+                                                account.id,
+                                                () => window.electron!.flowAccountsDelete(account.id),
+                                                'Đã xóa profile tài khoản.',
+                                            )
+                                        }}
+                                    >
+                                        <Trash2 size={11} /> Xóa
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
 // ─── License Panel ───────────────────────────────────────────
 function LicensePanel() {
     const hasLicenseBridge = Boolean(
@@ -966,6 +1263,7 @@ function LicensePanel() {
 // ─── Main Settings Page ───────────────────────────────────────
 export default function SettingsPage() {
     const [materials, setMaterials] = useState<string[]>(FALLBACK_MATERIALS)
+    const settingsTabTriggerClass = 'text-sm font-medium'
 
     const loadMaterialIds = async () => {
         try {
@@ -987,25 +1285,28 @@ export default function SettingsPage() {
             </div>
 
             <Tabs defaultValue="gemini">
-                <TabsList className="flex flex-wrap h-auto gap-1 bg-transparent p-0 mb-4">
+                <TabsList className="mb-4">
                     {PROVIDERS.map(p => (
-                        <TabsTrigger key={p.id} value={p.id} className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                        <TabsTrigger key={p.id} value={p.id} className={settingsTabTriggerClass}>
                             {p.label}
                         </TabsTrigger>
                     ))}
-                    <TabsTrigger value="general" className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                    <TabsTrigger value="general" className={settingsTabTriggerClass}>
                         Chung
                     </TabsTrigger>
-                    <TabsTrigger value="models" className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                    <TabsTrigger value="flow" className={settingsTabTriggerClass}>
+                        Flow
+                    </TabsTrigger>
+                    <TabsTrigger value="models" className={settingsTabTriggerClass}>
                         Model
                     </TabsTrigger>
-                    <TabsTrigger value="materials" className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                    <TabsTrigger value="materials" className={settingsTabTriggerClass}>
                         Chất liệu
                     </TabsTrigger>
-                    <TabsTrigger value="tts" className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                    <TabsTrigger value="tts" className={settingsTabTriggerClass}>
                         TTS
                     </TabsTrigger>
-                    <TabsTrigger value="license" className="rounded-md data-[state=active]:bg-[hsl(var(--card))] data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-[hsl(var(--border))]">
+                    <TabsTrigger value="license" className={settingsTabTriggerClass}>
                         Giấy phép
                     </TabsTrigger>
                 </TabsList>
@@ -1019,6 +1320,7 @@ export default function SettingsPage() {
                     )
                 })}
                 <TabsContent value="general"><GeneralPanel materials={materials} /></TabsContent>
+                <TabsContent value="flow"><FlowAccountsPanel /></TabsContent>
                 <TabsContent value="models"><ModelsPanel /></TabsContent>
                 <TabsContent value="materials"><MaterialsPanel onChanged={loadMaterialIds} /></TabsContent>
                 <TabsContent value="tts"><TTSPanel /></TabsContent>

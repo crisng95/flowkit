@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from agent.db import crud
+from agent.utils.orientation import normalize_orientation
 
 router = APIRouter(prefix="/api/active-project", tags=["active-project"])
 logger = logging.getLogger(__name__)
@@ -55,12 +56,15 @@ async def get_active_project():
         if project:
             # Enrich with video info
             videos = await crud.list_videos(project_id=project["id"])
-            video = videos[0] if videos else None
+            state_video_id = state.get("video_id")
+            video = next((v for v in videos if v["id"] == state_video_id), None) if state_video_id else None
+            if not video and videos:
+                video = videos[0]
             return {
                 "project_id": project["id"],
                 "project_name": project["name"],
                 "video_id": video["id"] if video else None,
-                "orientation": video.get("orientation") if video else None,
+                "orientation": normalize_orientation(video.get("orientation")) if video else None,
                 "material": project.get("material"),
                 "status": project.get("status"),
                 "source": "explicit",
@@ -81,7 +85,7 @@ async def get_active_project():
         "project_id": project["id"],
         "project_name": project["name"],
         "video_id": video["id"] if video else None,
-        "orientation": video.get("orientation") if video else None,
+        "orientation": normalize_orientation(video.get("orientation")) if video else None,
         "material": project.get("material"),
         "status": project.get("status"),
         "source": "fallback_most_recent",
@@ -92,6 +96,7 @@ async def get_active_project():
 async def set_active_project(body: dict):
     """Set the active project by project_id."""
     project_id = body.get("project_id")
+    video_id = body.get("video_id")
     if not project_id:
         raise HTTPException(status_code=400, detail="project_id is required")
 
@@ -99,16 +104,31 @@ async def set_active_project(body: dict):
     if not project:
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
 
-    _write_state({"project_id": project_id})
-    logger.info("Active project set: %s (%s)", project["name"], project_id[:8])
-
     videos = await crud.list_videos(project_id=project_id)
-    video = videos[0] if videos else None
+    video = None
+    if video_id:
+        video = next((v for v in videos if v["id"] == video_id), None)
+        if not video:
+            raise HTTPException(status_code=400, detail=f"video_id {video_id} does not belong to project {project_id}")
+    if not video and videos:
+        video = videos[0]
+
+    state = {"project_id": project_id}
+    if video:
+        state["video_id"] = video["id"]
+    _write_state(state)
+    logger.info(
+        "Active project set: %s (%s) video=%s",
+        project["name"],
+        project_id[:8],
+        (video["id"][:8] if video else "none"),
+    )
+
     return {
         "project_id": project["id"],
         "project_name": project["name"],
         "video_id": video["id"] if video else None,
-        "orientation": video.get("orientation") if video else None,
+        "orientation": normalize_orientation(video.get("orientation")) if video else None,
         "material": project.get("material"),
         "status": project.get("status"),
         "source": "explicit",

@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS request (
     video_id      TEXT REFERENCES video(id) ON DELETE CASCADE,
     scene_id      TEXT REFERENCES scene(id) ON DELETE CASCADE,
     character_id  TEXT REFERENCES character(id) ON DELETE CASCADE,
-    type          TEXT NOT NULL CHECK(type IN ('GENERATE_IMAGE','REGENERATE_IMAGE','EDIT_IMAGE','GENERATE_VIDEO','REGENERATE_VIDEO','GENERATE_VIDEO_REFS','UPSCALE_VIDEO','GENERATE_CHARACTER_IMAGE','REGENERATE_CHARACTER_IMAGE','EDIT_CHARACTER_IMAGE')),
+    type          TEXT NOT NULL CHECK(type IN ('GENERATE_IMAGE','REGENERATE_IMAGE','EDIT_IMAGE','GENERATE_VIDEO','REGENERATE_VIDEO','GENERATE_VIDEO_REFS','UPSCALE_VIDEO','UPSCALE_VIDEO_LOCAL','GENERATE_CHARACTER_IMAGE','REGENERATE_CHARACTER_IMAGE','EDIT_CHARACTER_IMAGE')),
     orientation   TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL')),
     status        TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     request_id    TEXT,   -- external operation ID
@@ -217,6 +217,8 @@ async def init_db():
                 needs_recreate = True  # old GENERATE_IMAGES typo
             if 'REGENERATE_IMAGE' not in table_sql:
                 needs_recreate = True  # missing REGENERATE/EDIT types
+            if 'UPSCALE_VIDEO_LOCAL' not in table_sql:
+                needs_recreate = True  # add local 4k upscaler request type
         if needs_recreate:
             await db.execute("PRAGMA foreign_keys=OFF")
             await db.execute("ALTER TABLE request RENAME TO _request_old")
@@ -227,7 +229,7 @@ CREATE TABLE IF NOT EXISTS request (
     video_id      TEXT REFERENCES video(id) ON DELETE CASCADE,
     scene_id      TEXT REFERENCES scene(id) ON DELETE CASCADE,
     character_id  TEXT REFERENCES character(id) ON DELETE CASCADE,
-    type          TEXT NOT NULL CHECK(type IN ('GENERATE_IMAGE','REGENERATE_IMAGE','EDIT_IMAGE','GENERATE_VIDEO','REGENERATE_VIDEO','GENERATE_VIDEO_REFS','UPSCALE_VIDEO','GENERATE_CHARACTER_IMAGE','REGENERATE_CHARACTER_IMAGE','EDIT_CHARACTER_IMAGE')),
+    type          TEXT NOT NULL CHECK(type IN ('GENERATE_IMAGE','REGENERATE_IMAGE','EDIT_IMAGE','GENERATE_VIDEO','REGENERATE_VIDEO','GENERATE_VIDEO_REFS','UPSCALE_VIDEO','UPSCALE_VIDEO_LOCAL','GENERATE_CHARACTER_IMAGE','REGENERATE_CHARACTER_IMAGE','EDIT_CHARACTER_IMAGE')),
     orientation   TEXT CHECK(orientation IN ('VERTICAL','HORIZONTAL')),
     status        TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     request_id    TEXT,
@@ -276,6 +278,9 @@ CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
         if "allow_voice" not in project_columns:
             await db.execute("ALTER TABLE project ADD COLUMN allow_voice INTEGER NOT NULL DEFAULT 0")
             logger.info("Migrated: added allow_voice column to project table")
+        if "orientation" not in project_columns:
+            await db.execute("ALTER TABLE project ADD COLUMN orientation TEXT NOT NULL DEFAULT 'VERTICAL'")
+            logger.info("Migrated: added orientation column to project table")
         # Migration: add orientation to video table + backfill from scene data
         cursor = await db.execute("PRAGMA table_info(video)")
         video_columns = {row[1] for row in await cursor.fetchall()}

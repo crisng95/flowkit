@@ -98,6 +98,7 @@ export default function CreateProjectModal({ onClose, onCreated }: CreateProject
                             <SelectContent>
                                 <SelectItem value="vi">Tiếng Việt</SelectItem>
                                 <SelectItem value="en">English</SelectItem>
+                                <SelectItem value="es">Español</SelectItem>
                                 <SelectItem value="zh">Chinese</SelectItem>
                                 <SelectItem value="ja">Japanese</SelectItem>
                                 <SelectItem value="ko">Korean</SelectItem>

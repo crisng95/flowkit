@@ -2,18 +2,16 @@
     "name": "flowkit-desktop",
     "version": "0.2.0",
     "description": "FlowKit Desktop — AI Video Generation",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/thememuse/flowkit.git"
-    },
     "main": "out/main/main.js",
     "private": true,
     "scripts": {
         "dev": "electron-vite dev",
         "build": "electron-vite build",
-        "dist": "npm run build && electron-builder",
-        "dist:mac": "npm run build && electron-builder --mac",
-        "dist:win": "npm run build && electron-builder --win",
+        "prepare:upscale-runtime": "node ./scripts/prepare-upscale-runtime.mjs",
+        "prepare:upscale-runtime:all": "node ./scripts/prepare-upscale-runtime.mjs --platform=all",
+        "dist": "npm run prepare:upscale-runtime && npm run build && electron-builder",
+        "dist:mac": "npm run prepare:upscale-runtime && npm run build && electron-builder --mac",
+        "dist:win": "node ./scripts/preflight-win-build.mjs && npm run prepare:upscale-runtime -- --platform=win32 && npm run build && electron-builder --win",
         "build:win": "npm run dist:win",
         "build:mac": "npm run dist:mac",
         "preview": "electron-vite preview"
