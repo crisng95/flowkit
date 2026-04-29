@@ -32,22 +32,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+          pip install pillow
 
       - name: Ensure macOS icon exists
         shell: bash
         run: |
           if [ ! -f "desktop/resources/icon.icns" ]; then
+            python - <<'PY'
+from PIL import Image
+img = Image.open("desktop/resources/icon.png").convert("RGBA")
+w, h = img.size
+s = min(w, h)
+left = (w - s) // 2
+top = (h - s) // 2
+img = img.crop((left, top, left + s, top + s)).resize((1024, 1024), Image.Resampling.LANCZOS)
+img.save("/tmp/flowkit-square.png")
+print("Generated /tmp/flowkit-square.png", img.size)
+PY
             mkdir -p /tmp/flowkit.iconset
-            sips -z 16 16     desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_16x16.png
-            sips -z 32 32     desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_16x16@2x.png
-            sips -z 32 32     desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_32x32.png
-            sips -z 64 64     desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_32x32@2x.png
-            sips -z 128 128   desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_128x128.png
-            sips -z 256 256   desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_128x128@2x.png
-            sips -z 256 256   desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_256x256.png
-            sips -z 512 512   desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_256x256@2x.png
-            sips -z 512 512   desktop/resources/icon.png --out /tmp/flowkit.iconset/icon_512x512.png
-            cp desktop/resources/icon.png /tmp/flowkit.iconset/icon_512x512@2x.png
+            sips -z 16 16     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16.png
+            sips -z 32 32     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16@2x.png
+            sips -z 32 32     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_32x32.png
+            sips -z 64 64     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_32x32@2x.png
+            sips -z 128 128   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_128x128.png
+            sips -z 256 256   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_128x128@2x.png
+            sips -z 256 256   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_256x256.png
+            sips -z 512 512   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_256x256@2x.png
+            sips -z 512 512   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_512x512.png
+            cp /tmp/flowkit-square.png /tmp/flowkit.iconset/icon_512x512@2x.png
             iconutil -c icns /tmp/flowkit.iconset -o desktop/resources/icon.icns
           fi
 
