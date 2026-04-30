@@ -1,0 +1,33 @@
+services:
+  flowkit-agent:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    user: "${FLOWKIT_UID:-1000}:${FLOWKIT_GID:-1000}"
+    restart: unless-stopped
+    env_file:
+      - ./env/lane.env
+    volumes:
+      - ./runtime:/app/runtime
+    ports:
+      - "127.0.0.1:8100:8100"
+      - "127.0.0.1:9222:9222"
+
+  lane-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    user: "${FLOWKIT_UID:-1000}:${FLOWKIT_GID:-1000}"
+    restart: unless-stopped
+    env_file:
+      - ./env/lane.env
+    depends_on:
+      - flowkit-agent
+    volumes:
+      - ./runtime:/srv/flowkit/runtime
+      - ./work:/srv/flowkit/work
+      - ./logs:/srv/flowkit/logs
+    ports:
+      - "127.0.0.1:8181:8181"
+
+  # Chrome remains host-managed by systemd in this architecture.

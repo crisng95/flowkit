@@ -1,0 +1,14 @@
+[Unit]
+Description=FlowKit Lane Runner
+After=network-online.target flowkit-agent.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flowkit
+ExecStart=/srv/flowkit/lane-01/scripts/lane-runner.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

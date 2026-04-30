@@ -5,7 +5,11 @@
  * Captures bearer token, solves reCAPTCHA, proxies API calls through browser.
  */
 
-const AGENT_WS_URL = 'ws://127.0.0.1:9222';
+const manifest = chrome.runtime.getManifest();
+const flowkitConfig = manifest.flowkit || {};
+const AGENT_WS_URL = flowkitConfig.agent_ws_url || 'ws://127.0.0.1:9222';
+const CALLBACK_BASE_URL = (flowkitConfig.callback_base_url || 'http://127.0.0.1:8100').replace(/\/$/, '');
+const CALLBACK_URL = `${CALLBACK_BASE_URL}/api/ext/callback`;
 // NOTE: This is a browser-restricted public API key — safe to ship in extension bundles.
 const API_KEY = 'AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY';
 
@@ -215,6 +219,12 @@ function connectToAgent() {
         callbackSecret = msg.secret;
         chrome.storage.local.set({ callbackSecret: msg.secret });
         console.log('[FlowAgent] Received callback secret');
+      } else if (msg.type === 'seed_token') {
+        flowKey = msg.flowKey || null;
+        metrics.tokenCapturedAt = Date.now();
+        chrome.storage.local.set({ flowKey, metrics });
+        console.log('[FlowAgent] Seeded flow token from agent');
+        broadcastStatus();
       } else if (msg.type === 'pong') {
         // keepalive response
       }
@@ -251,7 +261,7 @@ function keepAlive() {
 function sendToAgent(msg) {
   // API responses (with msg.id) go via HTTP — immune to WS disconnect
   if (msg.id) {
-    fetch('http://127.0.0.1:8100/api/ext/callback', {
+    fetch(CALLBACK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msg),
