@@ -28,6 +28,7 @@ from agent.config import (
     VIDEO_API_COOLDOWN,
     MAX_CONCURRENT_IMAGE_REQUESTS,
     MAX_CONCURRENT_VIDEO_REQUESTS,
+    MAX_CONCURRENT_LOCAL_UPSCALE_REQUESTS,
     MAX_CONCURRENT_CHARACTER_REF_REQUESTS,
     CAPTCHA_RETRY_LIMIT,
     CAPTCHA_RETRY_BACKOFF_BASE,
@@ -41,6 +42,7 @@ from agent.config import (
     OPERATION_FAILED_RETRY_BASE_SEC,
     REQUEST_DISPATCH_TIMEOUT,
     VIDEO_POLL_TIMEOUT,
+    STALE_PENDING_LOCAL_UPSCALE_TIMEOUT,
 )
 from agent.worker._parsing import _is_error
 from agent.sdk.services.result_handler import parse_result, apply_scene_result, apply_character_result
@@ -59,6 +61,10 @@ _VIDEO_CALL_TYPES = {
     "GENERATE_VIDEO",
     "REGENERATE_VIDEO",
     "GENERATE_VIDEO_REFS",
+    "UPSCALE_VIDEO",
+    "UPSCALE_VIDEO_LOCAL",
+}
+_LOCAL_UPSCALE_CALL_TYPES = {
     "UPSCALE_VIDEO",
     "UPSCALE_VIDEO_LOCAL",
 }
@@ -244,6 +250,12 @@ class WorkerController:
                 return False
 
         if req_type in _VIDEO_CALL_TYPES:
+            if req_type in _LOCAL_UPSCALE_CALL_TYPES:
+                local_upscale_active = sum(
+                    1 for t in self._active_types.values() if t in _LOCAL_UPSCALE_CALL_TYPES
+                )
+                if local_upscale_active >= max(1, MAX_CONCURRENT_LOCAL_UPSCALE_REQUESTS):
+                    return False
             video_active = sum(1 for t in self._active_types.values() if t in _VIDEO_CALL_TYPES)
             if video_active >= max(1, MAX_CONCURRENT_VIDEO_REQUESTS):
                 return False
@@ -297,6 +309,13 @@ class WorkerController:
             migrated = await crud.migrate_upscale_requests_to_local()
             if migrated:
                 logger.info("Migrated %d legacy UPSCALE_VIDEO request(s) to UPSCALE_VIDEO_LOCAL", migrated)
+            stale_upscale = await crud.fail_stale_pending_local_upscale(STALE_PENDING_LOCAL_UPSCALE_TIMEOUT)
+            if stale_upscale:
+                logger.warning(
+                    "Stopped %d stale PENDING UPSCALE_VIDEO_LOCAL request(s) on startup (timeout=%ss)",
+                    stale_upscale,
+                    STALE_PENDING_LOCAL_UPSCALE_TIMEOUT,
+                )
             stale = await crud.list_requests(status="PROCESSING")
             for req in stale:
                 await crud.update_request(req["id"], status="PENDING",
@@ -553,6 +572,10 @@ async def _process_one(
         dispatch_timeout = REQUEST_DISPATCH_TIMEOUT
         if req_type in _VIDEO_CALL_TYPES:
             dispatch_timeout = max(REQUEST_DISPATCH_TIMEOUT, VIDEO_POLL_TIMEOUT + 60)
+        if req_type in _LOCAL_UPSCALE_CALL_TYPES:
+            from agent.services.local_upscaler import local_upscale_dispatch_timeout_sec
+
+            dispatch_timeout = max(dispatch_timeout, local_upscale_dispatch_timeout_sec())
 
         result = await asyncio.wait_for(_dispatch(req, orientation), timeout=dispatch_timeout)
         if isinstance(result, dict) and result.get("pending") is True:
@@ -626,6 +649,22 @@ async def _process_one(
             # Backward-compatible aliases for older UI listeners.
             await event_bus.emit("request_completed", completed_payload)
             logger.info("Request %s COMPLETED: media=%s", rid[:8], gen_result.media_id[:20] if gen_result.media_id else "?")
+    except asyncio.TimeoutError:
+        timeout_msg = f"Dispatch timeout after {dispatch_timeout}s ({req_type})"
+        logger.error("Request %s timeout: %s", rid[:8], timeout_msg)
+        failed_payload = {
+            "id": rid,
+            "status": "FAILED",
+            "type": req_type,
+            "project_id": req.get("project_id"),
+            "video_id": req.get("video_id"),
+            "scene_id": req.get("scene_id"),
+            "character_id": req.get("character_id"),
+            "error": timeout_msg,
+        }
+        await event_bus.emit("request_update", failed_payload)
+        await event_bus.emit("request_failed", failed_payload)
+        await _handle_failure(rid, req, {"error": timeout_msg}, retry_after, group_retry_after)
     except Exception as e:
         logger.exception("Request %s exception: %s", rid[:8], e)
         failed_payload = {
@@ -803,6 +842,8 @@ async def _handle_failure(
             error_msg = "Unknown error"
     if isinstance(error_msg, dict):
         error_msg = json.dumps(error_msg)[:200]
+    if not str(error_msg).strip():
+        error_msg = "Unknown error"
 
     # Reconcile stale state: operation may have completed but app request got a transient
     # poll/read mismatch. If we can confirm SUCCESS from check-status, mark COMPLETED.
@@ -950,6 +991,17 @@ async def _handle_failure(
             )
             return
 
+    if req.get("type") in _LOCAL_UPSCALE_CALL_TYPES and "dispatch timeout" in error_lower:
+        await crud.update_request(
+            rid,
+            status="FAILED",
+            error_message=str(error_msg),
+            next_retry_at=None,
+        )
+        await _mark_scene_failed(req)
+        logger.error("Request %s local upscale dispatch-timeout => FAILED: %s", rid[:8], error_msg)
+        return
+
     retry = req.get("retry_count", 0) + 1
     if retry < MAX_RETRIES:
         now = time.time()
@@ -1034,7 +1086,7 @@ def _extract_operation_name_from_error(error_msg: str | None) -> str | None:
 async def _try_reconcile_operation_success(rid: str, req: dict, error_msg: str | None) -> bool:
     """If request has an operation id, re-check it once and recover COMPLETED state."""
     req_type = req.get("type", "")
-    if req_type not in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO"):
+    if req_type not in ("GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS"):
         return False
 
     req_row = await crud.get_request(rid)

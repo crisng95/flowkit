@@ -105,6 +105,13 @@ export default function BatchStatusBar({ videoId, type, label, lastEventType, or
     if (status.queued_pending > 0) detailParts.push(`Trong hàng đợi: ${status.queued_pending}`)
     if (status.retry_waiting > 0) detailParts.push(`Đang chờ retry: ${status.retry_waiting}`)
     const detailText = detailParts.join(' • ')
+    const hintClass = (() => {
+        const text = (status.status_hint || '').toLowerCase()
+        if (!text) return 'text-[10px] leading-tight'
+        if (text.includes('captcha') || text.includes('lỗi') || text.includes('error')) return 'text-[10px] text-red-600 leading-tight'
+        if (text.includes('retry')) return 'text-[10px] text-amber-600 leading-tight'
+        return 'text-[10px] text-[hsl(var(--muted-foreground))] leading-tight'
+    })()
 
     return (
         <div className="flex flex-col gap-1">
@@ -142,7 +149,7 @@ export default function BatchStatusBar({ videoId, type, label, lastEventType, or
                         </div>
                     )}
                     {status.status_hint && (
-                        <div className="text-[10px] text-red-600 leading-tight">{status.status_hint}</div>
+                        <div className={hintClass}>{status.status_hint}</div>
                     )}
                 </div>
             )}

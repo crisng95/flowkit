@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,14 +21,57 @@ from agent.utils.slugify import slugify
 
 logger = logging.getLogger(__name__)
 
+
+def _env_int(name: str, default: int, *, min_value: int | None = None, max_value: int | None = None) -> int:
+    raw = os.environ.get(name)
+    try:
+        value = int(raw) if raw is not None else default
+    except Exception:
+        value = default
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
 LOCAL_UPSCALE_SETUP_MARKER = "LOCAL_UPSCALE_SETUP_REQUIRED"
+DEFAULT_LOCAL_UPSCALE_ENGINE = (os.environ.get("LOCAL_UPSCALE_ENGINE", "fast").strip().lower() or "fast")
 DEFAULT_LOCAL_UPSCALE_MODEL = os.environ.get("LOCAL_UPSCALE_MODEL", "realesrgan-x4plus").strip() or "realesrgan-x4plus"
-DEFAULT_LOCAL_UPSCALE_SCALE = max(2, min(4, int(os.environ.get("LOCAL_UPSCALE_SCALE", "4"))))
-DEFAULT_LOCAL_UPSCALE_TIMEOUT_SEC = int(os.environ.get("LOCAL_UPSCALE_TIMEOUT_SEC", "1800"))
+DEFAULT_LOCAL_UPSCALE_SCALE = _env_int("LOCAL_UPSCALE_SCALE", 4, min_value=2, max_value=4)
+DEFAULT_LOCAL_UPSCALE_TIMEOUT_SEC = _env_int("LOCAL_UPSCALE_TIMEOUT_SEC", 900, min_value=120, max_value=3600)
+DEFAULT_LOCAL_UPSCALE_EXTRACT_TIMEOUT_SEC = _env_int("LOCAL_UPSCALE_EXTRACT_TIMEOUT_SEC", 480, min_value=60, max_value=1800)
+DEFAULT_LOCAL_UPSCALE_ENCODE_TIMEOUT_SEC = _env_int("LOCAL_UPSCALE_ENCODE_TIMEOUT_SEC", 600, min_value=60, max_value=2400)
 DEFAULT_LOCAL_UPSCALE_PRESET = os.environ.get("LOCAL_UPSCALE_PRESET", "slow").strip() or "slow"
+DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS = _env_int("LOCAL_UPSCALE_FFMPEG_THREADS", 1, min_value=1, max_value=16)
+DEFAULT_LOCAL_UPSCALE_REALESRGAN_JOBS = (
+    os.environ.get("LOCAL_UPSCALE_REALESRGAN_JOBS", "1:1:1").strip() or "1:1:1"
+)
+DEFAULT_LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE = _env_bool("LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE", True)
+DEFAULT_LOCAL_UPSCALE_FAST_PRESET = os.environ.get("LOCAL_UPSCALE_FAST_PRESET", "veryfast").strip() or "veryfast"
+DEFAULT_LOCAL_UPSCALE_AUTO_MAX_FRAMES = _env_int("LOCAL_UPSCALE_AUTO_MAX_FRAMES", 96, min_value=24, max_value=300)
+DEFAULT_LOCAL_UPSCALE_AUTO_MAX_DURATION_SEC = _env_int("LOCAL_UPSCALE_AUTO_MAX_DURATION_SEC", 4, min_value=2, max_value=20)
 
 _API_PUBLIC_HOST = "127.0.0.1" if API_HOST in {"0.0.0.0", "::"} else API_HOST
 _LOCAL_MEDIA_PROXY_BASE = f"http://{_API_PUBLIC_HOST}:{API_PORT}/api/flow/local-media"
+
+
+def local_upscale_dispatch_timeout_sec() -> int:
+    """Timeout budget for one local upscale request in worker dispatch."""
+    margin = _env_int("LOCAL_UPSCALE_DISPATCH_MARGIN_SEC", 90, min_value=30, max_value=600)
+    return (
+        DEFAULT_LOCAL_UPSCALE_EXTRACT_TIMEOUT_SEC
+        + DEFAULT_LOCAL_UPSCALE_TIMEOUT_SEC
+        + DEFAULT_LOCAL_UPSCALE_ENCODE_TIMEOUT_SEC
+        + margin
+    )
 
 
 @dataclass(frozen=True)
@@ -236,9 +280,19 @@ async def _run_cmd(cmd: list[str], *, timeout_sec: int, cwd: Path | None = None)
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+        with suppress(Exception):
+            proc.kill()
+        with suppress(Exception):
+            await asyncio.wait_for(proc.wait(), timeout=5)
         return False, f"timeout after {timeout_sec}s: {' '.join(cmd[:4])}..."
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            proc.kill()
+        with suppress(Exception):
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        raise RuntimeError(
+            f"Local upscale command cancelled (dispatch timeout): {' '.join(cmd[:4])}..."
+        )
     if proc.returncode != 0:
         out_tail = (stdout or b"")[-240:].decode("utf-8", errors="ignore")
         err_tail = (stderr or b"")[-480:].decode("utf-8", errors="ignore")
@@ -276,7 +330,117 @@ async def _probe_avg_fps(ffprobe_bin: str, source: str) -> str:
         return "30"
 
 
-async def _resolve_source_video(scene: dict, orientation: str, project_id: str | None) -> str | None:
+async def _probe_video_meta(ffprobe_bin: str, source: str) -> dict[str, float]:
+    cmd = [
+        ffprobe_bin,
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=avg_frame_rate,width,height:format=duration",
+        "-of",
+        "default=nokey=1:noprint_wrappers=1",
+        source,
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
+        if proc.returncode != 0:
+            return {"fps": 30.0, "duration": 0.0, "width": 0.0, "height": 0.0, "frames": 0.0}
+        lines = (stdout or b"").decode("utf-8", errors="ignore").strip().splitlines()
+        if len(lines) < 4:
+            return {"fps": 30.0, "duration": 0.0, "width": 0.0, "height": 0.0, "frames": 0.0}
+        fps_text, width_text, height_text, duration_text = lines[:4]
+        fps = 30.0
+        if "/" in fps_text:
+            num, den = fps_text.split("/", 1)
+            fps = float(num) / max(1.0, float(den))
+        elif fps_text:
+            fps = float(fps_text)
+        width = float(width_text or 0.0)
+        height = float(height_text or 0.0)
+        duration = float(duration_text or 0.0)
+        frames = max(0.0, fps * duration)
+        return {"fps": fps, "duration": duration, "width": width, "height": height, "frames": frames}
+    except Exception:
+        return {"fps": 30.0, "duration": 0.0, "width": 0.0, "height": 0.0, "frames": 0.0}
+
+
+def _choose_upscale_engine(meta: dict[str, float]) -> str:
+    engine = DEFAULT_LOCAL_UPSCALE_ENGINE
+    if engine in {"fast", "ai"}:
+        return engine
+    # auto mode: only use AI for short clips; default to fast for stability/speed.
+    frames = float(meta.get("frames", 0.0) or 0.0)
+    duration = float(meta.get("duration", 0.0) or 0.0)
+    if frames <= DEFAULT_LOCAL_UPSCALE_AUTO_MAX_FRAMES and duration <= DEFAULT_LOCAL_UPSCALE_AUTO_MAX_DURATION_SEC:
+        return "ai"
+    return "fast"
+
+
+async def _upscale_video_fast(
+    tools: LocalUpscaleTools,
+    *,
+    source: str,
+    target_w: int,
+    target_h: int,
+    fps: str,
+    output_path: Path,
+) -> tuple[bool, str]:
+    cmd = [
+        tools.ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-threads",
+        str(DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS),
+        "-i",
+        source,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-vf",
+        (
+            f"scale={target_w}:{target_h}:flags=lanczos:force_original_aspect_ratio=decrease,"
+            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2,"
+            "unsharp=5:5:0.8:3:3:0.35"
+        ),
+        "-r",
+        fps,
+        "-c:v",
+        "libx264",
+        "-preset",
+        DEFAULT_LOCAL_UPSCALE_FAST_PRESET,
+        "-crf",
+        "17",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        "-shortest",
+        str(output_path),
+    ]
+    return await _run_cmd(cmd, timeout_sec=DEFAULT_LOCAL_UPSCALE_ENCODE_TIMEOUT_SEC)
+
+
+async def _resolve_source_video(
+    scene: dict,
+    orientation: str,
+    project_id: str | None,
+    *,
+    allow_remote_fallback: bool,
+) -> str | None:
     prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
     video_url = scene.get(f"{prefix}_video_url")
     media_id = scene.get(f"{prefix}_video_media_id")
@@ -293,6 +457,9 @@ async def _resolve_source_video(scene: dict, orientation: str, project_id: str |
         local_path = _extract_local_media_path(local_url)
         if local_path and local_path.exists() and local_path.is_file():
             return str(local_path)
+
+    if not allow_remote_fallback:
+        return None
 
     if isinstance(media_id, str) and media_id and _is_direct_media_url(video_url):
         local_url = await client.cache_media_locally(media_id, video_url, project_id=normalized_pid)
@@ -333,8 +500,21 @@ async def upscale_scene_video_local(
     if not scene_id:
         return {"error": "Missing scene id for local upscale"}
 
-    source = await _resolve_source_video(scene, orientation, project_id)
+    source = await _resolve_source_video(
+        scene,
+        orientation,
+        project_id,
+        allow_remote_fallback=not DEFAULT_LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE,
+    )
     if not source:
+        if DEFAULT_LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE:
+            return {
+                "error": (
+                    "No local source video available for local upscale. "
+                    "Hay tai video local truoc (download video) hoac dat "
+                    "LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE=0 de cho phep fallback online."
+                )
+            }
         return {"error": "No source video available for local upscale"}
 
     video = await crud.get_video(scene.get("video_id")) if scene.get("video_id") else None
@@ -352,6 +532,51 @@ async def upscale_scene_video_local(
 
     target_w, target_h = (2160, 3840) if orientation == "VERTICAL" else (3840, 2160)
     fps = await _probe_avg_fps(tools.ffprobe, source)
+    video_meta = await _probe_video_meta(tools.ffprobe, source)
+    engine = _choose_upscale_engine(video_meta)
+    logger.info(
+        "Local upscale start scene=%s orientation=%s source=%s engine=%s ffmpeg_threads=%d jobs=%s frames=%.0f duration=%.2fs",
+        scene_id[:8],
+        orientation,
+        source,
+        engine,
+        DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS,
+        DEFAULT_LOCAL_UPSCALE_REALESRGAN_JOBS,
+        float(video_meta.get("frames", 0.0) or 0.0),
+        float(video_meta.get("duration", 0.0) or 0.0),
+    )
+
+    if engine == "fast":
+        ok, msg = await _upscale_video_fast(
+            tools,
+            source=source,
+            target_w=target_w,
+            target_h=target_h,
+            fps=fps,
+            output_path=output_path,
+        )
+        if not ok:
+            return {"error": f"Local upscale fast failed: {msg}"}
+        if not output_path.exists():
+            return {"error": "Local upscale fast failed: output file missing"}
+        local_url = _build_local_media_proxy_url(output_path)
+        return {
+            "data": {
+                "operations": [
+                    {
+                        "operation": {
+                            "name": f"local-upscale-{scene_id[:8]}",
+                            "metadata": {
+                                "video": {
+                                    "fifeUrl": local_url,
+                                }
+                            },
+                        },
+                        "status": "MEDIA_GENERATION_STATUS_SUCCESSFUL",
+                    }
+                ]
+            }
+        }
 
     tmp_root = OUTPUT_DIR / "_tmp" / "local_upscale"
     tmp_root.mkdir(parents=True, exist_ok=True)
@@ -369,13 +594,15 @@ async def upscale_scene_video_local(
             "-loglevel",
             "error",
             "-y",
+            "-threads",
+            str(DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS),
             "-i",
             source,
             "-vsync",
             "0",
             str(frames_in / "frame_%08d.png"),
         ]
-        ok, msg = await _run_cmd(extract_cmd, timeout_sec=900)
+        ok, msg = await _run_cmd(extract_cmd, timeout_sec=DEFAULT_LOCAL_UPSCALE_EXTRACT_TIMEOUT_SEC)
         if not ok:
             return {"error": f"Local upscale extract failed: {msg}"}
 
@@ -394,6 +621,8 @@ async def upscale_scene_video_local(
             "-m",
             str(tools.model_dir),
         ]
+        if DEFAULT_LOCAL_UPSCALE_REALESRGAN_JOBS:
+            upscale_cmd.extend(["-j", DEFAULT_LOCAL_UPSCALE_REALESRGAN_JOBS])
         ok, msg = await _run_cmd(upscale_cmd, timeout_sec=DEFAULT_LOCAL_UPSCALE_TIMEOUT_SEC)
         if not ok:
             return {"error": f"Local upscale Real-ESRGAN failed: {msg}"}
@@ -404,6 +633,8 @@ async def upscale_scene_video_local(
             "-loglevel",
             "error",
             "-y",
+            "-threads",
+            str(DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS),
             "-framerate",
             fps,
             "-i",
@@ -437,7 +668,7 @@ async def upscale_scene_video_local(
             "-shortest",
             str(output_path),
         ]
-        ok, msg = await _run_cmd(encode_cmd, timeout_sec=900)
+        ok, msg = await _run_cmd(encode_cmd, timeout_sec=DEFAULT_LOCAL_UPSCALE_ENCODE_TIMEOUT_SEC)
         if not ok:
             return {"error": f"Local upscale encode failed: {msg}"}
 
@@ -476,6 +707,12 @@ def local_upscale_health() -> dict:
             "model_dir": str(tools.model_dir),
             "model_name": tools.model_name,
             "scale": tools.scale,
+            "engine": DEFAULT_LOCAL_UPSCALE_ENGINE,
+            "fast_preset": DEFAULT_LOCAL_UPSCALE_FAST_PRESET,
+            "require_local_source": DEFAULT_LOCAL_UPSCALE_REQUIRE_LOCAL_SOURCE,
+            "ffmpeg_threads": DEFAULT_LOCAL_UPSCALE_FFMPEG_THREADS,
+            "realesrgan_jobs": DEFAULT_LOCAL_UPSCALE_REALESRGAN_JOBS,
+            "dispatch_timeout_sec": local_upscale_dispatch_timeout_sec(),
         }
     except Exception as exc:
         return {

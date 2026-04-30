@@ -99,6 +99,10 @@ def _status_hint(error_message: str | None) -> str | None:
         return "Extension mất kết nối."
     if "local_upscale_setup_required" in em:
         return "Thiếu công cụ upscale local (ffmpeg/ffprobe/realesrgan/model). Cần cấu hình trước khi chạy 4K local."
+    if "no local source video available for local upscale" in em:
+        return "Upscale local cần video nguồn đã lưu trên máy. Hãy tải video local trước rồi chạy lại."
+    if "dispatch timeout" in em and "upscale" in em:
+        return "Upscale local bị timeout khi xử lý nặng. Hệ thống đã dừng request để tránh treo máy."
     return error_message
 
 
@@ -331,11 +335,15 @@ async def batch_status(video_id: str = None, project_id: str = None,
     next_retry_ts: datetime | None = None
     hint: str | None = None
     oldest_processing_sec: int | None = None
+    processing_types: set[str] = set()
 
     for r in rows:
         s = r.get("status", "PENDING")
         counts[s] = counts.get(s, 0) + 1
         if s == "PROCESSING":
+            rt = r.get("type")
+            if isinstance(rt, str) and rt:
+                processing_types.add(rt)
             updated_at = _parse_utc(r.get("updated_at")) or _parse_utc(r.get("created_at"))
             if updated_at:
                 age = max(0, int((now - updated_at).total_seconds()))
@@ -357,8 +365,16 @@ async def batch_status(video_id: str = None, project_id: str = None,
     next_retry_in_sec = None
     if next_retry_ts:
         next_retry_in_sec = max(0, int((next_retry_ts - now).total_seconds()))
-    if not hint and oldest_processing_sec is not None and oldest_processing_sec > 60 and queued_pending > 0:
-        hint = f"Có request đang PROCESSING lâu ({oldest_processing_sec}s), có thể đang kẹt captcha/tab Flow."
+    if not hint and oldest_processing_sec is not None:
+        upscale_types = {"UPSCALE_VIDEO", "UPSCALE_VIDEO_LOCAL"}
+        if processing_types and processing_types.issubset(upscale_types):
+            if oldest_processing_sec >= 300:
+                hint = (
+                    f"Upscale local đang chạy ({oldest_processing_sec}s). "
+                    "Tác vụ này có thể mất vài phút tùy độ dài clip."
+                )
+        elif oldest_processing_sec > 120:
+            hint = f"Có request đang PROCESSING lâu ({oldest_processing_sec}s), có thể đang kẹt captcha/tab Flow."
     return BatchStatus(
         total=total,
         pending=counts["PENDING"],

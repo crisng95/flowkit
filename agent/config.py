@@ -39,6 +39,8 @@ IMAGE_API_COOLDOWN = float(os.environ.get("IMAGE_API_COOLDOWN", "12"))  # minimu
 # Video queue can run in parallel without overloading captcha as heavily as image generation.
 MAX_CONCURRENT_VIDEO_REQUESTS = int(os.environ.get("MAX_CONCURRENT_VIDEO_REQUESTS", "4"))
 VIDEO_API_COOLDOWN = float(os.environ.get("VIDEO_API_COOLDOWN", "1"))  # min gap for video submit/status jobs
+# Local 4K upscale is CPU/GPU intensive; keep strict concurrency by default.
+MAX_CONCURRENT_LOCAL_UPSCALE_REQUESTS = int(os.environ.get("MAX_CONCURRENT_LOCAL_UPSCALE_REQUESTS", "1"))
 # Ref stage (character + location) can run slightly faster than scene image stage.
 MAX_CONCURRENT_CHARACTER_REF_REQUESTS = int(os.environ.get("MAX_CONCURRENT_CHARACTER_REF_REQUESTS", "2"))
 CHARACTER_IMAGE_API_COOLDOWN = float(os.environ.get("CHARACTER_IMAGE_API_COOLDOWN", "5"))  # min gap for character/location ref ops
@@ -54,6 +56,9 @@ CAPTCHA_CONTENT_TIMEOUT_PAUSE_SEC = int(os.environ.get("CAPTCHA_CONTENT_TIMEOUT_
 OPERATION_FAILED_RETRY_BASE_SEC = int(os.environ.get("OPERATION_FAILED_RETRY_BASE_SEC", "45"))
 REQUEST_DISPATCH_TIMEOUT = int(os.environ.get("REQUEST_DISPATCH_TIMEOUT", "120"))  # per-request dispatch timeout
 STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600"))  # 10 min
+STALE_PENDING_LOCAL_UPSCALE_TIMEOUT = int(
+    os.environ.get("STALE_PENDING_LOCAL_UPSCALE_TIMEOUT", "5400")
+)  # 90 min
 FLOW_CREDITS_CACHE_TTL_SEC = int(os.environ.get("FLOW_CREDITS_CACHE_TTL_SEC", "1800"))
 FLOW_CREDITS_ERROR_TTL_SEC = int(os.environ.get("FLOW_CREDITS_ERROR_TTL_SEC", "30"))
 TIER_SYNC_MIN_INTERVAL_SEC = int(os.environ.get("TIER_SYNC_MIN_INTERVAL_SEC", "1800"))

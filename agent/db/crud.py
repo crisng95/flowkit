@@ -341,6 +341,32 @@ async def migrate_upscale_requests_to_local() -> int:
     return int(cur.rowcount or 0)
 
 
+async def fail_stale_pending_local_upscale(timeout_seconds: int = 5400) -> int:
+    """Mark very old pending local-upscale requests as FAILED to avoid restart storms."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(seconds=max(60, int(timeout_seconds)))
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    db = await get_db()
+    async with _db_lock:
+        cur = await db.execute(
+            """
+            UPDATE request
+               SET status='FAILED',
+                   next_retry_at=NULL,
+                   error_message=COALESCE(error_message, 'stale pending local upscale auto-stopped on startup'),
+                   updated_at=?
+             WHERE status='PENDING'
+               AND type='UPSCALE_VIDEO_LOCAL'
+               AND updated_at < ?
+            """,
+            (_now(), cutoff),
+        )
+        await db.commit()
+    return int(cur.rowcount or 0)
+
+
 async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5) -> list[dict]:
     """Priority-ordered fetch of PENDING requests ready to process."""
     db = await get_db()
