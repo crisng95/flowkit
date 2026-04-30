@@ -1,0 +1,429 @@
+@import "tailwindcss";
+
+/* ─── Shadcn-UI CSS Variable Layer ─────────────────────────── */
+:root {
+  /* HSL tokens (Shadcn convention) */
+  --background: 210 17% 98%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  --primary: 222 47% 11%;
+  --primary-foreground: 210 20% 98%;
+
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 210 40% 90%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 20% 98%;
+
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 222 47% 11%;
+
+  --radius: 0.375rem;
+
+  /* Chart colors */
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+
+  /* ─ Sidebar ─ */
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-primary: 222 47% 11%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 210 40% 95%;
+  --sidebar-accent-foreground: 222 47% 11%;
+  --sidebar-border: 214 32% 91%;
+  --sidebar-ring: 222 47% 11%;
+}
+
+/* ─── Backward-compatible aliases (used in existing pages) ─── */
+:root {
+  --bg: hsl(var(--background));
+  --surface: hsl(var(--card));
+  --surface-alt: hsl(var(--secondary));
+  --card-base: hsl(var(--card));
+  --card-muted: hsl(var(--secondary));
+  --border-base: hsl(var(--border));
+  --input-base: hsl(var(--input));
+  --ring-base: hsl(var(--ring));
+  --text: hsl(var(--foreground));
+  /* Legacy text-color alias — used by many components as `var(--muted)` for gray text */
+  --muted: hsl(var(--muted-foreground));
+  /* Tab/pill background alias — distinct from the legacy text alias */
+  --muted-bg: hsl(210 40% 90%);
+  --accent-dim: #1f2937;
+  --accent-soft: #eef2ff;
+  --green: #16a34a;
+  --red: hsl(var(--destructive));
+  --yellow: #d97706;
+  /* Shadows — NONE per design spec */
+  --shadow-sm: none;
+  --shadow-soft: none;
+}
+
+/* ─── Base reset ─────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Flat design — reset Tailwind shadow utility classes (keep focus rings intact) */
+.shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+  --tw-shadow: none;
+  --tw-shadow-colored: none;
+  box-shadow: none;
+}
+
+/* ─── Shadcn Tabs active trigger ────────────────────────────── */
+[role="tab"][data-state="active"] {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: none;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app-window-header {
+  height: 38px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.app-window-header[data-platform="darwin"] {
+  padding-left: 84px;
+}
+
+.app-window-title {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.app-window-btn {
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.app-window-btn:hover {
+  border-color: hsl(var(--border));
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.app-window-btn-close:hover {
+  border-color: hsl(var(--destructive));
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(215 16% 60%); }
+
+/* ─── Legacy .input utility (compact) ───────────────────────── */
+.input {
+  width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--input));
+  background: transparent;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.12);
+}
+.input::placeholder { color: hsl(var(--muted-foreground)); }
+
+textarea.input {
+  height: auto;
+  min-height: 56px;
+  padding: 6px 10px;
+  resize: vertical;
+}
+
+/* ─── FlowKit legacy shell (fk-*) ───────────────────────────── */
+.fk-app {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.fk-watermark {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: clamp(56px, 16vw, 180px);
+  color: hsl(var(--foreground) / 0.04);
+  pointer-events: none;
+  user-select: none;
+  line-height: 0.9;
+  white-space: nowrap;
+}
+
+.fk-frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+  height: 100%;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--card) / 0.72);
+}
+
+.fk-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--sidebar));
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fk-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.fk-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.fk-brand-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: hsl(var(--sidebar-foreground));
+}
+
+.fk-sidebar-block { margin-top: 10px; }
+
+.fk-label {
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.fk-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fk-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  border: 1px solid transparent;
+  transition: all 120ms ease;
+}
+
+.fk-nav-item.active {
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  font-weight: 600;
+}
+
+.fk-nav-item:not(.active):hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--sidebar-accent));
+}
+
+.fk-sidebar-footer {
+  margin-top: auto;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fk-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.fk-header-eyebrow {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+}
+
+.fk-header-title {
+  margin: 0;
+  font-size: clamp(16px, 2.5vw, 24px);
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.fk-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fk-open-flow {
+  border: 0;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.fk-content {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.fk-mobile-nav {
+  display: none;
+  gap: 4px;
+  padding: 6px;
+  overflow: auto;
+}
+
+.surface-card {
+  border-radius: 10px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.section-card {
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+@media (max-width: 1100px) {
+  .fk-watermark { display: none; }
+  .fk-frame { padding: 8px; }
+  .fk-sidebar { display: none; }
+  .fk-mobile-nav { display: flex; }
+  .fk-content { padding: 10px; }
+}

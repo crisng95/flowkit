@@ -18,8 +18,9 @@ class ProjectCreate(BaseModel):
     language: str = "en"
     user_paygate_tier: PaygateTier = "PAYGATE_TIER_ONE"
     tool_name: str = "PINHOLE"
-    material: str = Field("realistic", pattern=r"^[a-z0-9][a-z0-9_]{1,63}$")  # material ID from GET /api/materials
-    style: Optional[str] = None  # deprecated: use material instead; "3D"→"3d_pixar", "photorealistic"→"realistic"
+    material: str = Field("realistic", pattern=r"^[a-z0-9][a-z0-9_]{1,63}$")
+    orientation: str = "VERTICAL"  # VERTICAL=9:16, HORIZONTAL=16:9
+    style: Optional[str] = None
     allow_music: bool = False  # when True, skip "no background music" suffix in video prompts
     allow_voice: bool = False  # when True, keep character dialogue in video audio (suppress only music/narration)
     characters: Optional[list[CharacterInput]] = None
@@ -47,6 +48,7 @@ class ProjectUpdate(BaseModel):
     narrator_voice: Optional[str] = None
     narrator_ref_audio: Optional[str] = None
     material: Optional[str] = None
+    orientation: Optional[str] = None
     allow_music: Optional[bool] = None
     allow_voice: Optional[bool] = None
 
@@ -61,6 +63,7 @@ class Project(BaseModel):
     status: str = "ACTIVE"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
     material: Optional[str] = None
+    orientation: str = "VERTICAL"
     allow_music: bool = False
     allow_voice: bool = False
     narrator_voice: Optional[str] = None

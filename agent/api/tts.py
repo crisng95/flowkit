@@ -3,6 +3,8 @@ import asyncio
 import json
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -13,15 +15,22 @@ from agent.db.crud import get_video, list_scenes, get_project
 from agent.models.tts import (
     TTSGenerateRequest,
     TTSGenerateResponse,
+    TTSSettingsResponse,
+    TTSSettingsUpdateRequest,
+    TTSCatalogResponse,
     NarrateVideoRequest,
     NarrateVideoResponse,
     SceneNarrationResult,
     VoiceTemplateRequest,
+    VoiceTemplateImportRequest,
     VoiceTemplateResponse,
     VoiceTemplateListItem,
 )
 from agent.services.tts import generate_speech, generate_video_narration
+from agent.services.tts_catalog import load_tts_catalog
 from agent.services.post_process import add_narration
+from agent.services.tts_settings import get_tts_settings_public, update_tts_settings
+from agent.utils.orientation import normalize_orientation
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +73,35 @@ def _validate_ref_audio(ref_audio: str) -> None:
         raise HTTPException(400, "ref_audio must be within allowed directories")
 
 
+@router.get("/tts/settings", response_model=TTSSettingsResponse)
+async def get_tts_settings():
+    """Get current TTS provider settings (public-safe fields)."""
+    return TTSSettingsResponse(**get_tts_settings_public())
+
+
+@router.patch("/tts/settings", response_model=TTSSettingsResponse)
+async def patch_tts_settings(body: TTSSettingsUpdateRequest):
+    """Update TTS provider settings."""
+    update_tts_settings(
+        provider=body.provider,
+        elevenlabs_api_base=body.elevenlabs_api_base,
+        elevenlabs_api_key=body.elevenlabs_api_key,
+        clear_elevenlabs_api_key=body.clear_elevenlabs_api_key,
+        elevenlabs_model_id=body.elevenlabs_model_id,
+        elevenlabs_default_voice_id=body.elevenlabs_default_voice_id,
+        elevenlabs_timeout_sec=body.elevenlabs_timeout_sec,
+        elevenlabs_max_retries=body.elevenlabs_max_retries,
+    )
+    return TTSSettingsResponse(**get_tts_settings_public())
+
+
+@router.get("/tts/catalog", response_model=TTSCatalogResponse)
+async def get_tts_catalog(refresh: bool = False):
+    """Get provider catalog for UI dropdowns (models + voices)."""
+    data = await load_tts_catalog(force_refresh=bool(refresh))
+    return TTSCatalogResponse(**data)
+
+
 @router.post("/tts/generate", response_model=TTSGenerateResponse)
 async def tts_generate(body: TTSGenerateRequest):
     """Generate speech for a single text string. Returns path to WAV file."""
@@ -83,10 +121,12 @@ async def tts_generate(body: TTSGenerateRequest):
                 ref_audio=body.ref_audio,
                 ref_text=body.ref_text,
                 speed=body.speed,
+                voice_id=body.voice_id,
+                model_id=body.model_id,
             )
         except Exception as e:
             logger.exception("TTS generation failed")
-            raise HTTPException(500, "TTS generation failed")
+            raise HTTPException(500, str(e) or "TTS generation failed")
 
     duration = _wav_duration(audio_path)
     return TTSGenerateResponse(audio_path=audio_path, duration=duration)
@@ -128,6 +168,8 @@ async def narrate_video(vid: str, body: NarrateVideoRequest):
     instruct = body.instruct or project.get("narrator_voice")
     ref_audio = body.ref_audio or project.get("narrator_ref_audio")
     ref_text = body.ref_text
+    voice_id = body.voice_id
+    model_id = body.model_id
 
     if body.template:
         meta = _load_templates_meta()
@@ -136,6 +178,10 @@ async def narrate_video(vid: str, body: NarrateVideoRequest):
         tmpl = meta[body.template]
         ref_audio = tmpl["audio_path"]
         ref_text = tmpl.get("text")
+        if not voice_id:
+            voice_id = tmpl.get("voice_id")
+        if not model_id:
+            model_id = tmpl.get("model_id")
         logger.info("Using voice template '%s' as reference", body.template)
     elif ref_audio and not ref_text:
         # Try to auto-resolve ref_text from template metadata
@@ -143,6 +189,10 @@ async def narrate_video(vid: str, body: NarrateVideoRequest):
         for tmpl in meta.values():
             if tmpl["audio_path"] == ref_audio:
                 ref_text = tmpl.get("text")
+                if not voice_id:
+                    voice_id = tmpl.get("voice_id")
+                if not model_id:
+                    model_id = tmpl.get("model_id")
                 logger.info("Auto-resolved ref_text from template '%s'", tmpl["name"])
                 break
 
@@ -161,9 +211,11 @@ async def narrate_video(vid: str, body: NarrateVideoRequest):
             ref_audio=ref_audio,
             ref_text=ref_text,
             speed=body.speed,
+            voice_id=voice_id,
+            model_id=model_id,
         )
 
-    orientation = body.orientation.upper()
+    orientation = normalize_orientation(body.orientation)
 
     scene_results = []
     for r in raw_results:
@@ -230,10 +282,12 @@ async def create_voice_template(body: VoiceTemplateRequest):
                 output_path=wav_path,
                 instruct=body.instruct,
                 speed=body.speed,
+                voice_id=body.voice_id,
+                model_id=body.model_id,
             )
         except Exception as e:
             logger.exception("Voice template generation failed")
-            raise HTTPException(500, "Voice template generation failed")
+            raise HTTPException(500, str(e) or "Voice template generation failed")
 
     duration = _wav_duration(wav_path)
 
@@ -244,13 +298,84 @@ async def create_voice_template(body: VoiceTemplateRequest):
         "audio_path": wav_path,
         "text": body.text,
         "instruct": body.instruct,
+        "voice_id": body.voice_id or "",
+        "model_id": body.model_id or "",
         "duration": duration,
     }
     _save_templates_meta(meta)
 
     return VoiceTemplateResponse(
         name=body.name, audio_path=wav_path, text=body.text,
-        instruct=body.instruct, duration=duration,
+        instruct=body.instruct, voice_id=body.voice_id, model_id=body.model_id, duration=duration,
+    )
+
+
+@router.post("/tts/templates/import", response_model=VoiceTemplateResponse)
+async def import_voice_template(body: VoiceTemplateImportRequest):
+    """Import an existing local audio file as a template (fk:import-voice parity)."""
+    _validate_template_name(body.name)
+
+    src = Path(body.audio_path).expanduser().resolve()
+    if not src.exists():
+        raise HTTPException(404, f"Audio file not found: {body.audio_path}")
+    if not src.is_file():
+        raise HTTPException(400, "audio_path must be a file")
+
+    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    target = (TEMPLATES_DIR / f"{body.name}.wav").resolve()
+
+    # Import strategy:
+    # - copy WAV directly when allowed
+    # - otherwise transcode to 24k WAV for OmniVoice compatibility
+    if src.suffix.lower() == ".wav" and body.copy_audio:
+        try:
+            shutil.copyfile(src, target)
+        except Exception as e:
+            logger.exception("Failed to copy template audio")
+            raise HTTPException(500, f"Failed to import template audio: {e}")
+    else:
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(src),
+            "-ar",
+            "24000",
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            str(target),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except Exception as e:
+            raise HTTPException(500, f"ffmpeg failed while importing voice template: {e}")
+        if result.returncode != 0:
+            logger.error("ffmpeg import failed: %s", (result.stderr or "")[-400:])
+            raise HTTPException(500, "Failed to convert audio to WAV for template import")
+
+    duration = _wav_duration(str(target))
+    meta = _load_templates_meta()
+    meta[body.name] = {
+        "name": body.name,
+        "audio_path": str(target),
+        "text": body.text,
+        "instruct": body.instruct,
+        "voice_id": body.voice_id or "",
+        "model_id": body.model_id or "",
+        "duration": duration,
+    }
+    _save_templates_meta(meta)
+
+    return VoiceTemplateResponse(
+        name=body.name,
+        audio_path=str(target),
+        text=body.text,
+        instruct=body.instruct,
+        voice_id=body.voice_id,
+        model_id=body.model_id,
+        duration=duration,
     )
 
 
@@ -259,7 +384,13 @@ async def list_voice_templates():
     """List all saved voice templates."""
     meta = _load_templates_meta()
     return [
-        VoiceTemplateListItem(name=v["name"], audio_path=v["audio_path"], duration=v.get("duration"))
+        VoiceTemplateListItem(
+            name=v["name"],
+            audio_path=v["audio_path"],
+            voice_id=v.get("voice_id"),
+            model_id=v.get("model_id"),
+            duration=v.get("duration"),
+        )
         for v in meta.values()
     ]
 

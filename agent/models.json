@@ -3,15 +3,15 @@
     "PAYGATE_TIER_TWO": {
       "frame_2_video": {
         "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast_ultra_relaxed",
-        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_ultra_relaxed"
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait_ultra_relaxed"
       },
       "start_end_frame_2_video": {
         "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast_ultra_relaxed",
-        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_ultra_relaxed"
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait_fl_ultra_relaxed"
       },
       "reference_frame_2_video": {
         "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_r2v_fast_landscape_ultra_relaxed",
-        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_landscape_ultra_relaxed"
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_portrait_ultra_relaxed"
       }
     },
     "PAYGATE_TIER_ONE": {

@@ -3,9 +3,19 @@
   "name": "Flow Kit",
   "version": "0.2.0",
   "description": "Local agent bridge for Google Flow API — captures tokens, solves reCAPTCHA, proxies API calls",
-  "permissions": ["storage", "alarms", "tabs", "webRequest", "scripting", "declarativeNetRequest", "sidePanel"],
+  "permissions": ["storage", "alarms", "tabs", "activeTab", "webRequest", "scripting", "declarativeNetRequest"],
   "host_permissions": [
+    "<all_urls>",
     "https://labs.google/*",
+    "https://flow.google.com/*",
+    "https://*.flow.google.com/*",
+    "https://*.google/*",
+    "https://accounts.google.com/*",
+    "https://*.google.com/*",
+    "https://www.gstatic.com/*",
+    "https://*.gstatic.com/*",
+    "https://recaptcha.net/*",
+    "https://*.recaptcha.net/*",
     "https://aisandbox-pa.googleapis.com/*",
     "http://127.0.0.1:8100/*"
   ],
@@ -15,8 +25,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://labs.google/fx/tools/flow*",
-        "https://labs.google/fx/*/tools/flow*"
+        "https://labs.google/*",
+        "https://*.labs.google/*",
+        "https://flow.google.com/*",
+        "https://*.flow.google.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"
@@ -25,7 +37,12 @@
   "web_accessible_resources": [
     {
       "resources": ["injected.js"],
-      "matches": ["https://labs.google/*"]
+      "matches": [
+        "https://labs.google/*",
+        "https://*.labs.google/*",
+        "https://flow.google.com/*",
+        "https://*.flow.google.com/*"
+      ]
     }
   ],
   "declarative_net_request": {

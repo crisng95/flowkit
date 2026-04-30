@@ -1,0 +1,109 @@
+name: Build FlowKit Desktop (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v0.2.0)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            agent
+            extension
+            desktop
+            requirements.txt
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pip install pillow
+
+      - name: Ensure Windows icon exists
+        shell: bash
+        run: |
+          if [ ! -f "desktop/resources/icon.ico" ]; then
+            python -c "from PIL import Image; img=Image.open('desktop/resources/icon.png').convert('RGBA'); s=min(img.size); left=(img.width-s)//2; top=(img.height-s)//2; img=img.crop((left, top, left+s, top+s)); img.save('desktop/resources/icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]); print('Generated square desktop/resources/icon.ico')"
+          fi
+
+      - name: Bundle Python agent with PyInstaller
+        shell: bash
+        run: |
+          rm -rf desktop/resources/agent
+          mkdir -p desktop/resources/agent
+          pyinstaller \
+            --noconfirm \
+            --onefile \
+            --name flowkit-agent \
+            --distpath desktop/resources/agent \
+            --workpath /tmp/flowkit-build \
+            --add-data "agent;agent" \
+            --hidden-import uvicorn \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols \
+            --hidden-import uvicorn.protocols.http \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import websockets \
+            agent/main.py
+          if [ -f desktop/resources/agent/flowkit-agent ] && [ ! -f desktop/resources/agent/flowkit-agent.exe ]; then
+            mv desktop/resources/agent/flowkit-agent desktop/resources/agent/flowkit-agent.exe
+          fi
+          test -f desktop/resources/agent/flowkit-agent.exe
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: desktop
+        run: npm install --legacy-peer-deps
+
+      - name: Build Electron app (Windows)
+        working-directory: desktop
+        run: |
+          npm run build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowkit-windows-installer
+          path: desktop/dist/*.exe
+          retention-days: 30
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        uses: softprops/action-gh-release@v1
+        with:
+          files: desktop/dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

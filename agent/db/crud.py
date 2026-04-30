@@ -18,7 +18,7 @@ def _validate_table(table: str) -> None:
 # Column whitelists per table — prevents SQL injection via kwargs keys
 _COLUMNS = {
     "character": {"name", "slug", "entity_type", "description", "image_prompt", "voice_description", "reference_image_url", "media_id", "updated_at"},
-    "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "narrator_voice", "narrator_ref_audio", "material", "allow_music", "allow_voice", "updated_at"},
+    "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "narrator_voice", "narrator_ref_audio", "material", "orientation", "allow_music", "allow_voice", "updated_at"},
     "video": {"title", "description", "display_order", "status", "orientation", "vertical_url", "horizontal_url",
               "thumbnail_url", "duration", "resolution", "youtube_id", "privacy", "tags", "updated_at"},
     "scene": {"prompt", "image_prompt", "video_prompt", "character_names", "parent_scene_id", "chain_type",
@@ -111,13 +111,13 @@ async def list_characters() -> list[dict]:
 
 # ─── Project ────────────────────────────────────────────────
 
-async def create_project(name: str, description: str = None, story: str = None, language: str = "en", user_paygate_tier: str = "PAYGATE_TIER_ONE", id: str = None, material: str = None, allow_music: bool = False, allow_voice: bool = False) -> dict:
+async def create_project(name: str, description: str = None, story: str = None, language: str = "en", user_paygate_tier: str = "PAYGATE_TIER_ONE", id: str = None, material: str = None, orientation: str = "VERTICAL", allow_music: bool = False, allow_voice: bool = False) -> dict:
     db = await get_db()
     pid, now = id or _uuid(), _now()
     async with _db_lock:
         await db.execute(
-            "INSERT INTO project (id,name,description,story,language,user_paygate_tier,material,allow_music,allow_voice,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (pid, name, description, story, language, user_paygate_tier, material, int(allow_music), int(allow_voice), now, now))
+            "INSERT INTO project (id,name,description,story,language,user_paygate_tier,material,orientation,allow_music,allow_voice,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (pid, name, description, story, language, user_paygate_tier, material, orientation, int(allow_music), int(allow_voice), now, now))
         await db.commit()
     return await _get_with_db(db, "project", "id", pid)
 
@@ -188,18 +188,20 @@ async def create_scene(video_id: str, display_order: int, prompt: str,
                        transition_prompt: str = None,
                        character_names: list[str] = None,
                        parent_scene_id: str = None, chain_type: str = "ROOT",
-                       source: str = "root") -> dict:
+                       source: str = "root",
+                       narrator_text: str = None) -> dict:
     db = await get_db()
     sid, now = _uuid(), _now()
     chars_json = json.dumps(character_names) if character_names else None
     async with _db_lock:
         await db.execute(
             """INSERT INTO scene (id,video_id,display_order,prompt,image_prompt,video_prompt,transition_prompt,character_names,
-               parent_scene_id,chain_type,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               parent_scene_id,chain_type,source,narrator_text,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (sid, video_id, display_order, prompt, image_prompt, video_prompt, transition_prompt, chars_json,
-             parent_scene_id, chain_type, source, now, now))
+             parent_scene_id, chain_type, source, narrator_text, now, now))
         await db.commit()
     return await _get_with_db(db, "scene", "id", sid)
+
 
 async def get_scene(sid: str): return await _get("scene", "id", sid)
 async def update_scene(sid: str, **kw): return await _update("scene", "id", sid, **kw)
@@ -228,6 +230,53 @@ async def list_characters_by_media_id(media_id: str) -> list[dict]:
     db = await get_db()
     cur = await db.execute("SELECT * FROM character WHERE media_id=?", (media_id,))
     return [dict(r) for r in await cur.fetchall()]
+
+
+async def clear_redirect_media_urls() -> dict:
+    """Clear unstable TRPC redirect URLs so UI will fetch fresh signed URLs.
+
+    Redirect URLs (media.getMediaUrlRedirect) can break after restart/session change.
+    We keep media_id and reset URL slots to NULL, forcing refresh on demand.
+    """
+    db = await get_db()
+    now = _now()
+    scene_fields = (
+        "vertical_image_url",
+        "horizontal_image_url",
+        "vertical_video_url",
+        "horizontal_video_url",
+        "vertical_upscale_url",
+        "horizontal_upscale_url",
+    )
+    scene_slots_cleared = 0
+    characters_cleared = 0
+    async with _db_lock:
+        for field in scene_fields:
+            cur = await db.execute(
+                f"""
+                UPDATE scene
+                   SET {field}=NULL, updated_at=?
+                 WHERE {field} LIKE '%media.getMediaUrlRedirect%'
+                """,
+                (now,),
+            )
+            scene_slots_cleared += int(cur.rowcount or 0)
+
+        cur = await db.execute(
+            """
+            UPDATE character
+               SET reference_image_url=NULL, updated_at=?
+             WHERE reference_image_url LIKE '%media.getMediaUrlRedirect%'
+            """,
+            (now,),
+        )
+        characters_cleared = int(cur.rowcount or 0)
+        await db.commit()
+
+    return {
+        "scene_slots_cleared": scene_slots_cleared,
+        "characters_cleared": characters_cleared,
+    }
 
 
 # ─── Request ────────────────────────────────────────────────
@@ -271,6 +320,53 @@ async def list_pending_requests() -> list[dict]:
     return [dict(r) for r in await cur.fetchall()]
 
 
+async def migrate_upscale_requests_to_local() -> int:
+    """Back-compat: convert legacy UPSCALE_VIDEO rows to UPSCALE_VIDEO_LOCAL."""
+    db = await get_db()
+    now = _now()
+    async with _db_lock:
+        cur = await db.execute(
+            """
+            UPDATE request
+               SET type='UPSCALE_VIDEO_LOCAL',
+                   updated_at=?,
+                   next_retry_at=CASE WHEN status='PENDING' THEN NULL ELSE next_retry_at END,
+                   retry_count=CASE WHEN status='PENDING' THEN 0 ELSE retry_count END,
+                   error_message=CASE WHEN status='PENDING' THEN 'migrated to local upscale' ELSE error_message END
+             WHERE type='UPSCALE_VIDEO'
+            """,
+            (now,),
+        )
+        await db.commit()
+    return int(cur.rowcount or 0)
+
+
+async def fail_stale_pending_local_upscale(timeout_seconds: int = 5400) -> int:
+    """Mark very old pending local-upscale requests as FAILED to avoid restart storms."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(seconds=max(60, int(timeout_seconds)))
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    db = await get_db()
+    async with _db_lock:
+        cur = await db.execute(
+            """
+            UPDATE request
+               SET status='FAILED',
+                   next_retry_at=NULL,
+                   error_message=COALESCE(error_message, 'stale pending local upscale auto-stopped on startup'),
+                   updated_at=?
+             WHERE status='PENDING'
+               AND type='UPSCALE_VIDEO_LOCAL'
+               AND updated_at < ?
+            """,
+            (_now(), cutoff),
+        )
+        await db.commit()
+    return int(cur.rowcount or 0)
+
+
 async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5) -> list[dict]:
     """Priority-ordered fetch of PENDING requests ready to process."""
     db = await get_db()
@@ -283,6 +379,11 @@ async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5)
         WHERE status = 'PENDING'
           AND (next_retry_at IS NULL OR next_retry_at <= ?)
         ORDER BY
+          CASE
+            WHEN type IN ('GENERATE_VIDEO','REGENERATE_VIDEO','GENERATE_VIDEO_REFS','UPSCALE_VIDEO')
+              AND request_id IS NOT NULL THEN 1
+            ELSE 0
+          END,
           CASE type
             WHEN 'GENERATE_CHARACTER_IMAGE' THEN 0
             WHEN 'REGENERATE_CHARACTER_IMAGE' THEN 0
@@ -293,6 +394,7 @@ async def list_actionable_requests(exclude_ids: set[str] = None, limit: int = 5)
             WHEN 'GENERATE_VIDEO' THEN 2
             WHEN 'GENERATE_VIDEO_REFS' THEN 2
             WHEN 'UPSCALE_VIDEO' THEN 3
+            WHEN 'UPSCALE_VIDEO_LOCAL' THEN 3
             ELSE 2
           END,
           created_at ASC

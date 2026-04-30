@@ -14,6 +14,7 @@ class SceneCreate(BaseModel):
     parent_scene_id: Optional[str] = None
     chain_type: ChainType = "ROOT"
     source: Optional[SceneSource] = None
+    narrator_text: Optional[str] = None   # <-- allows narrator text at creation time
 
 
 class SceneUpdate(BaseModel):
@@ -98,6 +99,8 @@ class Scene(BaseModel):
     trim_end: Optional[float] = None
     duration: Optional[float] = None
     narrator_text: Optional[str] = None
+    tts_status: str = "PENDING"
+    tts_audio_path: Optional[str] = None
 
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

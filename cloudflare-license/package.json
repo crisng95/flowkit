@@ -1,0 +1,17 @@
+{
+  "name": "flowkit-license-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "d1:migrate:local": "wrangler d1 migrations apply flowkit_license --local",
+    "d1:migrate:remote": "wrangler d1 migrations apply flowkit_license --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260415.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.13.2"
+  }
+}

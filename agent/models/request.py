@@ -21,7 +21,7 @@ class RequestCreate(BaseModel):
             if not self.project_id:
                 raise ValueError(f"project_id is required for {req_type}")
         elif req_type in ("GENERATE_IMAGE", "REGENERATE_IMAGE", "EDIT_IMAGE",
-                          "GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO"):
+                          "GENERATE_VIDEO", "REGENERATE_VIDEO", "GENERATE_VIDEO_REFS", "UPSCALE_VIDEO", "UPSCALE_VIDEO_LOCAL"):
             if not self.scene_id:
                 raise ValueError(f"scene_id is required for {req_type}")
             if not self.project_id:
@@ -45,6 +45,7 @@ class Request(BaseModel):
     output_url: Optional[str] = None
     error_message: Optional[str] = None
     retry_count: int = 0
+    next_retry_at: Optional[str] = None
     source_media_id: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

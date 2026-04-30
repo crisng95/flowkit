@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from typing import Any
 
 import aiohttp
 from fastapi import APIRouter, HTTPException
@@ -12,7 +13,9 @@ from agent.models.project import Project, ProjectCreate, ProjectUpdate
 from agent.models.character import Character
 from agent.sdk.persistence.sqlite_repository import SQLiteRepository
 from agent.services.flow_client import get_flow_client
+from agent.services.event_bus import event_bus
 from agent.utils.slugify import slugify
+from agent.utils.orientation import normalize_orientation
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +132,60 @@ def _get_repo() -> SQLiteRepository:
     return SQLiteRepository()
 
 
+def _walk_values(node: Any):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _walk_values(value)
+        return
+    if isinstance(node, list):
+        for item in node:
+            yield from _walk_values(item)
+
+
+def _extract_project_id_from_flow_response(flow_result: dict) -> str | None:
+    """Extract projectId from multiple known/legacy tRPC response shapes."""
+    payload = flow_result.get("data", flow_result)
+
+    candidates: list[str] = []
+    for obj in _walk_values(payload):
+        if not isinstance(obj, dict):
+            continue
+        pid = obj.get("projectId")
+        if isinstance(pid, str) and pid.strip():
+            candidates.append(pid.strip())
+
+    # Preserve order while de-duplicating.
+    unique = list(dict.fromkeys(candidates))
+    if not unique:
+        return None
+    if len(unique) > 1:
+        logger.warning("Multiple projectId candidates in Flow response, using first: %s", unique)
+    return unique[0]
+
+
+def _extract_flow_error_text(flow_result: dict) -> str | None:
+    payload = flow_result.get("data", flow_result)
+    for obj in _walk_values(payload):
+        if not isinstance(obj, dict):
+            continue
+        # tRPC errors are often under error.json.message
+        err = obj.get("error")
+        if isinstance(err, str) and err.strip():
+            return err.strip()
+        if isinstance(err, dict):
+            for key in ("message",):
+                msg = err.get(key)
+                if isinstance(msg, str) and msg.strip():
+                    return msg.strip()
+            err_json = err.get("json")
+            if isinstance(err_json, dict):
+                msg = err_json.get("message")
+                if isinstance(msg, str) and msg.strip():
+                    return msg.strip()
+    return None
+
+
 @router.post("", response_model=Project)
 async def create(body: ProjectCreate):
     from agent.materials import get_material
@@ -158,13 +215,18 @@ async def create(body: ProjectCreate):
     if flow_result.get("error"):
         raise HTTPException(502, f"Flow API error: {flow_result['error']}")
 
-    try:
-        data = flow_result.get("data", {})
-        result = data["result"]["data"]["json"]["result"]
-        flow_project_id = result["projectId"]
-    except (KeyError, TypeError) as e:
+    status = flow_result.get("status")
+    if isinstance(status, int) and status >= 400:
+        err_msg = _extract_flow_error_text(flow_result) or "Unknown Flow error"
+        raise HTTPException(502, f"Flow createProject failed (HTTP {status}): {err_msg}")
+
+    flow_project_id = _extract_project_id_from_flow_response(flow_result)
+    if not flow_project_id:
         logger.error("Unexpected Flow response: %s", flow_result)
-        raise HTTPException(502, f"Failed to parse Flow response: {e}")
+        err_msg = _extract_flow_error_text(flow_result)
+        if err_msg:
+            raise HTTPException(502, f"Flow createProject failed: {err_msg}")
+        raise HTTPException(502, "Failed to parse Flow response: projectId not found")
 
     logger.info("Flow project created: %s", flow_project_id)
 
@@ -184,6 +246,7 @@ async def create(body: ProjectCreate):
         language=create_data.get("language", "en"),
         user_paygate_tier=detected_tier,
         material=material_id,
+        orientation=normalize_orientation(create_data.get("orientation", "VERTICAL")),
         allow_music=create_data.get("allow_music", False),
         allow_voice=create_data.get("allow_voice", False),
     )
@@ -212,6 +275,7 @@ async def create(body: ProjectCreate):
             await repo.link_character_to_project(flow_project_id, char.id)
             logger.info("%s '%s' created and linked: %s", etype, char_input["name"], char.id)
 
+    await event_bus.emit("project_created", {"id": project.id, "name": project.name})
     return project
 
 
@@ -234,10 +298,15 @@ async def get(pid: str):
 @router.patch("/{pid}", response_model=Project)
 async def update(pid: str, body: ProjectUpdate):
     repo = _get_repo()
-    row = await repo.update("project", pid, **body.model_dump(exclude_unset=True))
+    update_data = body.model_dump(exclude_unset=True)
+    if update_data.get("orientation"):
+        update_data["orientation"] = normalize_orientation(update_data["orientation"])
+    row = await repo.update("project", pid, **update_data)
     if not row:
         raise HTTPException(404, "Project not found")
-    return repo._row_to_project(row)
+    project = repo._row_to_project(row)
+    await event_bus.emit("project_updated", {"id": project.id, "name": project.name})
+    return project
 
 
 @router.delete("/{pid}")
@@ -245,6 +314,7 @@ async def delete(pid: str):
     repo = _get_repo()
     if not await repo.delete_project(pid):
         raise HTTPException(404, "Project not found")
+    await event_bus.emit("project_deleted", {"id": pid})
     return {"ok": True}
 
 
@@ -253,6 +323,7 @@ async def link_character(pid: str, cid: str):
     repo = _get_repo()
     if not await repo.link_character_to_project(pid, cid):
         raise HTTPException(400, "Failed to link character")
+    await event_bus.emit("character_linked", {"project_id": pid, "character_id": cid})
     return {"ok": True}
 
 
@@ -261,6 +332,7 @@ async def unlink_character(pid: str, cid: str):
     repo = _get_repo()
     if not await repo.unlink_character_from_project(pid, cid):
         raise HTTPException(404, "Link not found")
+    await event_bus.emit("character_unlinked", {"project_id": pid, "character_id": cid})
     return {"ok": True}
 
 
@@ -293,8 +365,10 @@ async def get_output_dir(pid: str):
         scenes = await repo.list_scenes(video_id)
         scene_count = len(scenes) if scenes else 0
 
-    # Orientation lives on the video table, not project
-    video_orientation = (getattr(video, "orientation", None) if video else None) or "VERTICAL"
+    # Prefer video orientation when a video exists, otherwise project orientation.
+    video_orientation = normalize_orientation(
+        (getattr(video, "orientation", None) if video else None) or getattr(project, "orientation", None) or "VERTICAL"
+    )
 
     now = datetime.now(timezone.utc).isoformat()
     meta = {
@@ -332,8 +406,12 @@ class ThumbnailRequest(BaseModel):
 class ThumbnailResponse(BaseModel):
     success: bool
     media_id: str | None = None
+    # API contract (new)
     image_url: str | None = None
     output_path: str | None = None
+    # Backward-compatible aliases expected by older UI
+    url: str | None = None
+    local_path: str | None = None
     prompt: str | None = None
     error: str | None = None
 
@@ -423,5 +501,7 @@ async def generate_thumbnail(pid: str, body: ThumbnailRequest):
         media_id=gen_result.media_id,
         image_url=gen_result.url,
         output_path=str(output_path),
+        url=gen_result.url,
+        local_path=str(output_path),
         prompt=full_prompt,
     )

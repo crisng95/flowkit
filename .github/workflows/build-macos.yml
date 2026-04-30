@@ -1,0 +1,117 @@
+name: Build FlowKit Desktop (macOS)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v0.2.0)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            agent
+            extension
+            desktop
+            requirements.txt
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pip install pillow
+
+      - name: Ensure macOS icon exists
+        shell: bash
+        run: |
+          if [ ! -f "desktop/resources/icon.icns" ]; then
+            python -c "from PIL import Image; img=Image.open('desktop/resources/icon.png').convert('RGBA'); w,h=img.size; s=min(w,h); left=(w-s)//2; top=(h-s)//2; img=img.crop((left,top,left+s,top+s)).resize((1024,1024), Image.Resampling.LANCZOS); img.save('/tmp/flowkit-square.png'); print('Generated /tmp/flowkit-square.png', img.size)"
+            mkdir -p /tmp/flowkit.iconset
+            sips -z 16 16     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16.png
+            sips -z 32 32     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_16x16@2x.png
+            sips -z 32 32     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_32x32.png
+            sips -z 64 64     /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_32x32@2x.png
+            sips -z 128 128   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_128x128.png
+            sips -z 256 256   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_128x128@2x.png
+            sips -z 256 256   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_256x256.png
+            sips -z 512 512   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_256x256@2x.png
+            sips -z 512 512   /tmp/flowkit-square.png --out /tmp/flowkit.iconset/icon_512x512.png
+            cp /tmp/flowkit-square.png /tmp/flowkit.iconset/icon_512x512@2x.png
+            iconutil -c icns /tmp/flowkit.iconset -o desktop/resources/icon.icns
+          fi
+
+      - name: Bundle Python agent with PyInstaller
+        shell: bash
+        run: |
+          rm -rf desktop/resources/agent
+          mkdir -p desktop/resources/agent
+          pyinstaller \
+            --noconfirm \
+            --onefile \
+            --name flowkit-agent \
+            --distpath desktop/resources/agent \
+            --workpath /tmp/flowkit-build \
+            --add-data "agent:agent" \
+            --hidden-import uvicorn \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols \
+            --hidden-import uvicorn.protocols.http \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import websockets \
+            agent/main.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: desktop
+        run: npm install --legacy-peer-deps
+
+      - name: Build Electron app (macOS)
+        working-directory: desktop
+        run: |
+          npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowkit-macos-installer
+          path: desktop/dist/*.dmg
+          retention-days: 30
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        uses: softprops/action-gh-release@v1
+        with:
+          files: desktop/dist/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

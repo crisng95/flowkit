@@ -67,8 +67,13 @@ def merge_videos(video_paths: list[str], output_path: str) -> bool:
 
 def add_narration(video_path: str, narration_path: str, output_path: str,
                   narration_volume: float = 1.0, sfx_volume: float = 0.4,
-                  fade_in: float = 0.5, fade_out: float = 0.5) -> bool:
-    """Overlay narration audio on video, ducking the existing SFX track."""
+                  fade_in: float = 0.5, fade_out: float = 0.5,
+                  replace_original: bool = False) -> bool:
+    """Add narration audio on video.
+
+    replace_original=False: mix narration with original SFX track.
+    replace_original=True: replace original audio track with narration.
+    """
     if not Path(video_path).exists():
         logger.error("add_narration: video file not found: %s", video_path)
         return False
@@ -93,16 +98,28 @@ def add_narration(video_path: str, narration_path: str, output_path: str,
         return False
     fade_start = max(0, duration - fade_out)
 
-    cmd = [
-        "ffmpeg", "-y", "-i", video_path, "-i", narration_path,
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-        "-filter_complex",
-        f"[0:a]volume={sfx_volume}[sfx];[1:a]volume={narration_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_start}:d={fade_out}[narr];[sfx][narr]amerge=inputs=2,pan=stereo|c0=c0+c2|c1=c1+c3[aout]",
-        "-map", "0:v", "-map", "[aout]",
-        "-shortest",
-        "-movflags", "+faststart",
-        output_path,
-    ]
+    if replace_original:
+        cmd = [
+            "ffmpeg", "-y", "-i", video_path, "-i", narration_path,
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-filter_complex",
+            f"[1:a]volume={narration_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_start}:d={fade_out},apad[aout]",
+            "-map", "0:v", "-map", "[aout]",
+            "-shortest",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-y", "-i", video_path, "-i", narration_path,
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-filter_complex",
+            f"[0:a]volume={sfx_volume}[sfx];[1:a]volume={narration_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_start}:d={fade_out}[narr];[sfx][narr]amerge=inputs=2,pan=stereo|c0=c0+c2|c1=c1+c3[aout]",
+            "-map", "0:v", "-map", "[aout]",
+            "-shortest",
+            "-movflags", "+faststart",
+            output_path,
+        ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
         logger.error("Add narration failed: %s", result.stderr[-200:])

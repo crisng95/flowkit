@@ -36,6 +36,29 @@ const TYPE_LABELS = {
   API:                      'API',
 };
 
+let _activeProjectId = '';
+let _projectPollTimer = null;
+let _keepAlivePort = null;
+let _keepAliveTimer = null;
+let _lastReconnectKickAt = 0;
+const PROJECT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeProjectId(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  return PROJECT_ID_RE.test(raw) ? raw : '';
+}
+
+function inferProjectIdFromEntries(entries) {
+  if (!Array.isArray(entries)) return '';
+  for (const entry of entries) {
+    const pid = normalizeProjectId(
+      entry?.projectId || entry?.project_id || entry?.project || '',
+    );
+    if (pid) return pid;
+  }
+  return '';
+}
+
 function formatType(type) {
   if (!type) return '—';
   return TYPE_LABELS[type] || type.slice(0, 5).toUpperCase();
@@ -69,7 +92,7 @@ function updateStatus(data) {
   // Toggle state
   const toggle = document.getElementById('main-toggle');
   const toggleLabel = document.getElementById('toggle-label');
-  const isOn = data.state !== 'off';
+  const isOn = !data.manualDisconnect;
   toggle.checked = isOn;
   toggleLabel.textContent = isOn ? 'ON' : 'OFF';
 
@@ -81,18 +104,36 @@ function updateStatus(data) {
 
   // Token status
   const tokenEl = document.getElementById('token-status');
+  const tokenAuthState = String(
+    data.tokenAuthState
+    || data.metrics?.tokenAuthState
+    || 'unknown',
+  );
+  const tokenAuthError = String(
+    data.tokenAuthError
+    || data.metrics?.tokenAuthError
+    || '',
+  );
   if (data.flowKeyPresent) {
     const ageMs = data.tokenAge || 0;
     const ageMin = Math.round(ageMs / 60000);
-    if (ageMs > 3600000) {
-      tokenEl.textContent = `token expired — open Flow to refresh`;
+    if (tokenAuthState === 'invalid') {
+      tokenEl.textContent = tokenAuthError
+        ? `token invalid (${tokenAuthError}) — open Flow to refresh`
+        : 'token expired/invalid — open Flow to refresh';
+      tokenEl.className = 'bad';
+    } else if (tokenAuthState === 'valid') {
+      tokenEl.textContent = `token valid · synced ${ageMin}m`;
+      tokenEl.className = 'ok';
+    } else if (ageMs > 3600000) {
+      tokenEl.textContent = `token stale ${ageMin}m — open Flow to refresh`;
       tokenEl.className = 'warn';
     } else {
-      tokenEl.textContent = `token synced ${ageMin}m`;
-      tokenEl.className = 'ok';
+      tokenEl.textContent = `token synced ${ageMin}m (pending verify)`;
+      tokenEl.className = 'warn';
     }
-    // Auto-refresh when token age > 55 min and connected
-    if (ageMs > 3300000 && data.agentConnected) {
+    // Auto-refresh when token age > 55 min and not yet verified valid.
+    if (ageMs > 3300000 && data.agentConnected && tokenAuthState !== 'valid') {
       chrome.runtime.sendMessage({ type: 'REFRESH_TOKEN' });
     }
   } else {
@@ -105,6 +146,20 @@ function updateStatus(data) {
   document.getElementById('m-total').textContent   = m.requestCount || 0;
   document.getElementById('m-success').textContent = m.successCount || 0;
   document.getElementById('m-failed').textContent  = m.failedCount  || 0;
+
+  const runtimeProjectId = normalizeProjectId(data.activeProjectId);
+  if (runtimeProjectId) {
+    setProjectId(runtimeProjectId);
+  }
+
+  // Auto-heal: if user did not manually disconnect but WS is down, trigger reconnect.
+  if (!connected && !data.manualDisconnect) {
+    const now = Date.now();
+    if (now - _lastReconnectKickAt > 5000) {
+      _lastReconnectKickAt = now;
+      chrome.runtime.sendMessage({ type: 'RECONNECT' }).catch(() => {});
+    }
+  }
 }
 
 // ── Request log ──────────────────────────────────────────────
@@ -114,18 +169,22 @@ function updateRequestLog(entries) {
   const countEl = document.getElementById('log-count');
 
   if (!entries || entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="log-empty">No requests yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="log-empty">No requests yet</td></tr>';
     countEl.textContent = '0';
     return;
   }
 
   countEl.textContent = entries.length;
   _logEntries = entries;
+  const latestPid = inferProjectIdFromEntries(entries);
+  if (latestPid) setProjectId(latestPid);
 
   // Render newest first (entries already sorted DESC by background.js)
   const rows = entries.map((entry) => {
     const shortId = entry.id ? String(entry.id).slice(0, 8) : '—';
     const type   = formatType(entry.type || entry.method);
+    const projectId = normalizeProjectId(entry.projectId || entry.project_id || '');
+    const shortProject = projectId ? `${projectId.slice(0, 8)}…` : '—';
     const time   = formatTime(entry.time || entry.timestamp || entry.createdAt);
     const status = entry.status || entry.state || 'pending';
     const error  = entry.error || '';
@@ -150,6 +209,7 @@ function updateRequestLog(entries) {
     return `<tr>
       <td class="td-id" data-request-id="${escHtml(entry.id || '')}">${escHtml(shortId)}</td>
       <td class="td-type">${escHtml(type)}</td>
+      <td class="td-project" title="${escHtml(projectId || '—')}" ${projectId ? `data-project-id="${escHtml(projectId)}"` : ''}>${escHtml(shortProject)}</td>
       <td class="td-time">${escHtml(time)}</td>
       <td>${badgeHtml}</td>
       ${errorDisplay}
@@ -165,6 +225,18 @@ function updateRequestLog(entries) {
       if (reqId) showRequestDetail(reqId);
     });
   });
+  tbody.querySelectorAll('.td-project[data-project-id]').forEach(td => {
+    td.addEventListener('click', async () => {
+      const pid = td.getAttribute('data-project-id');
+      if (!pid) return;
+      try {
+        await navigator.clipboard.writeText(pid);
+        setProjectId(pid);
+      } catch {
+        // ignore clipboard errors
+      }
+    });
+  });
 }
 
 function escHtml(str) {
@@ -178,6 +250,69 @@ function escHtml(str) {
 function truncate(str, len) {
   if (!str || str.length <= len) return str;
   return str.slice(0, len) + '…';
+}
+
+function setProjectId(projectId) {
+  _activeProjectId = normalizeProjectId(projectId);
+  const idEl = document.getElementById('project-id');
+  const copyBtn = document.getElementById('btn-copy-project');
+  if (!idEl || !copyBtn) return;
+  if (_activeProjectId) {
+    idEl.textContent = _activeProjectId;
+    idEl.title = _activeProjectId;
+    copyBtn.disabled = false;
+  } else {
+    idEl.textContent = '—';
+    idEl.title = 'No active project';
+    copyBtn.disabled = true;
+  }
+}
+
+async function fetchProjectId() {
+  try {
+    const res = await fetch(`http://127.0.0.1:8100/api/active-project?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, max-age=0',
+        Pragma: 'no-cache',
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const apiProjectId = normalizeProjectId(data?.project_id);
+    if (apiProjectId) {
+      setProjectId(apiProjectId);
+      return;
+    }
+    if (_activeProjectId) return;
+  } catch {
+    // keep current value, fall back to log/status derived project id
+  }
+
+  if (_activeProjectId) return;
+  const fromLog = inferProjectIdFromEntries(_logEntries);
+  if (fromLog) setProjectId(fromLog);
+}
+
+async function copyProjectId() {
+  if (!_activeProjectId) return;
+  const btn = document.getElementById('btn-copy-project');
+  const oldText = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(_activeProjectId);
+    btn.textContent = 'Copied';
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = _activeProjectId;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); btn.textContent = 'Copied'; } catch { btn.textContent = 'Failed'; }
+    document.body.removeChild(ta);
+  }
+  setTimeout(() => { btn.textContent = oldText || 'Copy'; }, 1000);
 }
 
 // ── Request detail modal ────────────────────────────────────
@@ -197,6 +332,7 @@ function showRequestDetail(reqId) {
   const fields = [
     ['ID', entry.id],
     ['Type', formatType(entry.type || entry.method)],
+    ['Project ID', normalizeProjectId(entry.projectId || entry.project_id || '') || '—'],
     ['Time', formatTime(entry.time || entry.timestamp || entry.createdAt)],
     ['Status', entry.status || entry.state || 'pending'],
     ['HTTP', entry.httpStatus || '—'],
@@ -285,9 +421,45 @@ document.getElementById('btn-token').addEventListener('click', () => {
   });
 });
 
+document.getElementById('btn-copy-project').addEventListener('click', () => {
+  copyProjectId();
+});
+
+function connectKeepAlivePort() {
+  if (_keepAlivePort) return;
+  try {
+    _keepAlivePort = chrome.runtime.connect({ name: 'side-panel-keepalive' });
+  } catch {
+    _keepAlivePort = null;
+    return;
+  }
+
+  _keepAlivePort.onDisconnect.addListener(() => {
+    _keepAlivePort = null;
+    if (_keepAliveTimer) {
+      clearInterval(_keepAliveTimer);
+      _keepAliveTimer = null;
+    }
+    setTimeout(connectKeepAlivePort, 1000);
+  });
+
+  if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+  _keepAliveTimer = setInterval(() => {
+    try {
+      _keepAlivePort?.postMessage({ type: 'PING', t: Date.now() });
+    } catch {
+      // ignore; onDisconnect will reconnect
+    }
+  }, 10000);
+}
+
 // ── Init ─────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  connectKeepAlivePort();
   fetchStatus();
   fetchLog();
+  fetchProjectId();
+  if (_projectPollTimer) clearInterval(_projectPollTimer);
+  _projectPollTimer = setInterval(fetchProjectId, 3000);
 });

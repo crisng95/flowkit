@@ -199,7 +199,7 @@ class Scene(DomainModel):
         project_id: str,
         video_id: Optional[str] = None,
     ) -> str:
-        """Submit an UPSCALE_VIDEO request. Returns the request id."""
+        """Submit a local upscale request. Returns the request id."""
         from agent.sdk.services.operations import get_operations
 
         ops = get_operations()
