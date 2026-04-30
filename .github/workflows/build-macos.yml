@@ -10,6 +10,9 @@ on:
         description: 'Version tag (e.g. v0.2.0)'
         required: false
 
+permissions:
+  contents: write
+
 jobs:
   build-macos:
     runs-on: macos-latest
