@@ -43,6 +43,7 @@ export interface Video {
   description: string | null
   display_order: number
   status: string
+  orientation: 'VERTICAL' | 'HORIZONTAL' | null
   vertical_url: string | null
   horizontal_url: string | null
   thumbnail_url: string | null

@@ -1,14 +1,18 @@
 import { BrowserRouter, NavLink, Routes, Route, useLocation } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, ScrollText, Film } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, ScrollText, Film, Braces, WandSparkles } from 'lucide-react'
 import { useWebSocket } from './api/useWebSocket'
 import DashboardPage from './pages/DashboardPage'
 import ProjectsPage from './pages/ProjectsPage'
 import LogsPage from './pages/LogsPage'
 import GalleryPage from './pages/GalleryPage'
+import ApiStudioPage from './pages/ApiStudioPage'
+import WorkflowPage from './pages/WorkflowPage'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { to: '/workflow', icon: WandSparkles, label: 'Workflow', exact: false },
   { to: '/projects', icon: FolderOpen, label: 'Projects', exact: false },
+  { to: '/api-studio', icon: Braces, label: 'API Studio', exact: false },
   { to: '/logs', icon: ScrollText, label: 'Logs', exact: false },
   { to: '/gallery', icon: Film, label: 'Gallery', exact: false },
 ]
@@ -76,8 +80,10 @@ function Layout() {
         <main className="flex-1 overflow-auto p-5">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/workflow" element={<WorkflowPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:id" element={<ProjectsPage />} />
+            <Route path="/api-studio" element={<ApiStudioPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/gallery" element={<GalleryPage />} />
           </Routes>

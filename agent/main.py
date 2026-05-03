@@ -23,6 +23,7 @@ from agent.api.materials import router as materials_router
 from agent.api.music import router as music_router
 from agent.api.models import router as models_router
 from agent.api.active_project import router as active_project_router
+from agent.api.skills_runner import router as skills_runner_router
 from agent.worker.processor import get_worker_controller
 from agent.services.flow_client import get_flow_client
 from agent.services.event_bus import event_bus
@@ -90,9 +91,12 @@ async def lifespan(app: FastAPI):
 
     controller = get_worker_controller()
 
-    # SIGTERM handler for graceful shutdown
+    # SIGTERM handler for graceful shutdown (not supported on Windows event loop)
     loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    try:
+        loop.add_signal_handler(signal.SIGTERM, controller.request_shutdown)
+    except NotImplementedError:
+        logger.warning("SIGTERM handler not supported on this platform; skipping")
 
     # Start background tasks
     ws_task = asyncio.create_task(run_ws_server())
@@ -128,6 +132,7 @@ app.include_router(reviews_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(materials_router, prefix="/api")
 app.include_router(music_router, prefix="/api")
+app.include_router(skills_runner_router, prefix="/api")
 app.include_router(models_router)
 app.include_router(active_project_router)
 

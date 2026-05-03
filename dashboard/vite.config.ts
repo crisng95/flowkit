@@ -10,6 +10,7 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:8100',
       '/ws': { target: 'ws://127.0.0.1:8100', ws: true },
       '/health': 'http://127.0.0.1:8100',
+      '/openapi.json': 'http://127.0.0.1:8100',
     }
   },
   build: { outDir: 'dist' }
