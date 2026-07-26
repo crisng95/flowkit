@@ -77,7 +77,7 @@ export default function ProjectGrid({ onOpen }: Props) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="px-6 py-8 2xl:px-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Dự án</h1>
@@ -123,7 +123,7 @@ export default function ProjectGrid({ onOpen }: Props) {
           <h2 className="mb-3 text-sm font-medium text-neutral-300">
             Project trên Google Flow
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
             {flow.map((fp) => (
               <button
                 key={fp.flow_project_id}
@@ -147,7 +147,9 @@ export default function ProjectGrid({ onOpen }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* auto-fill: pack as many ~260px cards as the viewport allows, so an ultra-wide screen
+          fills edge-to-edge instead of leaving big margins around a fixed 4-column grid. */}
+      <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
         {projects.map((p) => (
           <div
             key={p.id}
