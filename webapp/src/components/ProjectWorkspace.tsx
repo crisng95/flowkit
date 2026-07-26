@@ -35,11 +35,18 @@ export default function ProjectWorkspace({
   const [reload, setReload] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Fetch the full project (with script_raw) + entities on open.
+  // Fetch the full project (with script_raw) on open.
   useEffect(() => {
     api.getProject(initial.id).then(setProject).catch(() => {});
-    api.listEntities(initial.id).then((r) => setEntities(r.entities)).catch(() => {});
   }, [initial.id]);
+
+  // (Re)load entities on open, every time the node editor opens, and after a node-apply
+  // (reload bump). Regenerating an asset elsewhere changes its media_id/image_path, so the
+  // "Nguồn ảnh" picker must refetch — otherwise it binds a stale snapshot and shows the old
+  // image even though generation (which resolves entity_id live) uses the new one.
+  useEffect(() => {
+    api.listEntities(initial.id).then((r) => setEntities(r.entities)).catch(() => {});
+  }, [initial.id, reload, editor]);
 
   const openEditor = (t: EditorTarget) => setEditor(t);
 

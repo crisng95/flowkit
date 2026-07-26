@@ -334,9 +334,14 @@ function SourceNode({ id, data }: NodeProps) {
   const shotImgs = images.filter((x) => x.kind === "shot");
   const mediaImgs = images.filter((x) => x.kind === "media");
   const selected = d.src_key || (d.entity_id ? `e:${d.entity_id}` : "");
+  // A bound entity's image can be regenerated after this node was created, leaving d.web a
+  // stale snapshot. Prefer the live URL from the (refetched) reference list so the preview
+  // tracks the current asset image — matching what generation (entity_id → live) uses.
+  const live = d.entity_id ? images.find((x) => x.entity_id === d.entity_id) : undefined;
+  const displaySrc = live?.web || d.web;
   return (
     <Shell type="source" id={id} inputs={false}>
-      <Preview nodeId={id} src={d.web} label="Chọn / tải ảnh" />
+      <Preview nodeId={id} src={displaySrc} label="Chọn / tải ảnh" />
       <select className={fieldCls} value={selected} onChange={(e) => pick(e.target.value)}>
         <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh —"}</option>
         {entImgs.length > 0 && (
