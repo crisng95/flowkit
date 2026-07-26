@@ -834,7 +834,17 @@ async def _label_location_grid(entity: dict, project: dict) -> None:
     src = media_store.MEDIA_DIR / web.replace("/media/", "", 1)
     if not src.exists():
         return
-    out_rel = f"{project['id']}/loc_{entity['id']}_labeled.png"
+    # Include the media_id in the labeled filename so a REGENERATED grid gets a NEW url. A fixed
+    # name (loc_<eid>_labeled.png) kept the same url across regenerations, so the browser served
+    # the CACHED old image while history (media_id-named) showed the fresh one.
+    mid = entity.get("media_id") or "x"
+    out_dir = media_store.MEDIA_DIR / project["id"]
+    for old in out_dir.glob(f"loc_{entity['id']}_*labeled.png"):   # clean prior labeled copies
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    out_rel = f"{project['id']}/loc_{entity['id']}_{mid}_labeled.png"
     out_abs = media_store.MEDIA_DIR / out_rel
     ok = await asyncio.to_thread(
         assembler.label_quadrants, src, out_abs, brain.LOCATION_GRID_LABELS,
