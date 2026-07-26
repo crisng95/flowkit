@@ -873,7 +873,9 @@ async def library_entities(exclude_project: Optional[str] = None):
         "JOIN project p ON e.project_id = p.id "
         "WHERE e.media_id IS NOT NULL "
         + ("AND e.project_id != ? " if exclude_project else "")
-        + "ORDER BY p.title, e.type, e.name",
+        # Newer projects first: later videos tend to reference the most recent work, so surface
+        # the freshest project's assets at the top. NULL created_at (legacy rows) sinks to the end.
+        + "ORDER BY (p.created_at IS NULL), p.created_at DESC, p.title, e.type, e.name",
         (exclude_project,) if exclude_project else ())
     return {"entities": rows}
 
