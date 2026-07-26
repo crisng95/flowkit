@@ -215,7 +215,7 @@ export default function AssetsTab({
                 + Thêm
               </button>
             </div>
-            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
               {items.map((e) => (
                 <AssetCard
                   key={e.id}
