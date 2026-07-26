@@ -61,7 +61,7 @@ export default function AllImages({ project }: { project: Project }) {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="px-6 py-8 2xl:px-10">
         <div className="mb-5 flex flex-wrap items-center gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Tất cả ảnh</h1>
@@ -115,7 +115,7 @@ export default function AllImages({ project }: { project: Project }) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
           {filtered.map((m) => (
             <button
               key={m.media_id}

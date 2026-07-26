@@ -144,7 +144,7 @@ export default function AssetsTab({
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto max-w-6xl px-6 py-6">
+      <div className="px-6 py-6 2xl:px-10">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Thư viện Asset</h2>
@@ -215,7 +215,7 @@ export default function AssetsTab({
                 + Thêm
               </button>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
               {items.map((e) => (
                 <AssetCard
                   key={e.id}
