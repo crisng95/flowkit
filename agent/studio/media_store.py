@@ -143,6 +143,28 @@ async def save_media(media_id: str, project_id: str, ext: str,
     return await ensure_local(media_id, project_id, ext, attempts=attempts)
 
 
+def sniff_ext(data: bytes, default: str = "png") -> str:
+    """Image extension from magic bytes — the upsample response ships raw base64 with no
+    mime type, and writing a JPEG as .png confuses ffmpeg/Resolve on import."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:2] == b"\xff\xd8":
+        return "jpg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return default
+
+
+def save_bytes(name: str, project_id: str, data: bytes) -> str:
+    """Write raw image bytes to ./media/<project_id>/<name>.<sniffed ext>; return web path.
+    Used for media Flow hands back inline (base64) instead of behind a signed URL."""
+    rel = Path(project_id) / f"{name}.{sniff_ext(data)}"
+    dest = MEDIA_DIR / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return f"/media/{rel.as_posix()}"
+
+
 _LOCAL_EXTS = ("png", "jpg", "jpeg", "webp")
 
 

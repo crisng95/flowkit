@@ -166,9 +166,16 @@ _SINGLE_FRAME = (
     "to keep identity, costume, architecture, materials, colour and lighting consistent. Do NOT "
     "reproduce any reference-sheet layout: no grid, no 2x2, no multi-panel or split screen, no "
     "collage, no turnaround row, no side-by-side angles, no plain white reference backdrop. "
-    "Each named character must EXACTLY match its OWN reference image — never swap, blend or mix "
-    "up faces, hair or costumes between characters, keep each person's identity distinct, and "
-    "do NOT add any extra people who are not named in this shot. The location reference is a "
+    "Each named character must match its OWN reference image in IDENTITY ONLY — face, hair, "
+    "skin, build, age and costume — never swap, blend or mix up faces, hair or costumes between "
+    "characters, and do NOT add any extra people who are not named in this shot. The reference "
+    "does NOT dictate POSE: ignore its A-pose/stance, its expression, its gaze direction, its "
+    "body orientation, its framing, and — when a reference happens to show more than one person "
+    "— the way those people are arranged relative to each other. Pose, angle and spacing must be "
+    "invented FRESH for THIS shot's action and camera setup, and must differ from other shots; "
+    "characters interact with the scene and each other as the action demands. Never paste a "
+    "character in as a rigid cut-out standing the way the reference sheet shows. The location "
+    "reference is a "
     "2x2 grid of FOUR angles of the place for identity only — PICK the ONE angle that suits "
     "this shot and render it as a single full-frame scene; do NOT reproduce the grid, the four "
     "panels, the split layout or any position labels from it, and compose THIS shot at its own "
@@ -254,6 +261,13 @@ def entity_extract_prompt(script: str) -> str:
     return (
         "Extract every distinct ENTITY from this screenplay for an asset library.\n"
         "Three types: 'character' (people/animals), 'location' (places), 'prop' (key objects).\n"
+        "A 'character' is ONE SINGLE individual — never a group. If the screenplay refers to "
+        "several people with one collective term (a couple, the pair, the parents, the twins, "
+        "the children, a family, a crowd, a gang, a team), do NOT make one entity for it: emit "
+        "a SEPARATE character entity for each individual you can distinguish, each with its own "
+        "singular `name` and its own appearance. Unnamed background crowds are not entities at "
+        "all — leave them out. `name` must be singular and refer to one being; never a plural "
+        "or collective noun.\n"
         "`name` MUST be the SHORT, single consistent token the screenplay uses to refer to the "
         "entity (e.g. a first name like 'Hùng', not 'Hùng (Phạm Trọng Hùng)'). Do NOT put a "
         "full name, alias or anything in parentheses in `name` — that goes in `description`. "
@@ -271,15 +285,25 @@ def entity_extract_prompt(script: str) -> str:
 # Returns the BODY only; the caller wraps it with style/culture/header/footer via
 # compose_prompt() so style always leads the prompt.
 _SHEET = {
+    # EXACTLY ONE individual per sheet. A description that mentions a partner/group ("một nửa
+    # của cặp đôi", "walks with her husband") otherwise makes the model draw BOTH people on the
+    # sheet — and then every shot referencing it reproduces that same pair in the same stance,
+    # like carrying one statue from frame to frame.
     "character": ("full character reference sheet on a plain solid white background, "
                   "laid out as a single sheet: ONE large detailed upper-body (bust) "
                   "portrait on the left, a row of turnaround views (front, 3/4, side, back) "
                   "in a neutral A-pose, and a separate row of facial EXPRESSION studies "
-                  "(neutral, happy, sad, angry, surprised). Same consistent character in "
-                  "every view. No scene, no extra props, no ground shadow, studio reference"),
+                  "(neutral, happy, sad, angry, surprised). EXACTLY ONE individual appears on "
+                  "this sheet — the same single character in every view. Never draw two or more "
+                  "people, never a couple, pair, family or group, even if the description above "
+                  "mentions other people (they are separate entities with their own sheets); "
+                  "include no companion, partner, child or bystander. No scene, no extra props, "
+                  "no ground shadow, studio reference. Do NOT draw any text, titles, captions, "
+                  "view labels or watermarks on the sheet — clean art only"),
     "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
              "object on plain solid white background, no background scene, no shadow, "
-             "studio product reference"),
+             "studio product reference. Do NOT draw any text, titles, captions, view labels or "
+             "watermarks on the sheet — clean art only"),
     # ONE image = a 2x2 grid of four angles of the same place, in a FIXED quadrant order so
     # we can overlay correct position labels afterwards (Toàn cảnh / Góc ngược / Trên cao /
     # Cận cảnh). The model must not draw its own text. Shots use the single_frame guard to
@@ -329,6 +353,12 @@ _CINE = (
     "  • Composition & object layout: where each character and prop sits in frame "
     "(foreground / midground / background), rule of thirds, leading lines, symmetry/balance, "
     "headroom and negative space.\n"
+    "  • Pose & body language of EVERY character present: stance or posture, what the hands "
+    "are doing, head turn and gaze direction, facial expression, and — with two or more people "
+    "— how they are placed and turned relative to each other (facing, side by side, one behind, "
+    "one reaching toward the other). State this explicitly and CHANGE it between frames; "
+    "characters must act out the beat, never stand in the same neutral stance shot after shot "
+    "like a statue moved around the set.\n"
     "  • Mood / color palette and atmosphere: time of day, weather, haze/fog/dust, "
     "volumetric light, particles — whatever sells the scene's emotion."
 )
@@ -354,11 +384,48 @@ _MOTION = (
     "match the reference image; only the motion evolves."
 )
 
+# Omni Flash reads TIMESTAMP CUES in the prompt: "[00:04] ..." means "from 4s until the next
+# cue (or the end), do this". Veo has no such notion, so this block is only ever appended for
+# Omni. Without it a 10s Omni clip gets one flat instruction and renders as a single monotonous
+# camera move for the whole duration — paying 10 seconds' worth of credits for one beat.
+_OMNI_TIMELINE_HEAD = (
+    "TIMED BEATS (Omni Flash only) — this clip is {clip_s} seconds long and the model reads "
+    "timestamp cues, so write the `motion_prompt` as a SEQUENCE of cues instead of one flat "
+    "sentence:\n"
+    "  • Format: `[mm:ss] <what happens from this moment until the next cue>`. Always open at "
+    "`[00:00]`, then add cues across the clip; the last cue runs to the end.\n"
+    "  • Use as MANY cues as the action genuinely warrants — {n_beats} or more for {clip_s}s. "
+    "Denser is fine and often better, as long as every cue marks a REAL, distinct change that "
+    "can physically happen in the time it is given. Never pad with cues that just restate the "
+    "previous beat.\n"
+    "  • Make consecutive beats DIFFERENT in kind, not just 'more of the same': e.g. a camera "
+    "move, then a subject action, then a light/atmosphere change, then a focus shift or a beat "
+    "of stillness. A single push-in held for the whole clip is exactly what to avoid.\n"
+    "  • The beats must form ONE continuous take — no cuts, no teleporting; each follows on "
+    "physically from the previous.\n"
+    "  • Example shape (do not copy the content): `[00:00] locked-off on the puddle, rain "
+    "dimpling the surface. [00:03] a slow push-in begins as ripples spread outward. [00:06] a "
+    "cyclo rolls through frame behind, its lamp smearing across the water. [00:08] the ripples "
+    "settle and the reflection resolves.`"
+)
+
+
+def motion_spec(engine: str = "veo", clip_s: int = 8) -> str:
+    """Khối hướng dẫn viết `motion_prompt`, có thêm phần mốc thời gian khi engine là Omni.
+
+    `n_beats` chỉ là SÀN gợi ý (≈1 mốc / 2s), không phải trần — Omni nhận bao nhiêu mốc cũng
+    được miễn là hợp logic, nên prompt khuyến khích dày hơn nếu hành động xứng đáng."""
+    if engine != "omni":
+        return _MOTION
+    return _MOTION + "\n\n" + _OMNI_TIMELINE_HEAD.format(
+        clip_s=clip_s, n_beats=max(3, round(clip_s / 2)))
+
 
 def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
                                entities: list[dict], style: str,
                                n_frames: int | None = None,
-                               location: str | None = None) -> str:
+                               location: str | None = None,
+                               engine: str = "veo", clip_s: int = 8) -> str:
     roster = "\n".join(
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
@@ -400,7 +467,7 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "clip, referencing the SAME entities.\n"
         "- `ref_entity_names`: every entity used in the frame (names WITHOUT braces), and it "
         "MUST include the scene's location.\n"
-        f"\n{_CINE}\n\n{_MOTION}\n\n"
+        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
         "IMPORTANT: whenever a known entity (character/location/prop) appears in ANY prompt, "
         "wrap its name in curly braces exactly as listed (e.g. {Mai}) so it binds to its "
         "reference image.\n"
@@ -626,7 +693,8 @@ def scene_plan_prompt(voiceover: str, entities: list[dict], style: str,
 
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
                          location: str | None = None, target_beats: int | None = None,
-                         plan: dict | None = None) -> str:
+                         plan: dict | None = None,
+                         engine: str = "veo", clip_s: int = 8) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -697,7 +765,7 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"
         "- `key_phrases`: 1–3 SHORT punchy phrases taken VERBATIM from this beat's `text` "
         "(the words worth flashing on screen as captions); [] if none.\n\n"
-        f"{_CINE}\n\n{_MOTION}\n\n"
+        f"{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
         f"Wrap known entity names in curly braces. Visual style: {style}.\n\n"
         f"AVAILABLE ENTITIES:\n{roster}\n\nVOICEOVER:\n{voiceover}\n\n"
         "Return ONLY JSON array: [{\"text\":\"...\",\"beat_action\":\"...\","
@@ -707,7 +775,7 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
 
 
 def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
-                      clip_s: int = 8) -> str:
+                      clip_s: int = 8, engine: str = "veo") -> str:
     """A beat's video is longer than one clip (~clip_s s) → split into `n_parts` continuous
     sub-clips. Each sub-clip starts from the previous one's last frame (chained), so the
     motion must flow on. Returns a continuation motion prompt for each part."""
@@ -719,13 +787,14 @@ def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
         f"FULL ACTION: {beat_action}\nFULL MOTION: {motion_prompt}\n\n"
         f"Write {n_parts} motion prompts, one per sub-clip in order, each describing only the "
         f"portion of the action in that ~{clip_s}s window (continuous, no repetition).\n\n"
-        f"{_MOTION}\n\n"
+        f"{motion_spec(engine, clip_s)}\n\n"
         "Return ONLY JSON: {\"parts\":[{\"part_idx\":0,\"motion_prompt\":\"...\"}, ...]}"
     )
 
 
 def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
-                        location: str | None = None) -> str:
+                        location: str | None = None,
+                        engine: str = "veo", clip_s: int = 8) -> str:
     """Rewrite the CAMERA work of EXISTING shots without changing the story, order, count or
     per-shot action — only pick fresh, distinct angles so consecutive shots differ. Fast path
     to fix monotonous framing (and the location) without re-segmenting or re-running TTS."""
@@ -750,7 +819,7 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
         "previous shot, then the SAME action), plus a matching `visual_prompt` and `motion_prompt`. "
         "Wrap EVERY character/location/prop name in curly braces exactly as listed so it binds to "
         "its reference image (a character that acts in the shot MUST be wrapped and present).\n"
-        f"\n{_CINE}\n\n{_MOTION}\n\n"
+        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
         f"Visual style: {style}.\n\nAVAILABLE ENTITIES:\n{roster}\n\nSHOTS (in order):\n{listing}\n\n"
         "Return ONLY a JSON array with EXACTLY one object per shot, in order: "
         "[{\"idx\":0,\"description\":\"At {Loc}, <distinct shot size+angle>, <same action> {Entity}...\","
@@ -758,13 +827,14 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
     )
 
 
-def shot_prompts_prompt(description: str, style: str) -> str:
+def shot_prompts_prompt(description: str, style: str,
+                        engine: str = "veo", clip_s: int = 8) -> str:
     return (
         "For this storyboard frame, write two prompts for an image-to-video model:\n"
         "- `visual_prompt`: the full camera setup + what is on screen.\n"
         "- `motion_prompt`: the camera move + the action that happens during the clip "
         "(concrete, e.g. 'the fox steps onto the ice, camera slowly pushes in').\n"
-        f"\n{_CINE}\n\n{_MOTION}\n\n"
+        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
         f"Visual style: {style}.\n\n"
         f"FRAME: {description}\n\n"
         "Return ONLY JSON: {\"visual_prompt\":\"...\",\"motion_prompt\":\"...\"}"

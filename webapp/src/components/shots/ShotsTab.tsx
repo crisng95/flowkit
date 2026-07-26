@@ -249,11 +249,23 @@ function ShotPanel({
   const [motion, setMotion] = useState(shot.motion_prompt ?? "");
   const [aiBusy, setAiBusy] = useState(false);
   const [upBusy, setUpBusy] = useState(false);
+  const [upErr, setUpErr] = useState<string | null>(null);
+  // Trần upscale phụ thuộc tier (ONE → 1080p, TWO → 4K) → hỏi server thay vì cứng "4K".
+  const [upLabel, setUpLabel] = useState("");
 
   useEffect(() => {
     setVisual(shot.visual_prompt ?? "");
     setMotion(shot.motion_prompt ?? "");
+    setUpErr(null);
   }, [shot.id]);
+
+  useEffect(() => {
+    shotsApi.upscaleStatus(project.id).then((r) => setUpLabel(r.label)).catch(() => {});
+  }, [project.id]);
+
+  // Video ghép cục bộ từ nhiều clip (chained) không upscale được — Flow chỉ nhận một media.
+  const chained = !!shot.video_path && !shot.video_path.startsWith("/media/");
+  const upscaled = !!shot.upscale_path && shot.upscale_media_id === shot.video_media_id;
 
   const save = async () =>
     onChange(await storyboard.updateShot(shot.id, { visual_prompt: visual, motion_prompt: motion }));
@@ -269,8 +281,11 @@ function ShotPanel({
 
   const upscale = async () => {
     setUpBusy(true);
+    setUpErr(null);
     try {
-      onChange(await shotsApi.upscale(shot.id));
+      onChange(await shotsApi.upscale(shot.id, upscaled));
+    } catch (e: any) {
+      setUpErr(e.message);
     } finally {
       setUpBusy(false);
     }
@@ -334,13 +349,27 @@ function ShotPanel({
           {running ? "Đang render…" : "Generate Video"}
         </button>
         {shot.video_path && (
-          <button
-            onClick={upscale}
-            disabled={upBusy}
-            className="w-full rounded-lg border border-neutral-700 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
-          >
-            {upBusy ? "Đang upscale…" : "Upscale 4K"}
-          </button>
+          <>
+            <button
+              onClick={upscale}
+              disabled={upBusy || chained}
+              title={
+                chained
+                  ? "Shot ghép từ nhiều clip — Flow không upscale được video ghép cục bộ"
+                  : `Render lại video ở ${upLabel || "độ phân giải cao"} (tốn credit)`
+              }
+              className="w-full rounded-lg border border-neutral-700 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
+            >
+              {upBusy
+                ? "Đang upscale…"
+                : chained
+                  ? "Không upscale được (chained)"
+                  : upscaled
+                    ? `↻ Upscale lại ${shot.upscale_res?.split("_").pop()?.toLowerCase() ?? ""}`
+                    : `Upscale ${upLabel || "…"}`}
+            </button>
+            {upErr && <p className="text-xs text-rose-400">{upErr}</p>}
+          </>
         )}
       </div>
     </aside>

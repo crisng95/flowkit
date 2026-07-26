@@ -16,7 +16,7 @@ from xml.sax.saxutils import escape
 from PIL import Image
 
 from agent.config import BASE_DIR
-from agent.studio import assembler, db, media_store
+from agent.studio import assembler, db, hires, media_store
 
 FPS = 24
 STUDIO_MEDIA_DIR = Path(os.environ.get("STUDIO_OUT_DIR", BASE_DIR / "studio_media"))
@@ -188,7 +188,13 @@ async def build(project_id: str) -> dict:
     scenes = await db.query_all(
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (project_id,))
 
-    w, h = assembler._res(project["aspect_ratio"])
+    # Sequence resolution follows what the shots actually hold: all-hi-res (upsampled stills /
+    # upscaled videos) → 1080p or 4K, any HD leftover → 720p. Dropping 2K stills or a 1080p
+    # upscale into a 720p sequence would throw away exactly what was paid for.
+    all_shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id WHERE sc.project_id=?",
+        (project_id,))
+    w, h = assembler._res(project["aspect_ratio"], assembler.timeline_short_side(all_shots))
     # Stage media under sequence-safe (letters-only) names in one folder next to the XML, so
     # Resolve never mis-reads a UUID's digits as an image-sequence frame range.
     dv_dir = STUDIO_MEDIA_DIR / project_id / "dv_media"
@@ -206,11 +212,17 @@ async def build(project_id: str) -> dict:
         # Resolve each shot to a usable media file: prefer video, else the still image.
         usable = []   # (shot, path, is_image)
         for sh in rows:
-            vp = await _resolve_local(sh.get("video_path"), sh.get("video_media_id"), "mp4", project_id)
+            # Prefer the 1080p/4K upscale over the HD render (falls back to re-downloading
+            # the HD one by media_id if the local file went missing).
+            vp = assembler.shot_video_path(sh) or await _resolve_local(
+                sh.get("video_path"), sh.get("video_media_id"), "mp4", project_id)
             if vp:
                 usable.append((sh, vp, False))
                 continue
-            ip = await _resolve_local(sh.get("image_path"), sh.get("image_media_id"), "png", project_id)
+            # Prefer the 2K/4K copy; _resolve_local falls back to re-downloading the HD one by
+            # media_id if the hi-res file went missing, so the export never breaks over it.
+            ip = await _resolve_local(hires.shot_image(sh), sh.get("image_media_id"),
+                                      "png", project_id)
             if ip:
                 usable.append((sh, ip, True))
             else:

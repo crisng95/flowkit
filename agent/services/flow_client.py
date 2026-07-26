@@ -17,6 +17,8 @@ from agent.config import (
     GOOGLE_FLOW_API, GOOGLE_API_KEY, ENDPOINTS,
     VIDEO_MODELS, UPSCALE_MODELS, IMAGE_MODELS, VIDEO_POLL_TIMEOUT,
     OMNI_FLASH_MODELS, OMNI_FLASH_VALID_ASPECTS,
+    UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT, UPSAMPLE_IMAGE_TIMEOUT,
+    UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
 )
 from agent.services.headers import random_headers
 
@@ -603,26 +605,42 @@ class FlowClient:
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
-                             resolution: str = "VIDEO_RESOLUTION_4K") -> dict:
-        """Upscale a video."""
-        model_key = UPSCALE_MODELS.get(resolution, "veo_3_1_upsampler_4k")
+                             resolution: str = None,
+                             project_id: str = "",
+                             user_paygate_tier: str = "PAYGATE_TIER_ONE",
+                             workflow_id: str = None) -> dict:
+        """Submit a video upsample (async — poll with check_video_status like a normal gen).
+
+        The generated video is only HD; this re-renders it at a higher resolution. The
+        ceiling is tier-bound — TIER_ONE tops out at 1080p, only TIER_TWO reaches 4K — so an
+        omitted `resolution` is derived from `user_paygate_tier`. Asking for 4K on TIER_ONE
+        is rejected by Flow, so callers should let the tier decide.
+
+        `workflow_id` (the source video's workflow) attaches the upsample to that same Flow
+        workflow, which is how the web UI does it — the result shows up on the existing item
+        instead of as a detached one. The operation returned is named `<mediaId>_upsampled`.
+        """
+        target = resolution or UPSAMPLE_VIDEO_RESOLUTIONS.get(
+            user_paygate_tier, UPSAMPLE_VIDEO_DEFAULT)
+        model_key = UPSCALE_MODELS.get(target, "veo_3_1_upsampler_1080p")
+
+        request = {
+            "aspectRatio": aspect_ratio,
+            "resolution": target,
+            "seed": int(time.time()) % 100000,
+            "metadata": {"workflowId": workflow_id} if workflow_id else {"sceneId": scene_id},
+            "videoInput": {"mediaId": media_id},
+            "videoModelKey": model_key,
+        }
 
         body = {
-            "clientContext": {
-                "sessionId": f";{int(time.time() * 1000)}",
-                "recaptchaContext": {
-                    "applicationType": "RECAPTCHA_APPLICATION_TYPE_WEB",
-                    "token": "",
-                },
+            "mediaGenerationContext": {
+                "batchId": f"{uuid.uuid4()}",
+                "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
             },
-            "requests": [{
-                "aspectRatio": aspect_ratio,
-                "resolution": resolution,
-                "seed": int(time.time()) % 100000,
-                "metadata": {"sceneId": scene_id},
-                "videoInput": {"mediaId": media_id},
-                "videoModelKey": model_key,
-            }],
+            "clientContext": self._client_context(project_id, user_paygate_tier),
+            "requests": [request],
+            "useV2ModelConfig": True,
         }
 
         url = self._build_url("upscale_video")
@@ -634,24 +652,34 @@ class FlowClient:
             "captchaAction": "VIDEO_GENERATION",
         }, timeout=60)
 
-    async def upscale_image(self, 
-        media_id: str, 
+    async def upscale_image(self,
+        media_id: str,
         project_id: str,
-        target_resolution: str = "UPSAMPLE_IMAGE_RESOLUTION_2K") -> dict:
+        target_resolution: str = None,
+        user_paygate_tier: str = "PAYGATE_TIER_ONE") -> dict:
+        """Upsample an image to 2K/4K and get the bytes back.
+
+        Flow only serves the low-res (HD) copy through the normal media URL; this endpoint
+        returns the high-resolution render inline as base64 (`encodedImage` in the response).
+        The ceiling is tier-bound — TIER_ONE → 2K, TIER_TWO → 4K — so when `target_resolution`
+        is omitted it is derived from `user_paygate_tier` (see UPSAMPLE_IMAGE_RESOLUTIONS).
+        """
+        target = target_resolution or UPSAMPLE_IMAGE_RESOLUTIONS.get(
+            user_paygate_tier, UPSAMPLE_IMAGE_DEFAULT)
 
         body = {
             "clientContext": {
                 "projectId": project_id,
                 "recaptchaContext": {
                     "applicationType": "RECAPTCHA_APPLICATION_TYPE_WEB",
-                    "token": "",
+                    "token": "",  # Extension injects real token
                 },
                 "sessionId": f";{int(time.time() * 1000)}",
                 "tool": "PINHOLE",
-                "userPaygateTier": "PAYGATE_TIER_ONE",
+                "userPaygateTier": user_paygate_tier,
             },
             "mediaId": media_id,
-            "targetResolution": target_resolution,
+            "targetResolution": target,
         }
 
         url = self._build_url("upscale_image")
@@ -661,7 +689,7 @@ class FlowClient:
             "headers": random_headers(),
             "body": body,
             "captchaAction": "IMAGE_GENERATION",
-        }, timeout=60)
+        }, timeout=UPSAMPLE_IMAGE_TIMEOUT)
 
     async def check_video_status(self, operations: list[dict]) -> dict:
         """Check status of video generation operations."""

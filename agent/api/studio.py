@@ -20,9 +20,13 @@ from pydantic import BaseModel
 
 from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
+    UPSAMPLE_VIDEO_RESOLUTIONS, VIDEO_POLL_TIMEOUT,
 )
 from agent.services.flow_client import get_flow_client
-from agent.studio import db, media_store, brain, assembler, davinci_xml, vntext, align, graph as graph_mod
+from agent.studio import (
+    db, media_store, brain, assembler, davinci_xml, vntext, align, hires,
+    graph as graph_mod,
+)
 from agent.studio.jobs import get_job_manager
 
 logger = logging.getLogger(__name__)
@@ -127,6 +131,9 @@ class UpdateProjectRequest(BaseModel):
     target_duration: Optional[int] = None
     shot_duration: Optional[int] = None
     storytelling: Optional[bool] = None
+    auto_hires: Optional[bool] = None
+    auto_upscale_video: Optional[bool] = None
+    upscale_res: Optional[str] = None
     script_lang: Optional[str] = None
     image_text_lang: Optional[str] = None
     bgm_volume: Optional[float] = None
@@ -289,8 +296,14 @@ async def options():
         agents = []
     return {
         "image_models": list(IMAGE_MODELS.keys()),
+        # Người dùng chỉ chọn ENGINE, không chọn model key: Veo i2v tự chọn theo tier + khung
+        # hình, còn Omni Flash chọn theo thời lượng clip. (`veo_tiers` giữ lại cho tương thích —
+        # nó là danh sách TIER, không phải model, dropdown cũ hiển thị nhầm thành model.)
         "video_models": {"veo_tiers": list(VIDEO_MODELS.keys()),
                           "omni_flash_durations": list(OMNI_FLASH_MODELS.keys())},
+        "video_engines": [{"value": "", "label": "Veo i2v (mặc định — tự chọn theo tier)"}]
+                         + [{"value": s, "label": f"Omni Flash {s}s (r2v)"}
+                            for s in OMNI_FLASH_MODELS],
         "upscale_models": list(UPSCALE_MODELS.keys()),
         "aspect_ratios": ["VIDEO_ASPECT_RATIO_LANDSCAPE", "VIDEO_ASPECT_RATIO_PORTRAIT"],
         "paygate_tiers": ["PAYGATE_TIER_ONE", "PAYGATE_TIER_TWO"],
@@ -512,6 +525,10 @@ async def update_project(pid: str, body: UpdateProjectRequest):
     data = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if "storytelling" in data:
         data["storytelling"] = 1 if data["storytelling"] else 0
+    if "auto_hires" in data:
+        data["auto_hires"] = 1 if data["auto_hires"] else 0
+    if "auto_upscale_video" in data:
+        data["auto_upscale_video"] = 1 if data["auto_upscale_video"] else 0
     if "bgm_duck" in data:
         data["bgm_duck"] = 1 if data["bgm_duck"] else 0
     if "seed" in data and (data["seed"] is None or data["seed"] <= 0):
@@ -1219,6 +1236,11 @@ async def _store_media_on_shot(shot: dict, project: dict, info: dict,
                                info.get("media_id"), info.get("primary_media_id"), web)
     if kind == "image":
         await _maybe_set_cover(project["id"], project.get("flow_project_id"), info.get("media_id"))
+        # Bản HD vừa lưu chỉ đủ để xem trong app. Nếu dự án bật "tự tải ảnh 2K/4K", kéo thêm
+        # bản hi-res ngay (best-effort — hỏng thì chỉ ghi log, ảnh HD đã có).
+        if web and project.get("auto_hires"):
+            await hires.auto_upscale_shot(
+                {**shot, "image_media_id": info.get("media_id")}, project, await _current_tier())
     return await _shot_or_404(shot["id"])
 
 
@@ -1376,7 +1398,8 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
     scene_loc_id = scene_loc["id"] if scene_loc else None
     frames = await brain.run_json(brain.storyboard_autofill_prompt(
         scene["heading"], scene.get("action") or "", erows, project["style"], body.n_frames,
-        location=(scene_loc["name"] if scene_loc else None)))
+        location=(scene_loc["name"] if scene_loc else None),
+        **_engine_kw(project)))
     if not isinstance(frames, list):
         raise HTTPException(502, "AI không trả về danh sách frame")
     if not scene_loc_id:                      # heading matched no entity → use the AI's pick
@@ -2023,7 +2046,8 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
         beats = await brain.run_json_valid(
             brain.scene_segment_prompt(
                 voiceover, erows, project["style"],
-                location=loc_name, target_beats=target_beats, plan=plan),
+                location=loc_name, target_beats=target_beats, plan=plan,
+                **_engine_kw(project)),
             lambda d: isinstance(d, list) and len(d) > 0 and all(isinstance(x, dict) for x in d),
             label=f"Tách beat ({scene.get('heading') or sid})")
     except HTTPException as e:
@@ -2236,7 +2260,8 @@ async def _revary_scene(sid: str) -> int:
         try:
             cand = await brain.run_json(brain.revary_shots_prompt(
                 shots, erows, project["style"],
-                location=(scene_loc["name"] if scene_loc else None)))
+                location=(scene_loc["name"] if scene_loc else None),
+                **_engine_kw(project)))
             if isinstance(cand, list) and cand:
                 out = cand
                 break
@@ -2625,7 +2650,8 @@ async def update_shot(sid: str, body: UpdateShotRequest):
 async def delete_shot(sid: str):
     row = await _shot_or_404(sid)
     await db.delete("shot", sid)
-    for p in (row.get("image_path"), row.get("video_path")):
+    for p in (row.get("image_path"), row.get("image_hires_path"),
+              row.get("video_path"), row.get("upscale_path")):
         if p:
             f = media_store.MEDIA_DIR / p.replace("/media/", "", 1)
             if f.exists():
@@ -2688,15 +2714,17 @@ async def export_storyboard_images(pid: str):
         used: set[str] = set()
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for sh in shots:
-                src = media_store.MEDIA_DIR / sh["image_path"].replace("/media/", "", 1)
-                if not src.exists():
+                # Bản 2K/4K nếu có (đây là đường tải ảnh ra ngoài), không thì bản HD.
+                src = assembler.shot_image_path(sh)
+                if not src:
                     continue
+                ext = src.suffix.lower() or ".png"
                 desc = _slug(sh.get("description") or sh.get("title") or "")
-                name = f"sc{sh['scene_idx']+1:03d}-s{sh['idx']+1:03d}-{desc}.png"
+                name = f"sc{sh['scene_idx']+1:03d}-s{sh['idx']+1:03d}-{desc}{ext}"
                 # tránh trùng tên
                 base, i = name, 2
                 while name in used:
-                    name = base[:-4] + f"-{i}.png"
+                    name = base[:-len(ext)] + f"-{i}{ext}"
                     i += 1
                 used.add(name)
                 zf.write(src, name)
@@ -2736,6 +2764,67 @@ def _start_image_job(pid: str, shots: list[dict], force: bool, type_: str) -> di
     return {"job_id": job.id, "total": len(todo)}
 
 
+# ─── Ảnh độ phân giải cao (2K/4K) ───────────────────────────
+# Flow chỉ phát bản HD qua URL media; bản 2K/4K phải xin riêng qua upsampleImage và trần
+# độ phân giải phụ thuộc tier (ONE → 2K, TWO → 4K). Bản hi-res chỉ dùng khi dựng video từ
+# ảnh / export DaVinci — app vẫn hiển thị bản HD cho nhẹ.
+
+@router.get("/projects/{pid}/hires/status")
+async def hires_status(pid: str):
+    """Đếm số ảnh đã/chưa có bản hi-res + độ phân giải tier hiện tại cho phép."""
+    await _project_or_404(pid)
+    shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? AND sh.image_media_id IS NOT NULL", (pid,))
+    tier = await _current_tier()
+    resolution = hires.res_for_tier(tier)
+    missing = [s for s in shots if hires.is_stale(s)]
+    return {
+        "tier": tier, "resolution": resolution, "label": hires.res_label(resolution).upper(),
+        "total": len(shots), "done": len(shots) - len(missing), "missing": len(missing),
+    }
+
+
+@router.post("/shots/{sid}/hires")
+async def generate_shot_hires(sid: str, force: bool = False):
+    """Tải bản hi-res cho ảnh của MỘT shot (nút thủ công / tải bù khi tự động hỏng)."""
+    shot = await _shot_or_404(sid)
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    _require_extension()
+    if not force and not hires.is_stale(shot):
+        return shot
+    try:
+        await hires.upscale_shot(shot, project, await _current_tier())
+    except RuntimeError as e:
+        raise HTTPException(502, f"Tải ảnh 2K/4K thất bại: {e}") from e
+    return await _shot_or_404(sid)
+
+
+@router.post("/projects/{pid}/hires/generate-all")
+async def generate_project_hires(pid: str, force: bool = False):
+    """Tải bù bản hi-res cho mọi ảnh storyboard còn thiếu (hoặc tất cả khi force)."""
+    project = await _project_or_404(pid)
+    _require_extension()
+    shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? AND sh.image_media_id IS NOT NULL ORDER BY sc.idx, sh.idx", (pid,))
+    todo = [s for s in shots if force or hires.is_stale(s)]
+    tier = await _current_tier()
+    label = hires.res_label(hires.res_for_tier(tier)).upper()
+
+    async def _worker(s):
+        await hires.upscale_shot(s, project, tier)
+
+    # Mỗi lần upsample tốn một captcha và trả về vài MB base64 → chạy tuần tự, giãn như các
+    # lệnh sinh ảnh khác để không dính anti-abuse.
+    job = get_job_manager().start(
+        project_id=pid, type_="hires", items=todo, worker=_worker,
+        label=f"Tải ảnh {label} ({len(todo)})", throttle=(3.0, 6.0),
+        item_label=lambda s: s.get("title") or s["id"])
+    return {"job_id": job.id, "total": len(todo), "resolution": label}
+
+
 # ─── Shots (video) ──────────────────────────────────────────
 
 def _extract_video_submit(payload: dict) -> dict:
@@ -2748,8 +2837,13 @@ def _extract_video_submit(payload: dict) -> dict:
     }
 
 
-async def _poll_video(client, op: dict, timeout: float = 240, interval: float = 8):
-    """Poll check-status until the video URL appears; return URL or None."""
+async def _poll_video(client, op: dict, timeout: float = VIDEO_POLL_TIMEOUT,
+                      interval: float = 8):
+    """Poll check-status until the video URL appears; return URL or None.
+
+    Default comes from VIDEO_POLL_TIMEOUT (420s), not the old hard-coded 240s — an Omni Flash
+    10s clip regularly runs past 4 minutes, and giving up early is expensive: the render keeps
+    going on Flow (already paid for) while the caller sees a failure."""
     import time as _t
     deadline = _t.monotonic() + timeout
     while _t.monotonic() < deadline:
@@ -2767,20 +2861,65 @@ async def _poll_video(client, op: dict, timeout: float = 240, interval: float = 
 CLIP_MAX_S = 8  # one Veo i2v clip ≈ 8s; longer beats are rendered as chained sub-clips
 
 
-async def _render_i2v_clip(client, project: dict, shot_id: str,
-                           start_media_id: str, prompt: str, name: str) -> dict:
-    """Submit one i2v clip, poll, download to media/<pid>/<media_id>.mp4. Retries on
-    block/transient. Returns {media_id, primary_media_id, workflow_id, web, local}."""
-    tier = await _current_tier()
+def _video_engine(project: dict) -> tuple[str, int]:
+    """('omni'|'veo', độ dài tối đa MỘT clip tính bằng giây) theo cấu hình dự án.
+
+    `project.video_model` là lựa chọn của người dùng ở ⚙ Cấu hình dự án. Một key thời lượng
+    Omni Flash ("4"/"6"/"8"/"10") → Omni Flash r2v với đúng độ dài đó; rỗng → Veo i2v tự chọn
+    theo tier. Các giá trị RÁC do dropdown cũ lưu nhầm (nó liệt kê tên tier như thể là model,
+    vd "PAYGATE_TIER_ONE") cũng rơi về Veo thay vì làm hỏng lượt render.
+    """
+    raw = (project.get("video_model") or "").strip()
+    if raw in OMNI_FLASH_MODELS:
+        return "omni", int(raw)
+    for secs, key in OMNI_FLASH_MODELS.items():      # chấp nhận cả model key đầy đủ
+        if raw == key:
+            return "omni", int(secs)
+    return "veo", CLIP_MAX_S
+
+
+def _engine_kw(project: dict) -> dict:
+    """kwargs {engine, clip_s} cho các hàm sinh prompt của brain — quyết định motion prompt
+    được viết dạng MỘT câu (Veo) hay dạng nhiều mốc thời gian `[mm:ss]` (Omni Flash)."""
+    engine, clip_s = _video_engine(project)
+    return {"engine": engine, "clip_s": clip_s}
+
+
+def _clip_submit(client, project: dict, shot_id: str, prompt: str,
+                 start_media_id: str, engine: str, duration_s: int, tier: str,
+                 refs: list[dict] | None = None):
+    """Callable submit một clip theo engine đã chọn.
+
+    Veo là i2v (ảnh frame làm START image); Omni Flash là r2v (không có start image) nên ảnh
+    frame đi vào làm REFERENCE, kèm các entity reference của shot.
+
+    `refs` QUAN TRỌNG với Omni: motion_prompt chứa token `{Tên entity}`, và chỉ khi truyền
+    references thì chúng mới được bind thành reference part; không có nó thì dấu ngoặc nhọn
+    lọt thẳng vào structuredPrompt dưới dạng text thô."""
+    if engine == "omni":
+        # Ảnh frame đứng đầu (mỏ neo thị giác của shot), rồi tới entity refs để bind token.
+        omni_refs = [{"handle": "frame", "media_id": start_media_id}] + [
+            r for r in (refs or []) if r.get("media_id") != start_media_id]
+        return lambda: client.generate_video_omni(
+            prompt=prompt, project_id=project["flow_project_id"],
+            reference_media_ids=[start_media_id], duration_s=duration_s,
+            aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
+            references=omni_refs)
+    return lambda: client.generate_video(
+        start_image_media_id=start_media_id, prompt=prompt,
+        project_id=project["flow_project_id"], scene_id=shot_id,
+        aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
+
+
+async def _render_clip(client, project: dict, shot_id: str, submit, name: str) -> dict:
+    """Submit one clip via `submit()`, poll, download to media/<pid>/<media_id>.mp4. Retries
+    on block/transient. Returns {media_id, primary_media_id, workflow_id, web, local}."""
     last = ""
     attempt = 0
     max_attempts = VIDEO_GEN_RETRIES
     while attempt < max_attempts:
         attempt += 1
-        res = await client.generate_video(
-            start_image_media_id=start_media_id, prompt=prompt,
-            project_id=project["flow_project_id"], scene_id=shot_id,
-            aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
+        res = await submit()
         blocked = _is_abuse_block(res)
         if res.get("error"):
             last = str(res["error"])
@@ -2792,7 +2931,17 @@ async def _render_i2v_clip(client, project: dict, shot_id: str,
                 op = {"operation": {"name": info["media_id"]}, "sceneId": shot_id}
                 url = await _poll_video(client, op)
                 if not url:
-                    last = "video chưa xong trong thời gian chờ"
+                    # KHÔNG re-submit: hết giờ chờ nghĩa là Flow VẪN ĐANG render bản đã tính
+                    # tiền, không phải nó hỏng. Submit lại chỉ tốn thêm credit cho một bản
+                    # thứ hai rồi lại bỏ rơi cả hai. Ghi operation lại để hồi phục sau.
+                    await db.update("shot", shot_id, {
+                        "operation_json": json.dumps({**info, "name": name,
+                                                      "submitted_at": db.now()}),
+                        "updated_at": db.now()})
+                    raise HTTPException(
+                        504, f"Video vẫn đang render trên Flow (quá {VIDEO_POLL_TIMEOUT:.0f}s "
+                             f"chờ). KHÔNG tạo lại (tránh tốn credit lần nữa) — bấm 'Lấy lại "
+                             f"video' để lấy bản đang render về.")
                 else:
                     if info.get("workflow_id"):
                         try:
@@ -2815,14 +2964,16 @@ async def _render_i2v_clip(client, project: dict, shot_id: str,
     raise HTTPException(502, f"Tạo clip thất bại sau {attempt} lần: {last}")
 
 
-async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int) -> dict:
-    """Storytelling beat > one clip: render `n` chained i2v sub-clips (each starts on the
+async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
+                         engine: str = "veo", clip_max: int = CLIP_MAX_S) -> dict:
+    """Storytelling beat > one clip: render `n` chained sub-clips (each continues from the
     previous clip's last frame, motion flows on) and concat them into the shot's video."""
+    tier = await _current_tier()
     motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
     motions = [motion]
     try:
         pp = await brain.run_json(brain.beat_parts_prompt(
-            shot.get("beat_action") or motion, motion, n, CLIP_MAX_S))
+            shot.get("beat_action") or motion, motion, n, clip_max, engine))
         parts = pp.get("parts") if isinstance(pp, dict) else None
         if parts:
             motions = [p.get("motion_prompt") or motion
@@ -2835,10 +2986,13 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int)
     out_dir = assembler.STUDIO_MEDIA_DIR / project["id"]
     out_dir.mkdir(parents=True, exist_ok=True)
     start_media = shot["image_media_id"]
+    refs = await _build_frame_references(shot, scene) if engine == "omni" else None
     clips, first = [], None
     for k in range(n):
         name = f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_p{k+1}_vid"
-        info = await _render_i2v_clip(client, project, shot["id"], start_media, motions[k], name)
+        submit = _clip_submit(client, project, shot["id"], motions[k], start_media,
+                              engine, clip_max, tier, refs)
+        info = await _render_clip(client, project, shot["id"], submit, name)
         first = first or info
         clips.append(info["local"])
         if k < n - 1:  # chain: last frame of this clip → uploaded start image for the next
@@ -2859,6 +3013,9 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int)
     await db.update("shot", shot["id"], {
         "video_media_id": first["media_id"], "video_primary_id": first.get("primary_media_id"),
         "video_workflow_id": first.get("workflow_id"), "video_path": web,
+        "video_model": (OMNI_FLASH_MODELS.get(str(clip_max)) if engine == "omni"
+                        else VIDEO_MODELS.get(tier, {}).get("frame_2_video", {})
+                                         .get(project["aspect_ratio"])),
         "status": "done", "updated_at": db.now()})
     return await _shot_or_404(shot["id"])
 
@@ -2871,20 +3028,38 @@ async def _generate_shot_video(shot: dict) -> dict:
         raise HTTPException(400, "Shot chưa có ảnh frame — tạo ảnh ở Storyboard trước")
     await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
 
-    # Storytelling beat longer than one clip → chained sub-clips covering the beat.
+    # Engine + độ dài tối đa một clip do Cấu hình dự án quyết định (Veo i2v 8s mặc định, hoặc
+    # Omni Flash 4/6/8/10s). Beat dài hơn một clip → chained sub-clips phủ hết beat; với Omni
+    # 10s thì một beat 10s chỉ cần MỘT clip thay vì hai clip Veo nối nhau.
+    engine, clip_max = _video_engine(project)
     dur = float(shot.get("duration") or 0)
-    n = max(1, math.ceil(dur / CLIP_MAX_S)) if dur > CLIP_MAX_S else 1
+    n = max(1, math.ceil(dur / clip_max)) if dur > clip_max else 1
+    tier = await _current_tier()
     try:
         if n > 1:
-            return await _chained_video(shot, scene, project, client, n)
+            return await _chained_video(shot, scene, project, client, n, engine, clip_max)
         motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
-        info = await _render_i2v_clip(
-            client, project, shot["id"], shot["image_media_id"], motion,
+        refs = await _build_frame_references(shot, scene) if engine == "omni" else None
+        submit = _clip_submit(client, project, shot["id"], motion, shot["image_media_id"],
+                              engine, clip_max, tier, refs)
+        info = await _render_clip(
+            client, project, shot["id"], submit,
             f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
         await db.update("shot", shot["id"], {
             "video_media_id": info["media_id"], "video_primary_id": info.get("primary_media_id"),
             "video_workflow_id": info.get("workflow_id"), "video_path": info["web"],
+            # Ghi lại model ĐÃ DÙNG THẬT — không có nó thì "đặt Omni mà ra Veo" chỉ phát hiện
+            # được bằng cách mở Flow lên xem.
+            "video_model": (OMNI_FLASH_MODELS.get(str(clip_max)) if engine == "omni"
+                            else VIDEO_MODELS.get(tier, {}).get("frame_2_video", {})
+                                             .get(project["aspect_ratio"])),
             "status": "done", "updated_at": db.now()})
+        # Video vừa render chỉ là bản HD. Nếu dự án bật "tự upscale video", kéo bản
+        # 1080p/4K ngay (best-effort — hỏng chỉ ghi log, video HD đã có). Chỉ áp dụng cho
+        # clip đơn: nhánh chained ở trên không upscale được.
+        if project.get("auto_upscale_video"):
+            await hires.auto_upscale_video(
+                await _shot_or_404(shot["id"]), project, await _current_tier(), _poll_video)
         return await _shot_or_404(shot["id"])
     except HTTPException:
         await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
@@ -2897,7 +3072,8 @@ async def gen_shot_prompts(sid: str):
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
     out = await brain.run_json(brain.shot_prompts_prompt(
-        shot.get("description") or shot.get("title") or "", project["style"]))
+        shot.get("description") or shot.get("title") or "", project["style"],
+        **_engine_kw(project)))
     await db.update("shot", sid, {
         "visual_prompt": out.get("visual_prompt"),
         "motion_prompt": out.get("motion_prompt"), "updated_at": db.now()})
@@ -2910,27 +3086,111 @@ async def generate_shot_video(sid: str):
     return await _generate_shot_video(shot)
 
 
+@router.post("/shots/{sid}/video/resume")
+async def resume_shot_video(sid: str):
+    """Lấy về video của một lượt render ĐÃ SUBMIT nhưng hết giờ chờ (operation_json).
+
+    Không submit gì mới — chỉ poll lại operation cũ, nên không tốn thêm credit. Dùng khi
+    'Tạo video' báo 504 vì Flow render lâu hơn thời gian chờ."""
+    shot = await _shot_or_404(sid)
+    try:
+        op_info = json.loads(shot.get("operation_json") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        op_info = {}
+    media_id = op_info.get("media_id")
+    if not media_id:
+        raise HTTPException(400, "Shot không có lượt render nào đang chờ")
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    client = _require_extension()
+
+    url = await _poll_video(client, {"operation": {"name": media_id}, "sceneId": sid})
+    if not url:
+        raise HTTPException(504, "Video vẫn chưa xong — thử 'Lấy lại video' sau ít phút.")
+    if op_info.get("workflow_id") and op_info.get("name"):
+        try:
+            await client.change_display_name(
+                op_info["workflow_id"], project["flow_project_id"], op_info["name"])
+        except Exception:
+            pass
+    web = await media_store.save_from_url(media_id, project["id"], "mp4", url)
+    if not web:
+        raise HTTPException(502, "Tải video về lỗi")
+    await db.update("shot", sid, {
+        "video_media_id": media_id, "video_primary_id": op_info.get("primary_media_id"),
+        "video_workflow_id": op_info.get("workflow_id"), "video_path": web,
+        "operation_json": None, "status": "done", "updated_at": db.now()})
+    return await _shot_or_404(sid)
+
+
 @router.post("/shots/{sid}/upscale")
-async def upscale_shot(sid: str, resolution: str = "VIDEO_RESOLUTION_4K"):
+async def upscale_shot(sid: str, resolution: Optional[str] = None, force: bool = False):
+    """Upscale video của MỘT shot. Bỏ trống `resolution` → lấy theo tier (ONE → 1080p,
+    TWO → 4K); xin 4K trên tier ONE sẽ bị Flow từ chối."""
     shot = await _shot_or_404(sid)
     if not shot.get("video_media_id"):
         raise HTTPException(400, "Shot chưa có video để upscale")
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
-    client = _require_extension()
-    res = await client.upscale_video(
-        media_id=shot["video_media_id"], scene_id=shot["id"],
-        aspect_ratio=project["aspect_ratio"], resolution=resolution)
-    if res.get("error"):
-        raise HTTPException(502, str(res["error"]))
-    info = _extract_video_submit(res.get("data", res))
-    op = {"operation": {"name": info["media_id"]}, "sceneId": shot["id"]}
-    url = await _poll_video(client, op, timeout=300)
-    if not url:
-        raise HTTPException(504, "Upscale chưa xong — thử lại sau")
-    web = await media_store.save_from_url(info["media_id"], project["id"], "mp4", url)
-    await db.update("shot", sid, {"upscale_path": web, "upscale_url": url, "updated_at": db.now()})
+    _require_extension()
+    if not force and not hires.video_is_stale(shot):
+        return shot
+    try:
+        await hires.upscale_video(shot, project, await _current_tier(),
+                                  _poll_video, resolution)
+    except RuntimeError as e:
+        raise HTTPException(502, f"Upscale video thất bại: {e}") from e
     return await _shot_or_404(sid)
+
+
+@router.get("/projects/{pid}/upscale/status")
+async def upscale_video_status(pid: str):
+    """Đếm video đã/chưa upscale + độ phân giải sẽ dùng (trần tier ∩ lựa chọn dự án)."""
+    project = await _project_or_404(pid)
+    rows = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? AND sh.video_media_id IS NOT NULL", (pid,))
+    # Shot chained không upscale được → không tính vào tổng, nếu không "còn thiếu" sẽ
+    # không bao giờ về 0.
+    shots = [s for s in rows if hires.video_upscalable(s)]
+    tier = await _current_tier()
+    resolution = hires.video_res_for_tier(tier, project.get("upscale_res"))
+    missing = [s for s in shots if hires.video_is_stale(s)]
+    return {
+        "tier": tier, "resolution": resolution,
+        "label": hires.video_res_label(resolution).upper(),
+        "total": len(shots), "done": len(shots) - len(missing), "missing": len(missing),
+        "skipped_chained": len(rows) - len(shots),
+        # Các mức tier này cho phép — tier TWO chọn được 1080p cho nhẹ/rẻ thay vì luôn 4K.
+        "choices": [{"value": r, "label": hires.video_res_label(r).upper()}
+                    for r in hires.video_res_choices(tier)],
+    }
+
+
+@router.post("/projects/{pid}/upscale/generate-all")
+async def upscale_all_videos(pid: str, force: bool = False):
+    """Upscale bù mọi video chưa có bản độ phân giải cao (~1 phút/video)."""
+    project = await _project_or_404(pid)
+    _require_extension()
+    shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? AND sh.video_media_id IS NOT NULL ORDER BY sc.idx, sh.idx", (pid,))
+    todo = [s for s in shots
+            if hires.video_upscalable(s) and (force or hires.video_is_stale(s))]
+    tier = await _current_tier()
+    label = hires.video_res_label(
+        hires.video_res_for_tier(tier, project.get("upscale_res"))).upper()
+
+    async def _worker(s):
+        await hires.upscale_video(s, project, tier, _poll_video)
+
+    # Mỗi upscale là một lượt render thật (submit + poll ~1 phút) → tuần tự, giãn như
+    # generate-all video để không dính anti-abuse.
+    job = get_job_manager().start(
+        project_id=pid, type_="upscale", items=todo, worker=_worker,
+        label=f"Upscale video {label} ({len(todo)})", throttle=(15.0, 30.0),
+        item_label=lambda s: s.get("title") or s["id"])
+    return {"job_id": job.id, "total": len(todo), "resolution": label}
 
 
 @router.post("/projects/{pid}/shots/generate-all")
@@ -3392,6 +3652,42 @@ async def upload_bgm(pid: str, file: UploadFile = File(...),
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
 
 
+class CopyBgmRequest(BaseModel):
+    source: str                       # đường dẫn file nhạc của một dự án khác
+    volume: Optional[float] = None
+
+
+@router.post("/projects/{pid}/bgm/copy")
+async def copy_bgm(pid: str, body: CopyBgmRequest):
+    """Chép nhạc nền từ một dự án khác sang dự án này (dùng khi nạp preset thiết lập).
+
+    COPY chứ không trỏ chung đường dẫn: mỗi dự án giữ file `bgm.<ext>` riêng, nếu dùng chung
+    thì xoá/gỡ nhạc ở một dự án sẽ làm hỏng những dự án còn lại."""
+    await _project_or_404(pid)
+    src = Path(body.source)
+    # Chỉ cho phép chép từ trong kho media của studio — preset là dữ liệu nhập từ ngoài,
+    # không nên biến nó thành đường đọc file tuỳ ý trên máy.
+    try:
+        src.resolve().relative_to(assembler.STUDIO_MEDIA_DIR.resolve())
+    except ValueError:
+        raise HTTPException(400, "Nguồn nhạc nằm ngoài kho media của studio")
+    if not src.is_file():
+        raise HTTPException(404, "Không tìm thấy file nhạc nguồn")
+
+    out_dir = assembler.STUDIO_MEDIA_DIR / pid
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"bgm{src.suffix.lower() or '.mp3'}"
+    if src.resolve() != dest.resolve():
+        for old in out_dir.glob("bgm.*"):    # một bgm mỗi dự án
+            old.unlink(missing_ok=True)
+        await asyncio.to_thread(shutil.copyfile, src, dest)
+    fields = {"bgm_path": str(dest), "updated_at": db.now()}
+    if body.volume is not None:
+        fields["bgm_volume"] = min(max(float(body.volume), 0.0), 1.0)
+    await db.update("project", pid, fields)
+    return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+
+
 @router.delete("/projects/{pid}/bgm")
 async def clear_bgm(pid: str):
     """Gỡ nhạc nền khỏi dự án (video ghép sau sẽ không còn nhạc)."""
@@ -3564,14 +3860,20 @@ async def sync_project_media(pid: str):
             if (sh.get("image_media_id") or sh.get("image_primary_id")) and \
                     not present(sh.get("image_media_id"), sh.get("image_primary_id")):
                 rm_file(sh.get("image_path"))
+                rm_file(sh.get("image_hires_path"))   # bản 2K/4K thuộc về ảnh vừa mất
                 upd.update(image_media_id=None, image_primary_id=None,
-                           image_workflow_id=None, image_path=None)
+                           image_workflow_id=None, image_path=None,
+                           image_hires_path=None, image_hires_media_id=None,
+                           image_hires_res=None)
                 removed["shot_images"].append(sh.get("title") or sh["id"])
             if (sh.get("video_media_id") or sh.get("video_primary_id")) and \
                     not present(sh.get("video_media_id"), sh.get("video_primary_id")):
                 rm_file(sh.get("video_path"))
+                rm_file(sh.get("upscale_path"))   # bản upscale thuộc về video vừa mất
                 upd.update(video_media_id=None, video_primary_id=None,
-                           video_workflow_id=None, video_path=None)
+                           video_workflow_id=None, video_path=None,
+                           upscale_path=None, upscale_url=None,
+                           upscale_media_id=None, upscale_res=None)
                 removed["shot_videos"].append(sh.get("title") or sh["id"])
             if upd:
                 upd["updated_at"] = db.now()

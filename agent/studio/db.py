@@ -140,6 +140,24 @@ _MIGRATIONS = [
     # Timed keyword captions burned on the video / exported to DaVinci (JSON list of
     # {text, start, end} in scene-local seconds).
     ("shot", "captions", "TEXT"),
+    # Ảnh Flow sinh ra chỉ là bản HD; bật cờ này để tự tải thêm bản 2K/4K (theo tier) qua
+    # upsampleImage sau mỗi lần sinh ảnh — dùng khi dựng video từ ảnh / export DaVinci.
+    ("project", "auto_hires", "INTEGER DEFAULT 0"),
+    # Bản hi-res của ảnh shot: file riêng cạnh bản HD (image_path vẫn là bản nhẹ để hiển thị).
+    # image_hires_media_id = ảnh HD mà bản này được phóng to từ đó → regen ảnh làm nó cũ đi.
+    ("shot", "image_hires_path", "TEXT"),
+    ("shot", "image_hires_media_id", "TEXT"),
+    ("shot", "image_hires_res", "TEXT"),
+    # Video cũng chỉ sinh ra bản HD. Bật cờ này để tự upscale sau khi render xong — trần theo
+    # tier (ONE → 1080p, TWO → 4K). Mỗi lượt mất ~1 phút (render bất đồng bộ).
+    ("project", "auto_upscale_video", "INTEGER DEFAULT 0"),
+    # upscale_path/upscale_url đã có sẵn; thêm nguồn + độ phân giải để biết bản upscale còn
+    # đúng với video hiện tại hay đã cũ (shot render lại video sau khi upscale).
+    ("shot", "upscale_media_id", "TEXT"),
+    ("shot", "upscale_res", "TEXT"),
+    # Độ phân giải upscale MONG MUỐN. Rỗng = kịch trần của tier. Tier TWO có thể chọn 1080p
+    # thay vì 4K cho nhẹ/rẻ; giá trị vượt trần tier bị hạ xuống chứ không làm Flow từ chối.
+    ("project", "upscale_res", "TEXT"),
     # Location entities get extra angle views (besides the primary establishing shot) so a
     # shot has several angles of the place to reference — JSON list of {media_id,
     # primary_media_id, path}. Stops shots from copying one fixed location framing.

@@ -90,6 +90,29 @@ with open(_MODELS_FILE) as _f:
 VIDEO_MODELS = _MODELS["video_models"]
 UPSCALE_MODELS = _MODELS["upscale_models"]
 IMAGE_MODELS = _MODELS["image_models"]
+
+# ─── Image upsample (Flow /v1/flow/upsampleImage) ───────────
+# Ảnh sinh ra chỉ là bản HD (phân giải thấp). Flow cho tải bản phóng to theo tier:
+# TIER_ONE → 2K, TIER_TWO → 4K. Response trả base64 trong `encodedImage`.
+UPSAMPLE_IMAGE_RESOLUTIONS = {
+    "PAYGATE_TIER_ONE": "UPSAMPLE_IMAGE_RESOLUTION_2K",
+    "PAYGATE_TIER_TWO": "UPSAMPLE_IMAGE_RESOLUTION_4K",
+}
+UPSAMPLE_IMAGE_DEFAULT = "UPSAMPLE_IMAGE_RESOLUTION_2K"
+# Upsample trả cả ảnh 4K dưới dạng base64 → chậm hơn hẳn một call thường.
+UPSAMPLE_IMAGE_TIMEOUT = float(os.environ.get("UPSAMPLE_IMAGE_TIMEOUT", "180"))
+
+# ─── Video upsample (batchAsyncGenerateVideoUpsampleVideo) ──
+# Video sinh ra cũng chỉ là bản HD. Trần upscale cũng theo tier: TIER_ONE chỉ lên được
+# Full HD (1080p), TIER_TWO mới lên 4K. Khác upsample ảnh (đồng bộ, trả base64), việc này
+# chạy BẤT ĐỒNG BỘ như một lượt sinh video: submit → poll, ~1 phút/video.
+# Đo thực tế trên tier ONE → 1080p: KHÔNG trừ credit (914 → 914 cho một video render mới).
+# Bản 4K (tier TWO) chưa kiểm chứng được — nhiều khả năng mới là bản tính tiền.
+UPSAMPLE_VIDEO_RESOLUTIONS = {
+    "PAYGATE_TIER_ONE": "VIDEO_RESOLUTION_1080P",
+    "PAYGATE_TIER_TWO": "VIDEO_RESOLUTION_4K",
+}
+UPSAMPLE_VIDEO_DEFAULT = "VIDEO_RESOLUTION_1080P"
 # Omni Flash — r2v đa-độ-dài (4/6/8/10s), key theo số giây (string). Aspect chỉ
 # PORTRAIT/LANDSCAPE (không SQUARE). Dùng chung endpoint r2v.
 OMNI_FLASH_MODELS = _MODELS.get("omni_flash_models", {})

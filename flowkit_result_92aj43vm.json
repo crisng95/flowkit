@@ -1,0 +1,1302 @@
+[
+  {
+    "text": "Căn phòng chìm vào sự im lặng tịch mịch của đêm muộn. ",
+    "beat_action": "Sitting in silence",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Hùng} sits in a wooden chair, while {Tiểu Kỳ} sits opposite him, both remaining silent. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Hùng} sits in a wooden chair, while {Tiểu Kỳ} sits opposite him, both remaining silent. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: locked-off, no camera move. Subject motion: subtle drifting of dust particles in the warm desk lamp light.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "im lặng tịch mịch"
+    ]
+  },
+  {
+    "text": "Đó không phải là khoảng im lặng ngột ngạt của sự nghi kị, mà là sự tĩnh lặng khi hai con người nhận ra họ đang đứng ở cùng một tọa độ suy nghĩ và không cần thiết phải lấp đầy không gian bằng những lời nói thừa thãi. ",
+    "beat_action": "Sitting in silence",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Tiểu Kỳ} looks back at {Hùng} without speaking, her face calm and serious. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Tiểu Kỳ} looks back at {Hùng} without speaking, her face calm and serious. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} blinks slowly, holding {Hùng}'s gaze in the dim light.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "tĩnh lặng",
+      "Đó không"
+    ]
+  },
+  {
+    "text": "Hùng nhìn vào những nét vẽ biểu đồ trong cuốn sổ tay giấy, rồi ngước nhìn Tiểu Kỳ. ",
+    "beat_action": "Inspecting notebook",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Hùng} looks down at the frequency graph in {Sổ tay} on the desk, then looks up at {Tiểu Kỳ}. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Hùng} looks down at the frequency graph in {Sổ tay} on the desk, then looks up at {Tiểu Kỳ}. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} lifts his head, his metal-framed glasses reflecting the lamp light.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Sổ tay",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "nét vẽ biểu đồ",
+      "sổ tay giấy"
+    ]
+  },
+  {
+    "text": "\"Cô có nghe thấy thứ gì bất thường dưới những tầng hang đó không?\" ",
+    "beat_action": "Asking a question",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Hùng} speaks to {Tiểu Kỳ}, asking if she heard anything unusual. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Hùng} speaks to {Tiểu Kỳ}, asking if she heard anything unusual. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Hùng}'s lips move as he asks the question, his expression analytical.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "bất thường dưới những tầng hang"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ nhìn thẳng vào mắt anh. ",
+    "beat_action": "Staring intently",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, {Tiểu Kỳ} stares directly into {Hùng}'s eyes, her face expressionless. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: {Tiểu Kỳ} stares directly into {Hùng}'s eyes, her face expressionless. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} holds her gaze, her eyes narrowing slightly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "nhìn thẳng vào mắt"
+    ]
+  },
+  {
+    "text": "\"Ý anh thực sự muốn hỏi là gì?\" ",
+    "beat_action": "Asking for clarification",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Tiểu Kỳ} speaks calmly, asking what he really means. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Tiểu Kỳ} speaks calmly, asking what he really means. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: slow pan. Subject motion: {Tiểu Kỳ}'s mouth moves slightly as she speaks, maintaining eye contact.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "thực sự muốn hỏi"
+    ]
+  },
+  {
+    "text": "\"Dưới lòng hang sâu đó — cô có từng cảm nhận được bất kỳ tín hiệu hay dao động nào không bình thường không? ",
+    "beat_action": "Explaining the signal",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Hùng} explains the signal, asking if she felt abnormal vibrations. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Hùng} explains the signal, asking if she felt abnormal vibrations. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} speaks with a serious look, leaning forward slightly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "tín hiệu hay dao động",
+      "lòng hang sâu"
+    ]
+  },
+  {
+    "text": "Những âm thanh, những đợt rung động vật lý mà địa tầng thông thường không thể giải thích được bằng các đứt gãy tự nhiên?\" ",
+    "beat_action": "Describing vibrations",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Hùng} gestures toward the desk, describing physical vibrations that geology cannot explain. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Hùng} gestures toward the desk, describing physical vibrations that geology cannot explain. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: locked-off. Subject motion: {Hùng} gestures with his hand, pointing toward the floor.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "đợt rung động vật lý",
+      "đứt gãy tự nhiên"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ giữ im lặng lâu hơn tất cả những lần trước đó. ",
+    "beat_action": "Staying silent",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} remains silent, looking down at the desk. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} remains silent, looking down at the desk. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow zoom-out. Subject motion: {Tiểu Kỳ} sits completely still, looking down, processing the question.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "giữ im lặng"
+    ]
+  },
+  {
+    "text": "Không phải vì cô không có câu trả lời, mà Hùng đọc được trong tư thế ngồi im phăng phắc của cô một sự cân nhắc kỹ lưỡng xem liệu hệ thần kinh của người đàn ông đối diện có đủ khả năng tiếp nhận những gì cô sắp tiết lộ hay không. ",
+    "beat_action": "Sizing up Hùng",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Tiểu Kỳ} watches {Hùng} closely, evaluating his readiness. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Tiểu Kỳ} watches {Hùng} closely, evaluating his readiness. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} blinks slowly, her posture rigid as she sizes him up.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "ngồi im phăng phắc",
+      "cân nhắc kỹ lưỡng"
+    ]
+  },
+  {
+    "text": "\"Có,\" cô nói cuối cùng, giọng cô trầm thấp. ",
+    "beat_action": "Answering 'Có'",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Tiểu Kỳ} looks at {Hùng} and speaks the word 'Có' in a low voice. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Tiểu Kỳ} looks at {Hùng} and speaks the word 'Có' in a low voice. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ}'s lips form the word as she answers.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Có",
+      "giọng cô trầm thấp"
+    ]
+  },
+  {
+    "text": "\"Thứ đó trông thế nào?\" ",
+    "beat_action": "Asking what it looks like",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Hùng} asks immediately what it looks like. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Hùng} asks immediately what it looks like. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} leans forward, asking with intense curiosity.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "trông thế nào"
+    ]
+  },
+  {
+    "text": "\"Đó là một thực thể dao động mà tôi hoàn toàn không sở hữu bất kỳ từ ngữ ngôn ngữ nào của mặt đất để có thể mô tả một cách chính xác.\" Cô nói chậm rãi. ",
+    "beat_action": "Describing the entity",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Tiểu Kỳ} describes the vibrating entity, speaking slowly. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Tiểu Kỳ} describes the vibrating entity, speaking slowly. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow tilt-up. Subject motion: {Tiểu Kỳ} speaks with a calm, slow movement of her lips.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "thực thể dao động",
+      "nói chậm rãi"
+    ]
+  },
+  {
+    "text": "\"Nó không phải là một tiếng ồn cơ học. ",
+    "beat_action": "Explaining noise",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Tiểu Kỳ} shakes her head, explaining it is not mechanical noise. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Tiểu Kỳ} shakes her head, explaining it is not mechanical noise. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} shakes her head slightly, her face serious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "tiếng ồn cơ học"
+    ]
+  },
+  {
+    "text": "Nó cũng không phải là âm thanh theo nghĩa vật lý thông thường mà tai anh có thể nghe thấy. ",
+    "beat_action": "Explaining sound",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Tiểu Kỳ} explains that it is not normal physical sound heard by ears. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Tiểu Kỳ} explains that it is not normal physical sound heard by ears. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} points to her ear, indicating the nature of the vibration.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "âm thanh",
+      "vật lý thông thường"
+    ]
+  },
+  {
+    "text": "Nó giống như... cảm giác khi anh đứng sát cạnh một máy biến áp công nghiệp khổng lồ đang vận hành xuyên đêm, anh cảm nhận thấy các xương trong cơ thể mình dao động trước khi bản thân màng nhĩ ghi nhận được tần số âm thanh. ",
+    "beat_action": "Describing transformer",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Tiểu Kỳ} describes the feeling of standing next to a massive transformer. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Tiểu Kỳ} describes the feeling of standing next to a massive transformer. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} gestures with both hands, describing the deep frequency vibration.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "máy biến áp công nghiệp",
+      "vận hành xuyên đêm"
+    ]
+  },
+  {
+    "text": "Nhưng nó không phải là một đợt rung động cơ học đơn thuần. ",
+    "beat_action": "Explaining vibration",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, {Tiểu Kỳ} explains that it is not a simple physical vibration. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: {Tiểu Kỳ} explains that it is not a simple physical vibration. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} shakes her head slightly, her slanted eyes intense.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "không phải là một đợt rung động"
+    ]
+  },
+  {
+    "text": "Và nó không xuất phát từ bất kỳ thiết bị nhân tạo nào dưới đó.\" ",
+    "beat_action": "Ruling out artificial source",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Tiểu Kỳ} states that it does not come from any machine. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Tiểu Kỳ} states that it does not come from any machine. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} looks down, shadows lengthening across the concrete wall.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "không xuất phát từ",
+      "thiết bị nhân tạo"
+    ]
+  },
+  {
+    "text": "\"Tần suất cô cảm nhận được nó là bao lâu?\" ",
+    "beat_action": "Asking about frequency",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Hùng} asks how often she felt it, looking at her. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Hùng} asks how often she felt it, looking at her. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} speaks, his analytical expression serious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Tần suất",
+      "bao lâu"
+    ]
+  },
+  {
+    "text": "\"Kể từ khi tôi còn là một đứa trẻ.\" ",
+    "beat_action": "Replying 'Since childhood'",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Tiểu Kỳ} responds that it has been since she was a child. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Tiểu Kỳ} responds that it has been since she was a child. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks calmly, her face showing no emotion.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "đứa trẻ"
+    ]
+  },
+  {
+    "text": "Giọng Tiểu Kỳ phẳng lặng, không hề có sắc thái cảm xúc cá nhân — kiểu điềm nhiên của một sinh vật đã quen sống chung với một hiện tượng dị thường mà cả thế giới xung quanh không thể hiểu nổi, và cô đã từ bỏ nỗ lực mong cầu sự đồng cảm từ lâu. ",
+    "beat_action": "Explaining detachment",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} sits quietly, her face displaying a flat, detached look. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} sits quietly, her face displaying a flat, detached look. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow orbit. Subject motion: {Tiểu Kỳ} blinks slowly, looking calm and indifferent.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Giọng Tiểu",
+      "dị thường"
+    ]
+  },
+  {
+    "text": "\"Khi còn nhỏ, tôi luôn nghĩ rằng đó là một hiện tượng sinh học bình thường mà bất kỳ ai cũng cảm nhận được trong cơ thể mình. ",
+    "beat_action": "Recalling childhood",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Tiểu Kỳ} looks at the warm desk lamp, recalling her childhood thoughts. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Tiểu Kỳ} looks at the warm desk lamp, recalling her childhood thoughts. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s eyes soften slightly as she remembers.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "hiện tượng sinh học bình thường"
+    ]
+  },
+  {
+    "text": "Tôi đã mất rất nhiều năm sinh tồn trên mặt đất chỉ để nhận ra một sự thật tàn nhẫn: Không một ai xung quanh nghe thấy điệu nhạc đó ngoài tôi.\" ",
+    "beat_action": "Realizing the truth",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Tiểu Kỳ} describes the cruel truth that only she heard the music. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Tiểu Kỳ} describes the cruel truth that only she heard the music. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} speaks slowly, her voice flat and steady.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "sự thật tàn nhẫn",
+      "điệu nhạc đó"
+    ]
+  },
+  {
+    "text": "Hùng chằm chằm nhìn cô gái. ",
+    "beat_action": "Staring in disbelief",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Hùng} stares at her in silence, processing this revelation. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Hùng} stares at her in silence, processing this revelation. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} blinks, his eyes locked on her in shock.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "chằm chằm nhìn"
+    ]
+  },
+  {
+    "text": "Dòng chảy suy luận trong đầu anh va chạm kịch liệt vào những thông số tần số 432Hz. ",
+    "beat_action": "Connecting details",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Hùng} looks down at the 432Hz frequency graphs in {Sổ tay}. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Hùng} looks down at the 432Hz frequency graphs in {Sổ tay}. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} turns a page of the notebook, looking at the curves.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Sổ tay"
+    ],
+    "key_phrases": [
+      "suy luận",
+      "tần số 432Hz"
+    ]
+  },
+  {
+    "text": "Một dao động lan truyền trực tiếp qua hệ thần kinh và xương cốt, xuất hiện từ thời thơ ấu, có đặc tính tương đồng hoàn hảo với cách thức dải sóng địa chấn 432Hz lan truyền qua các tầng đá thạch áp dưới lòng đất sâu. ",
+    "beat_action": "Analyzing frequency",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Hùng} holds {Bút chì} near the 432Hz notes in {Sổ tay}. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Hùng} holds {Bút chì} near the 432Hz notes in {Sổ tay}. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng}'s hand holds the green pencil tightly over the paper.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Bút chì",
+      "Hùng",
+      "Sổ tay"
+    ],
+    "key_phrases": [
+      "hệ thần kinh",
+      "địa chấn 432Hz"
+    ]
+  },
+  {
+    "text": "Vũ Đình Khải đã từng viết trong tệp tin cá nhân của mình: \"Tôi nghĩ nó nghe thấy tôi\". ",
+    "beat_action": "Remembering Khải",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Hùng} looks thoughtful, recalling Vũ Đình {Khải}'s notes. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Hùng} looks thoughtful, recalling Vũ Đình {Khải}'s notes. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow tilt-up. Subject motion: {Hùng}'s eyes reflect the warm light as he recalls {Khải}'s words.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Vũ Đình Khải",
+      "nghe thấy tôi"
+    ]
+  },
+  {
+    "text": "Và giờ đây, sinh vật đứng trước mặt anh tuyên bố cô đã nghe thấy điệu nhạc của đá suốt cả cuộc đời mình. ",
+    "beat_action": "Processing statement",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Hùng} looks up at {Tiểu Kỳ}, who claims she heard the stone music. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Hùng} looks up at {Tiểu Kỳ}, who claims she heard the stone music. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} looks up from the desk toward {Tiểu Kỳ}.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "điệu nhạc của đá"
+    ]
+  },
+  {
+    "text": "\"Cô sống gần phân khu công nghiệp này từ nhỏ?\" ",
+    "beat_action": "Asking about childhood location",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, {Hùng} asks if she lived near the industrial zone. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: {Hùng} asks if she lived near the industrial zone. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Hùng} speaks, trying to keep his voice calm and steady.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "phân khu công nghiệp",
+      "từ nhỏ"
+    ]
+  },
+  {
+    "text": "anh cố gắng giữ cho giọng nói của mình ở trạng thái bình ổn nhất có thể. ",
+    "beat_action": "Keeping calm voice",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Hùng} maintains a neutral expression as he waits for her reply. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Hùng} maintains a neutral expression as he waits for her reply. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} holds his calm expression, adjusting his glasses.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "bình ổn nhất"
+    ]
+  },
+  {
+    "text": "\"Không phải khu vực Zone 4 này. ",
+    "beat_action": "Denying Zone 4",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Tiểu Kỳ} shakes her head, stating it wasn't Zone 4. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Tiểu Kỳ} shakes her head, stating it wasn't Zone 4. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} shakes her head slowly, looking at {Hùng}.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Không phải",
+      "Zone 4"
+    ]
+  },
+  {
+    "text": "Tôi sinh trưởng ở gần Resonance Grid — Mạng Lưới Cộng Hưởng.\" ",
+    "beat_action": "Mentioning Resonance Grid",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Tiểu Kỳ} states she grew up near the Resonance Grid. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Tiểu Kỳ} states she grew up near the Resonance Grid. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks the name with a calm, flat tone.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Resonance Grid",
+      "Mạng Lưới Cộng Hưởng"
+    ]
+  },
+  {
+    "text": "Cô dừng lại một nhịp dài, đôi mắt xếch nhìn anh dò xét. ",
+    "beat_action": "Observing Hùng",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} pauses, looking at {Hùng} with her slanted eyes. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} pauses, looking at {Hùng} with her slanted eyes. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow pan. Subject motion: {Tiểu Kỳ}'s eyes study {Hùng}'s expression.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "nhịp dài",
+      "dò xét"
+    ]
+  },
+  {
+    "text": "\"Anh có nắm giữ thông tin về Resonance Grid là gì không?\" ",
+    "beat_action": "Asking if Hùng knows",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Tiểu Kỳ} asks if he knows what the Resonance Grid is. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Tiểu Kỳ} asks if he knows what the Resonance Grid is. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s lips move as she asks the question.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "nắm giữ thông tin"
+    ]
+  },
+  {
+    "text": "Hùng lắc đầu. ",
+    "beat_action": "Shaking head",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Hùng} shakes his head, looking blank. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Hùng} shakes his head, looking blank. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} shakes his head slowly, looking confused.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "lắc đầu"
+    ]
+  },
+  {
+    "text": "Cái tên đó hoàn toàn trống rỗng trong trí nhớ kỹ thuật của anh. ",
+    "beat_action": "Searching memory",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Hùng} taps {Bút chì} on the desk, searching his memory. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Hùng} taps {Bút chì} on the desk, searching his memory. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng}'s hand taps the pencil on the wood surface.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Bút chì",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "trống rỗng"
+    ]
+  },
+  {
+    "text": "Không một tài liệu địa chất, bản đồ phân khu hay hồ sơ dự án nào của Vortex Systems từng nhắc đến cái tên Mạng Lưới Cộng Hưởng. ",
+    "beat_action": "Recalling documents",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, Close shot of the technical maps on the desk, none listing the Mạng Lưới Cộng Hưởng. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: Close shot of the technical maps on the desk, none listing the Mạng Lưới Cộng Hưởng. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow pan. Subject motion: shadows from the window drift across the technical drawings.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC"
+    ],
+    "key_phrases": [
+      "tài liệu địa chất",
+      "hồ sơ dự án"
+    ]
+  },
+  {
+    "text": "\"Không,\" anh đáp thành thật. ",
+    "beat_action": "Answering honestly",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Hùng} speaks honestly, looking at her. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Hùng} speaks honestly, looking at her. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} speaks, his face open and honest.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "đáp thành thật"
+    ]
+  },
+  {
+    "text": "\"Tôi chưa từng nghe thấy cái tên đó.\" ",
+    "beat_action": "Confirming ignorance",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Hùng} confirms he has never heard of it. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Hùng} confirms he has never heard of it. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng}'s eyes lock on {Tiểu Kỳ} as he confirms.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "chưa từng nghe"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ nhìn anh thật lâu, như đang thực hiện một đợt đánh giá xem tọa độ thông tin hiện tại của anh là điểm khởi đầu phù hợp hay là giới hạn cuối cùng của cuộc đối thoại. ",
+    "beat_action": "Evaluating Hùng",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Tiểu Kỳ} looks at {Hùng} for a long time, assessing him. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Tiểu Kỳ} looks at {Hùng} for a long time, assessing him. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} blinks slowly, maintaining her long silence.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "nhìn anh thật lâu",
+      "đánh giá"
+    ]
+  },
+  {
+    "text": "Rồi cô đứng dậy bằng một động tác vô cùng nhẹ nhàng và linh hoạt — chuyển động cơ học của một cơ thể đã quen với việc đứng dậy nhanh chóng bên trong các hang động hẹp và trần thấp dưới lòng đất. ",
+    "beat_action": "Standing up",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, {Tiểu Kỳ} stands up from her chair with a light, agile movement. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: {Tiểu Kỳ} stands up from her chair with a light, agile movement. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow tilt-up. Subject motion: {Tiểu Kỳ} stands up, her dark industrial windbreaker rustling slightly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "đứng dậy",
+      "nhẹ nhàng"
+    ]
+  },
+  {
+    "text": "\"Anh sẽ tự mình nhìn thấy toàn bộ cấu trúc đó khi anh bước chân xuống dưới lòng hang ngầm,\" cô nói. ",
+    "beat_action": "Explaining next step",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Tiểu Kỳ} stands by the desk, looking down at {Hùng}. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Tiểu Kỳ} stands by the desk, looking down at {Hùng}. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} stands looking down, her posture alert and agile.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "tự mình nhìn thấy",
+      "hang ngầm"
+    ]
+  },
+  {
+    "text": "\"Khi nào chúng ta bắt đầu?\" ",
+    "beat_action": "Asking when to start",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Hùng} stands up from his chair, looking at her. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Hùng} stands up from his chair, looking at her. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow tilt-up. Subject motion: {Hùng} stands up, facing {Tiểu Kỳ} directly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Khi nào"
+    ]
+  },
+  {
+    "text": "Hùng hỏi, anh cũng đứng dậy theo. ",
+    "beat_action": "Standing up too",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Hùng} stands fully upright, facing {Tiểu Kỳ} across the desk. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Hùng} stands fully upright, facing {Tiểu Kỳ} across the desk. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} stands face-to-face with {Tiểu Kỳ}, his posture serious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "đứng dậy theo"
+    ]
+  },
+  {
+    "text": "\"Khi anh đã tự mình đưa ra quyết định sẵn sàng đối mặt với sự thật.\" ",
+    "beat_action": "Replying about readiness",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} says they start when he is ready to face the truth. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} says they start when he is ready to face the truth. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} speaks calmly, her face steady.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "quyết định sẵn sàng",
+      "đối mặt"
+    ]
+  },
+  {
+    "text": "\"Tôi không cần thêm bất kỳ khoảng thời gian nào để chuẩn bị nữa.\" ",
+    "beat_action": "Declaring readiness",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Hùng} declares he doesn't need preparation time. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Hùng} declares he doesn't need preparation time. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} speaks with a firm, determined expression.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "không cần",
+      "chuẩn bị"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ nhìn anh, đôi mắt cô biểu lộ một vệt thú vị cực nhỏ — góc môi cô khẽ nhếch lên nhưng không tạo thành một nụ cười thực sự. ",
+    "beat_action": "Showing interest",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Tiểu Kỳ} looks at him with a faint hint of interest in her eyes. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Tiểu Kỳ} looks at him with a faint hint of interest in her eyes. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ}'s lips twitch slightly, showing a tiny hint of curiosity.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "thú vị",
+      "khẽ nhếch"
+    ]
+  },
+  {
+    "text": "\"Câu nói đó chứng minh anh là một kỹ sư chưa thực sự hiểu rõ mình cần phải chuẩn bị những gì trước khi bước qua ranh giới.\" ",
+    "beat_action": "Explaining engineering ignorance",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Tiểu Kỳ} tells him that his statement shows he is an unprepared engineer. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Tiểu Kỳ} tells him that his statement shows he is an unprepared engineer. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks with a neutral, calm face.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "kỹ sư",
+      "ranh giới"
+    ]
+  },
+  {
+    "text": "\"Vậy tôi cần chuẩn bị những gì?\" ",
+    "beat_action": "Asking what to prepare",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Hùng} asks what he needs to prepare. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Hùng} asks what he needs to prepare. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} stands firm, looking at her with a questioning look.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "chuẩn bị những gì"
+    ]
+  },
+  {
+    "text": "\"Không phải là các thiết bị đo đạc thạch áp hay đầu dò địa chấn công nghệ cao. ",
+    "beat_action": "Ruling out high-tech tools",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Tiểu Kỳ} explains that high-tech seismic tools are not needed. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Tiểu Kỳ} explains that high-tech seismic tools are not needed. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} shakes her head slightly, explaining the tools.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "đo đạc thạch áp",
+      "đầu dò địa chấn"
+    ]
+  },
+  {
+    "text": "Những công cụ thực địa thô sơ tôi đã chuẩn bị đầy đủ dưới đó rồi.\" ",
+    "beat_action": "Mentioning crude tools",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Tiểu Kỳ} states she has already prepared crude tools down there. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Tiểu Kỳ} states she has already prepared crude tools down there. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} gestures downward slightly, her posture calm.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "công cụ thực địa",
+      "chuẩn bị đầy đủ"
+    ]
+  },
+  {
+    "text": "Cô gái bước về phía cửa ra vào. ",
+    "beat_action": "Walking to the door",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Tiểu Kỳ} turns and walks toward the door of the living room. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Tiểu Kỳ} turns and walks toward the door of the living room. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} turns and steps toward the steel door.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "bước về phía cửa"
+    ]
+  },
+  {
+    "text": "Chuyển động của cô uyển chuyển và nhanh nhẹn. ",
+    "beat_action": "Moving gracefully",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, Medium shot of {Tiểu Kỳ} moving gracefully toward the exit. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: Medium shot of {Tiểu Kỳ} moving gracefully toward the exit. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow tracking shot. Subject motion: {Tiểu Kỳ} walks with fluid, agile movements across the floor.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "uyển chuyển",
+      "nhanh nhẹn"
+    ]
+  },
+  {
+    "text": "\"Thứ duy nhất anh cần chuẩn bị chính là một quyết định dứt khoát trong đầu: Anh muốn đi sâu đến đâu trên hành trình tìm kiếm câu trả lời của mình. ",
+    "beat_action": "Explaining the decision",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Tiểu Kỳ} explains that the only thing he needs is a firm decision. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Tiểu Kỳ} explains that the only thing he needs is a firm decision. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} stops near the door, looking back at him.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "quyết định dứt khoát"
+    ]
+  },
+  {
+    "text": "Đây hoàn toàn không phải là một chuyến đi thực địa vật lý thông thường — nó là hành trình đi vào tâm của những câu hỏi cấm kỵ.\" ",
+    "beat_action": "Warning about the journey",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Tiểu Kỳ} warns that this is a journey into forbidden questions. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Tiểu Kỳ} warns that this is a journey into forbidden questions. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} speaks with a solemn face near the door frame.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "câu hỏi cấm kỵ",
+      "thực địa vật lý"
+    ]
+  },
+  {
+    "text": "Hùng đứng đối diện cô gần cửa ra vào. ",
+    "beat_action": "Standing opposite her",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Hùng} walks over and stands opposite her near the door. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Hùng} walks over and stands opposite her near the door. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} walks to the door and stands facing {Tiểu Kỳ}.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "đứng đối diện"
+    ]
+  },
+  {
+    "text": "Khi đứng sát cạnh nhau, anh nhận ra Tiểu Kỳ cao hơn so với những gì anh ước lượng khi cô còn ngồi trên ghế — đỉnh đầu cô ngang tầm mắt anh, nhưng vóc dáng cô mảnh mai và gầy guộc hơn nhiều so với cấu trúc cơ thể của những cư dân mặt đất, hệ quả của một cuộc đời di chuyển liên tục dưới các tầng hầm ngầm áp lực cao. ",
+    "beat_action": "Comparing height and build",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, Medium shot of {Hùng} and {Tiểu Kỳ} standing close, highlighting their height difference. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: Medium shot of {Hùng} and {Tiểu Kỳ} standing close, highlighting their height difference. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow tilt-down. Subject motion: {Hùng} looks slightly down at her, her thin silhouette visible in the light.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "ngang tầm mắt",
+      "gầy guộc"
+    ]
+  },
+  {
+    "text": "\"Tôi đã đưa ra quyết định của mình từ bốn tháng trước rồi,\" anh nói, giọng anh đanh thép. ",
+    "beat_action": "Declaring past decision",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Hùng} states he made his decision four months ago. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Hùng} states he made his decision four months ago. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} speaks firmly, his jaw set.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "bốn tháng trước",
+      "giọng anh đanh thép"
+    ]
+  },
+  {
+    "text": "\"Rất dễ dàng để phát biểu những câu nói như thế vào lúc hai giờ sáng.\" ",
+    "beat_action": "Commenting on late hour",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Tiểu Kỳ} remarks that it is easy to say that at 2 AM. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Tiểu Kỳ} remarks that it is easy to say that at 2 AM. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} speaks with a flat, calm expression.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "hai giờ sáng"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ nhận xét bằng giọng phẳng lặng. ",
+    "beat_action": "Telling him to sleep",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Tiểu Kỳ} tells him to sleep and let his brain recalibrate. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Tiểu Kỳ} tells him to sleep and let his brain recalibrate. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks, her eyes looking calm.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tiểu Kỳ",
+      "Tiểu Kỳ"
+    ]
+  },
+  {
+    "text": "\"Hãy ngủ đi. ",
+    "beat_action": "Giving instructions",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Tiểu Kỳ} tells him to message her if his decision holds. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Tiểu Kỳ} tells him to message her if his decision holds. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} speaks, pointing toward her pocket.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Hãy ngủ",
+      "Hãy ngủ"
+    ]
+  },
+  {
+    "text": "Cho phép bộ não của anh hiệu chuẩn lại các thông số vào buổi sáng. ",
+    "beat_action": "Reaching into pocket",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Tiểu Kỳ} reaches into her windbreaker jacket pocket. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Tiểu Kỳ} reaches into her windbreaker jacket pocket. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s hand reaches into the dark cargo pocket.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Cho phép"
+    ]
+  },
+  {
+    "text": "Nếu sau khi thức dậy anh vẫn giữ nguyên quyết định đó, hãy gửi cho tôi một tín hiệu nhắn tin theo số liên lạc này.\" ",
+    "beat_action": "Comparing paper type",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, Close shot of {Tiểu Kỳ}'s hand holding the small gray paper slip {Giấy Kỳ}. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: Close shot of {Tiểu Kỳ}'s hand holding the small gray paper slip {Giấy Kỳ}. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow tilt-down. Subject motion: the light catches the rough texture of the gray paper slip.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Giấy Kỳ",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Nếu sau",
+      "Nếu sau"
+    ]
+  },
+  {
+    "text": "Cô thò ngón tay mảnh khảnh vào túi áo khoác, rút ra một mảnh giấy xám nhỏ — cùng một loại giấy sợi thực vật kiểu cũ mà Trần Thiên Ân đã sử dụng, bằng chứng cho thấy cả hai người phụ nữ này đều sở hữu chung một giao thức cảnh giác tối đa đối với các công cụ lưu trữ số học của Vortex. ",
+    "beat_action": "Placing the paper",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Tiểu Kỳ} places the small gray paper slip {Giấy Kỳ} on the desk. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Tiểu Kỳ} places the small gray paper slip {Giấy Kỳ} on the desk. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s hand places the slip next to the notebook on the wood desk.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Giấy Kỳ",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Cô thò",
+      "Cô thò"
+    ]
+  },
+  {
+    "text": "Cô đặt mảnh giấy lên mặt bàn làm việc, ngay cạnh cuốn sổ tay giấy của anh. ",
+    "beat_action": "Showing phone number",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, Close-up of the small gray paper slip {Giấy Kỳ} showing the handwritten number. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: Close-up of the small gray paper slip {Giấy Kỳ} showing the handwritten number. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: the thin black ink numbers on the gray paper are clearly visible.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Giấy Kỳ"
+    ],
+    "key_phrases": [
+      "Cô đặt",
+      "Cô đặt"
+    ]
+  },
+  {
+    "text": "Trên giấy chỉ có một dãy số điện thoại di động được viết bằng những đường mực đen mỏng, hoàn toàn không có tên tuổi hay bất kỳ ký tự định danh nào kèm theo. ",
+    "beat_action": "Asking about spy potential",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Hùng} asks how he can be sure she is not a Vortex spy. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Hùng} asks how he can be sure she is not a Vortex spy. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} stands near the door, his arms crossed, looking suspicious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Trên giấy",
+      "Trên giấy"
+    ]
+  },
+  {
+    "text": "\"Làm sao tôi có thể chắc chắn cô không phải là một nhân sự ngầm được ban an ninh của Vortex phái đến để kiểm soát và định hướng các bước đi của tôi?\" ",
+    "beat_action": "Stating lack of tools",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Tiểu Kỳ} answers instantly that he has no tools to check. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Tiểu Kỳ} answers instantly that he has no tools to check. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} looks directly at him, her face steady.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Làm sao"
+    ]
+  },
+  {
+    "text": "Hùng đưa ra câu hỏi nghi vấn cuối cùng. ",
+    "beat_action": "Explaining evaluation",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Tiểu Kỳ} explains that he must evaluate based on consistency. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Tiểu Kỳ} explains that he must evaluate based on consistency. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks with a calm, flat tone, gesturing slightly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Hùng đưa",
+      "Hùng đưa"
+    ]
+  },
+  {
+    "text": "\"Anh không có bất kỳ công cụ nào để kiểm chứng điều đó cả.\" ",
+    "beat_action": "Looking into eyes",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} looks directly into {Hùng}'s eyes, holding his gaze. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} looks directly into {Hùng}'s eyes, holding his gaze. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} keeps her eyes locked on him, unwavering.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Anh không"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ trả lời lập tức, không hề có một nhịp chần chừ hay né tránh. ",
+    "beat_action": "Stating unique protocol",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Tiểu Kỳ} states this is the only protocol working in this world. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Tiểu Kỳ} states this is the only protocol working in this world. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks, her expression serious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tiểu Kỳ"
+    ]
+  },
+  {
+    "text": "\"Trong trò chơi này, anh chỉ có thể tự mình đánh giá dựa trên tính nhất quán của những thông tin mà tôi cung cấp, và quan sát xem các bước đi thực tế dưới lòng đất sẽ dẫn anh tới tọa độ nào.\" ",
+    "beat_action": "Asking about the journalist",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Hùng} asks if that includes the journalist who approached him yesterday. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Hùng} asks if that includes the journalist who approached him yesterday. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Hùng} speaks, his eyes narrowing slightly as he watches her.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Trong trò"
+    ]
+  },
+  {
+    "text": "Cô nhìn thẳng vào mắt anh. ",
+    "beat_action": "Pausing at the door",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, {Tiểu Kỳ} pauses near the door, processing the information. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: {Tiểu Kỳ} pauses near the door, processing the information. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s slanted eyes narrow slightly as she processes the name.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Cô nhìn",
+      "Cô nhìn"
+    ]
+  },
+  {
+    "text": "\"Đó là giao thức đánh giá duy nhất đang vận hành hiệu quả trong thế giới này.\" ",
+    "beat_action": "Asking about journalist",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, {Tiểu Kỳ} asks if he is referring to a journalist. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: {Tiểu Kỳ} asks if he is referring to a journalist. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} tilts her head slightly, asking with a flat tone.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Đó là"
+    ]
+  },
+  {
+    "text": "\"Kể cả đối với người phụ nữ tự xưng là nhà báo điều tra đã tiếp cận tôi vào sáng ngày hôm qua?\" ",
+    "beat_action": "Confirming identity",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, {Hùng} confirms, stating her name is Trần Thiên Ân. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: {Hùng} confirms, stating her name is Trần Thiên Ân. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Hùng} speaks, his face serious and tense.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Kể cả"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ khẽ dừng lại một nhịp cực ngắn ở lối cửa ra vào. ",
+    "beat_action": "Denying knowledge",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Tiểu Kỳ} states she has no data on that name. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Tiểu Kỳ} states she has no data on that name. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow dolly-in. Subject motion: {Tiểu Kỳ} shakes her head slowly, her voice flat.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tiểu Kỳ"
+    ]
+  },
+  {
+    "text": "Đôi mắt xếch của cô khẽ nheo lại để xử lý mảnh thông tin mới vừa được cấy vào hệ thống suy luận. ",
+    "beat_action": "Expressing lack of surprise",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, {Tiểu Kỳ} adds that she is not surprised by her presence. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: {Tiểu Kỳ} adds that she is not surprised by her presence. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks calmly, looking at him.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Đôi mắt"
+    ]
+  },
+  {
+    "text": "\"Anh đang nhắc đến một nhà báo?\" ",
+    "beat_action": "Asking why",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, full shot, low angle, {Hùng} asks why she is not surprised. Visual style: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Full shot, low angle shot. Lens: 24mm wide lens, deep focus. Lighting: soft key light from the side, long dark shadows stretching across the concrete floor. Composition: symmetrical balance, showing the subject standing/sitting next to the desk. Subject: {Hùng} asks why she is not surprised. Mood: Comic style, sci-fi theme, isolating, industrial zone atmosphere.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Hùng} raises his eyebrow, waiting for her explanation.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Anh đang"
+    ]
+  },
+  {
+    "text": "\"Đúng vậy. Cô ấy tên là Trần Thiên Ân.\" ",
+    "beat_action": "Explaining magnetic pull",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, high angle, {Tiểu Kỳ} explains that correct geological questions act like a magnetic field. Visual style: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, high angle shot. Lens: 28mm wide lens, deep focus. Lighting: dim room lighting with a warm yellow glow from the desk lamp. Composition: high perspective looking down, showing the concrete walls and the window. Subject: {Tiểu Kỳ} explains that correct geological questions act like a magnetic field. Mood: Comic style, sci-fi theme, quiet room, late-night surveillance feel.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} speaks with a calm face, gesturing slightly.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Đúng vậy",
+      "Đúng vậy"
+    ]
+  },
+  {
+    "text": "\"Tôi hoàn toàn không nắm giữ bất kỳ dữ liệu nào về cái tên đó.\" ",
+    "beat_action": "Placing hand on handle",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, dutch tilt, {Tiểu Kỳ} places her hand on the steel door handle. Visual style: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, dutch tilt shot. Lens: 50mm lens, shallow depth of field. Lighting: cool blue backlight paired with warm yellow side-light, high contrast. Composition: canted framing, dynamic leading lines of the desk, subject off-center. Subject: {Tiểu Kỳ} places her hand on the steel door handle. Mood: Comic style, sci-fi theme, psychological tension, disoriented vibe.",
+    "motion_prompt": "Camera movement: slow close-up. Subject motion: {Tiểu Kỳ}'s hand grips the cold steel handle of the door.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tôi hoàn"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ đáp, giọng cô phẳng lặng. ",
+    "beat_action": "Warning about questions",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, over-the-shoulder, {Tiểu Kỳ} warns that correct questions have a deadly attraction. Visual style: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, over-the-shoulder shot. Lens: 85mm portrait lens, shallow depth of field. Lighting: soft Rembrandt lighting, warm key and cool fill. Composition: foreground shoulder out of focus, subject's face in sharp focus in midground. Subject: {Tiểu Kỳ} warns that correct questions have a deadly attraction. Mood: Comic style, sci-fi theme, intimate conversation, serious confrontation.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ} looks back over her shoulder, her face serious.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tiểu Kỳ"
+    ]
+  },
+  {
+    "text": "\"Nhưng tôi không hề ngạc nhiên về sự hiện diện của cô ta.\" ",
+    "beat_action": "Stating danger",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, POV, {Tiểu Kỳ} warns that this is why they are dangerous. Visual style: Comic style, sci-fi theme, investigative, direct observation.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, POV shot. Lens: 35mm lens, deep focus. Lighting: harsh practical light from the desk lamp, long dark shadows in corners. Composition: subject's point of view, looking at the desk with papers and notebooks. Subject: {Tiểu Kỳ} warns that this is why they are dangerous. Mood: Comic style, sci-fi theme, investigative, direct observation.",
+    "motion_prompt": "Camera movement: slow push-in. Subject motion: {Tiểu Kỳ} holds her warning look for a brief moment.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Nhưng tôi"
+    ]
+  },
+  {
+    "text": "\"Tại sao cô lại không ngạc nhiên?\" ",
+    "beat_action": "Opening door latch",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, low angle, {Tiểu Kỳ} pulls the door latch open. Visual style: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, low angle shot. Lens: 100mm macro lens, shallow depth of field. Lighting: cool edge lighting, warm glow underneath. Composition: extreme details of hands or face, dramatic angle emphasizing scale. Subject: {Tiểu Kỳ} pulls the door latch open. Mood: Comic style, sci-fi theme, dark revelation, hyper-focused.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: {Tiểu Kỳ}'s hand pulls the latch, releasing the door.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Tại sao"
+    ]
+  },
+  {
+    "text": "\"Bởi vì một khi anh đã đặt ra những câu hỏi địa chất chính xác dưới lòng đất sâu, tọa độ của anh sẽ tự động thu hút những con người đang đi tìm sự thật từ các hướng khác nhau tiến về phía anh giống như một trường lực từ tính ngầm.\" ",
+    "beat_action": "Stepping into hallway",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, wide shot, eye-level, {Tiểu Kỳ} steps out into the dark hallway. Visual style: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "visual_prompt": "Comic style, sci-fi theme. Wide shot, eye-level shot. Lens: 24mm wide lens, deep focus. Lighting: dim room light, warm desk lamp glow and cool night sky through the window. Composition: subject seated at the desk, vast concrete wall in background, wide empty space. Subject: {Tiểu Kỳ} steps out into the dark hallway. Mood: Comic style, sci-fi theme, isolating, industrial sci-fi aesthetic.",
+    "motion_prompt": "Camera movement: slow tracking shot. Subject motion: {Tiểu Kỳ} steps through the doorway into the dim hallway outside.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Tiểu Kỳ"
+    ],
+    "key_phrases": [
+      "Bởi vì"
+    ]
+  },
+  {
+    "text": "Cô đặt tay lên tay nắm cửa thép. ",
+    "beat_action": "Closing steel door",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, low angle, The steel door slowly swings shut, blocking the hallway view. Visual style: Comic style, sci-fi theme, ready to act, determined presence.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, low angle shot. Lens: 50mm lens, shallow depth of field. Lighting: warm rim light, dim practical lighting. Composition: low camera height looking slightly up at the subject standing near the door. Subject: The steel door slowly swings shut, blocking the hallway view. Mood: Comic style, sci-fi theme, ready to act, determined presence.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: the door moves slowly, narrowing the beam of light from the room.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC"
+    ],
+    "key_phrases": [
+      "Cô đặt",
+      "Cô đặt"
+    ]
+  },
+  {
+    "text": "\"Những câu hỏi chính xác luôn sở hữu một sức hấp dẫn chết người. ",
+    "beat_action": "Lock clicking",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium close-up, eye-level, Close-up of the automatic electronic lock clicking dryly. Visual style: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium close-up, eye-level shot. Lens: 50mm portrait lens, shallow depth of field, soft bokeh. Lighting: warm yellow key light from a desk lamp, casting long soft shadows. Composition: rule of thirds, subject slightly off-center, dark background. Subject: Close-up of the automatic electronic lock clicking dryly. Mood: Comic style, sci-fi theme, tense and intimate atmosphere.",
+    "motion_prompt": "Camera movement: slow zoom-in. Subject motion: the lock clicks shut, a tiny indicator light changing to red.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC"
+    ],
+    "key_phrases": [
+      "Những câu",
+      "Những câu"
+    ]
+  },
+  {
+    "text": "Và đó chính là lý do đầu tiên khiến chúng trở nên vô cùng nguy hiểm.\" ",
+    "beat_action": "Quiet room",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, close-up, low angle, Wide shot of the empty room with the warm desk lamp lighting. Visual style: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "visual_prompt": "Comic style, sci-fi theme. Close-up, low angle shot. Lens: 85mm lens, shallow depth of field. Lighting: high-contrast lighting, soft yellow glow from below, cool shadow side. Composition: tight frame focusing on facial details, looking upwards slightly. Subject: Wide shot of the empty room with the warm desk lamp lighting. Mood: Comic style, sci-fi theme, mysterious, cold and high contrast shadow.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: dust particles float slowly in the quiet room after her departure.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC"
+    ],
+    "key_phrases": [
+      "Và đó"
+    ]
+  },
+  {
+    "text": "Tiểu Kỳ kéo chốt cửa, bước ra ngoài hành lang tối tăm của tòa nhà. ",
+    "beat_action": "Hùng alone",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, medium shot, high angle, {Hùng} stands near the closed door in the quiet room. Visual style: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "visual_prompt": "Comic style, sci-fi theme. Medium shot, high angle shot. Lens: 35mm wide-normal lens, deep focus. Lighting: warm fill from the desk lamp blending with cool dim moonlight from the window. Composition: overshoulder perspective showing the room layout and the wood desk. Subject: {Hùng} stands near the closed door in the quiet room. Mood: Comic style, sci-fi theme, analytical, quiet and moody vibe.",
+    "motion_prompt": "Camera movement: slow tilt-up. Subject motion: {Hùng} looks down at the door, then turns back toward the desk.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Hùng"
+    ],
+    "key_phrases": [
+      "Tiểu Kỳ"
+    ]
+  },
+  {
+    "text": "Cánh cửa thép từ từ khép lại, tiếng khóa từ cạch lên một tiếng khô khốc vang vọng giữa không gian tĩnh lặng của đêm muộn.",
+    "beat_action": "Looking at desk",
+    "description": "{PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC}, extreme close-up, eye-level, Close shot of the desk with {Sổ tay} and the small gray paper slip {Giấy Kỳ}. Visual style: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "visual_prompt": "Comic style, sci-fi theme. Extreme close-up, eye-level shot. Lens: 135mm macro lens, razor-thin depth of field. Lighting: warm rim light highlighting the edges of the subject, dark shadow side. Composition: tight macro framing focusing on the eyes and glasses, strong negative space. Subject: Close shot of the desk with {Sổ tay} and the small gray paper slip {Giấy Kỳ}. Mood: Comic style, sci-fi theme, intense focus, quiet suspense.",
+    "motion_prompt": "Camera movement: static lock-off. Subject motion: the desk lamp continues to cast its warm yellow glow over the paper.",
+    "ref_entity_names": [
+      "PHÒNG KHÁCH CĂN HỘ CỦA HÙNG - ĐÊM - TIẾP TỤC",
+      "Giấy Kỳ",
+      "Sổ tay"
+    ],
+    "key_phrases": [
+      "khóa từ",
+      "tĩnh lặng"
+    ]
+  }
+]

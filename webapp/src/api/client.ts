@@ -28,6 +28,12 @@ export interface Project {
   bgm_path?: string | null;
   bgm_volume?: number | null;
   bgm_duck?: number | null;
+  // Tự tải thêm bản ảnh 2K/4K (theo tier) sau mỗi lần sinh ảnh storyboard.
+  auto_hires?: number | null;
+  // Tự upscale video (1080p/4K theo tier) sau mỗi lần render.
+  auto_upscale_video?: number | null;
+  // Mức upscale mong muốn; rỗng = kịch trần tier. Tier TWO chọn 1080p cho nhẹ/rẻ hơn 4K.
+  upscale_res?: string | null;
   status: string;
   updated_at: number;
 }
@@ -123,6 +129,12 @@ export const api = {
   },
   clearBgm: (id: string) =>
     req<Project>(`/projects/${id}/bgm`, { method: "DELETE" }),
+  // Chép nhạc nền từ dự án khác (preset thiết lập mang theo bgm_path của dự án nguồn).
+  copyBgm: (id: string, source: string, volume?: number) =>
+    req<Project>(`/projects/${id}/bgm/copy`, {
+      method: "POST",
+      body: JSON.stringify({ source, volume }),
+    }),
   // Every image in the project's Flow project (for the Node Editor "Nguồn ảnh" picker).
   projectImages: (id: string) => req<{ media: FlowMedia[] }>(`/projects/${id}/images`),
   // Upload an image from the user's machine → Flow (gets a media_id) + local cache.
@@ -312,7 +324,17 @@ export interface Shot {
   ref_entity_ids: string | null;
   image_media_id: string | null;
   image_path: string | null;
+  // Bản 2K/4K tải qua upsampleImage (chỉ dùng khi dựng video / export DaVinci — app vẫn
+  // hiển thị image_path cho nhẹ). image_hires_media_id ≠ image_media_id ⇒ bản cũ, phải tải lại.
+  image_hires_path?: string | null;
+  image_hires_media_id?: string | null;
+  image_hires_res?: string | null;
+  video_media_id?: string | null;
   video_path: string | null;
+  // Bản upscale 1080p/4K của video. upscale_media_id ≠ video_media_id ⇒ bản cũ.
+  upscale_path?: string | null;
+  upscale_media_id?: string | null;
+  upscale_res?: string | null;
   visual_prompt: string | null;
   motion_prompt: string | null;
   video_model: string | null;
@@ -397,12 +419,30 @@ export const storyboard = {
     req<{ job_id: string; total: number }>(`/scenes/${sid}/storyboard/generate-all`, { method: "POST" }),
   genProjectAll: (pid: string) =>
     req<{ job_id: string; total: number }>(`/projects/${pid}/storyboard/generate-all`, { method: "POST" }),
+  // Ảnh 2K/4K (upsampleImage). Trần độ phân giải theo tier: ONE → 2K, TWO → 4K.
+  hiresStatus: (pid: string) =>
+    req<{ tier: string; resolution: string; label: string; total: number; done: number; missing: number }>(
+      `/projects/${pid}/hires/status`),
+  genHires: (sid: string, force = false) =>
+    req<Shot>(`/shots/${sid}/hires?force=${force}`, { method: "POST" }),
+  genProjectHires: (pid: string, force = false) =>
+    req<{ job_id: string; total: number; resolution: string }>(
+      `/projects/${pid}/hires/generate-all?force=${force}`, { method: "POST" }),
 };
 
 export const shots = {
   genPrompts: (sid: string) => req<Shot>(`/shots/${sid}/prompts`, { method: "POST" }),
   genVideo: (sid: string) => req<Shot>(`/shots/${sid}/video`, { method: "POST" }),
-  upscale: (sid: string) => req<Shot>(`/shots/${sid}/upscale`, { method: "POST" }),
+  // Bỏ trống resolution → server lấy theo tier (ONE → 1080p, TWO → 4K).
+  upscale: (sid: string, force = false) =>
+    req<Shot>(`/shots/${sid}/upscale?force=${force}`, { method: "POST" }),
+  upscaleStatus: (pid: string) =>
+    req<{ tier: string; resolution: string; label: string; total: number; done: number;
+          missing: number; skipped_chained: number;
+          choices: { value: string; label: string }[] }>(`/projects/${pid}/upscale/status`),
+  upscaleAll: (pid: string, force = false) =>
+    req<{ job_id: string; total: number; resolution: string }>(
+      `/projects/${pid}/upscale/generate-all?force=${force}`, { method: "POST" }),
   genAllVideos: (pid: string) =>
     req<{ job_id: string; total: number }>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
   narration: (sid: string, language = "Vietnamese") =>

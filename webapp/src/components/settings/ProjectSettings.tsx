@@ -6,6 +6,8 @@ import {
   base64ToAudioUrl,
   projectExportUrl,
   type Project,
+  storyboard,
+  shots as shotsApi,
   type SettingsPreset,
   type Voice,
 } from "../../api/client";
@@ -35,6 +37,13 @@ export default function ProjectSettings({
   });
   const [shotDuration, setShotDuration] = useState<number>(project.shot_duration ?? 8);
   const [storytelling, setStorytelling] = useState<boolean>(!!project.storytelling);
+  const [autoHires, setAutoHires] = useState<boolean>(!!project.auto_hires);
+  const [hiresInfo, setHiresInfo] = useState<{ label: string; done: number; total: number; missing: number } | null>(null);
+  const [autoUpVideo, setAutoUpVideo] = useState<boolean>(!!project.auto_upscale_video);
+  const [upInfo, setUpInfo] = useState<
+    { label: string; done: number; total: number; missing: number;
+      choices: { value: string; label: string }[] } | null>(null);
+  const [upscaleRes, setUpscaleRes] = useState<string>(project.upscale_res ?? "");
   const [seed, setSeed] = useState<number>(project.seed ?? 0);
   const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
   const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
@@ -57,7 +66,49 @@ export default function ProjectSettings({
     api.options().then(setOpts).catch(() => {});
     listVoices().then(setVoices).catch(() => {});
     api.listSettingsPresets().then((r) => setPresets(r.presets)).catch(() => {});
-  }, []);
+    // Tier quyết định trần độ phân giải (ONE → 2K, TWO → 4K) → hỏi server, không đoán ở client.
+    storyboard.hiresStatus(project.id).then(setHiresInfo).catch(() => {});
+    shotsApi.upscaleStatus(project.id).then(setUpInfo).catch(() => {});
+  }, [project.id]);
+
+  // Upscale bù video chưa có bản độ phân giải cao. Mỗi video là một lượt render → tốn credit.
+  const upscaleMissingVideos = async () => {
+    const n = upInfo?.missing ?? 0;
+    // 4K (tier TWO) chưa đo được nên vẫn hỏi trước khi chạy hàng loạt; 1080p đo được là miễn phí.
+    if (!window.confirm(
+      `Upscale ${n} video lên ${upInfo?.label}?\n\n` +
+      `Mỗi video là một lượt render thật trên Flow (~1 phút/video)` +
+      (upInfo?.label === "4K" ? " và bản 4K có thể tốn credit." : ", đo được là không tốn credit.")
+    )) return;
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await shotsApi.upscaleAll(project.id);
+      setMsg(r.total ? `Đang upscale ${r.total} video lên ${r.resolution} (chạy nền).`
+                     : "Mọi video đã có bản độ phân giải cao.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Tải bù bản 2K/4K cho những ảnh còn thiếu (ảnh sinh trước khi bật tuỳ chọn này).
+  const fetchMissingHires = async () => {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const r = await storyboard.genProjectHires(project.id);
+      setMsg(r.total ? `Đang tải ${r.total} ảnh ${r.resolution} (chạy nền, xem ở thanh tiến trình).`
+                     : "Mọi ảnh đã có bản độ phân giải cao.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const testVoice = async () => {
     setTesting(true);
@@ -88,6 +139,9 @@ export default function ProjectSettings({
         voice_id: voiceId,
         shot_duration: shotDuration,
         storytelling,
+        auto_hires: autoHires,
+        auto_upscale_video: autoUpVideo,
+        upscale_res: upscaleRes,
         tts_speed: ttsSpeed,
         tts_gap: ttsGap,
         tts_sentence_gap: ttsSentenceGap,
@@ -133,15 +187,19 @@ export default function ProjectSettings({
   };
 
   // ── Export / import REUSABLE settings (not project content) so the same setup can be
-  // applied to other projects without redoing it by hand. BGM file isn't included (it's media).
+  // applied to other projects without redoing it by hand. The BGM travels too — as the source
+  // project's path, which applySettings COPIES into this project (see copyBgm). Without it,
+  // loading a preset still left you hunting for the same music file by hand every time.
   const STR_KEYS = ["style", "script_lang", "image_text_lang", "culture_hint",
-    "prompt_header", "prompt_footer", "image_model", "aspect_ratio", "video_model"] as const;
+    "prompt_header", "prompt_footer", "image_model", "aspect_ratio", "video_model", "upscale_res"] as const;
   const NUM_KEYS = ["shot_duration", "seed", "bgm_volume", "voice_id",
     "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad"] as const;
-  const BOOL_KEYS = ["storytelling", "bgm_duck"] as const;
+  const BOOL_KEYS = ["storytelling", "auto_hires", "auto_upscale_video", "bgm_duck"] as const;
 
   const collectSettings = () => ({
-    ...s, shot_duration: shotDuration, storytelling, seed, bgm_volume: bgmVol, bgm_duck: bgmDuck,
+    ...s, shot_duration: shotDuration, storytelling, auto_hires: autoHires,
+    auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
+    seed, bgm_volume: bgmVol, bgm_duck: bgmDuck, bgm_path: bgmPath,
     voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
     tts_edge_pad: ttsEdgePad,
   });
@@ -169,6 +227,9 @@ export default function ProjectSettings({
       }));
       if (u.shot_duration != null) setShotDuration(u.shot_duration);
       if (u.storytelling != null) setStorytelling(!!u.storytelling);
+      if (u.auto_hires != null) setAutoHires(!!u.auto_hires);
+      if (u.auto_upscale_video != null) setAutoUpVideo(!!u.auto_upscale_video);
+      if (u.upscale_res != null) setUpscaleRes(u.upscale_res);
       if (u.seed != null) setSeed(u.seed);
       if (u.bgm_volume != null) setBgmVol(u.bgm_volume);
       if (u.bgm_duck != null) setBgmDuck(!!u.bgm_duck);
@@ -177,8 +238,24 @@ export default function ProjectSettings({
       if (u.tts_gap != null) setTtsGap(u.tts_gap);
       if (u.tts_sentence_gap != null) setTtsSentenceGap(u.tts_sentence_gap);
       if (u.tts_edge_pad != null) setTtsEdgePad(u.tts_edge_pad);
-      onSaved(u);
-      setMsg(`Đã áp dụng ${Object.keys(fields).length} ${label}.`);
+
+      // Nhạc nền đi kèm preset: chép file của dự án nguồn sang dự án này. Bỏ qua nếu preset
+      // không có nhạc, hoặc dự án này đã dùng đúng file đó rồi. Lỗi ở đây KHÔNG được làm hỏng
+      // cả lượt áp dụng — các thiết lập khác đã lưu xong.
+      let applied = u;
+      let bgmNote = "";
+      const srcBgm = typeof obj.bgm_path === "string" ? obj.bgm_path.trim() : "";
+      if (srcBgm && srcBgm !== (u.bgm_path ?? "")) {
+        try {
+          applied = await api.copyBgm(project.id, srcBgm, obj.bgm_volume);
+          setBgmPath(applied.bgm_path ?? null);
+          bgmNote = " (kèm nhạc nền)";
+        } catch {
+          bgmNote = " — nhưng KHÔNG chép được nhạc nền (file nguồn đã bị xoá?)";
+        }
+      }
+      onSaved(applied);
+      setMsg(`Đã áp dụng ${Object.keys(fields).length} ${label}${bgmNote}.`);
     } catch (e: any) {
       setErr("Áp dụng thiết lập lỗi: " + (e.message || e));
     } finally {
@@ -311,20 +388,27 @@ export default function ProjectSettings({
             </Field>
           </div>
 
-          <Field label="Video model">
+          <Field label="Model video">
             <select value={s.video_model} onChange={(e) => set("video_model", e.target.value)} className={inp}>
-              <option value="">(mặc định)</option>
-              {(opts?.video_models?.veo_tiers || []).length > 0 && (
-                <optgroup label="Veo (i2v)">
-                  {(opts?.video_models?.veo_tiers || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
-                </optgroup>
-              )}
-              {(opts?.video_models?.omni_flash_durations || []).length > 0 && (
-                <optgroup label="Omni Flash (r2v)">
-                  {(opts?.video_models?.omni_flash_durations || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
-                </optgroup>
-              )}
+              {(opts?.video_engines || [{ value: "", label: "Veo i2v (mặc định)" }]).map(
+                (m: { value: string; label: string }) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
             </select>
+            <p className="mt-1 text-xs text-neutral-600">
+              Veo i2v dựng video TỪ ảnh frame (model cụ thể tự chọn theo tier + khung hình).
+              Omni Flash là r2v — ảnh frame thành ảnh tham chiếu — và cho chọn thẳng độ dài
+              clip, nên beat 10s chỉ cần MỘT clip thay vì hai clip Veo 8s nối nhau; motion
+              prompt cũng được viết theo mốc thời gian <code>[00:04]</code> để clip có nhiều
+              pha chuyển động thay vì một cú máy đơn điệu.
+            </p>
+            <p className="mt-1 text-xs text-neutral-600">
+              ⚠ <b>Watermark</b>: cả hai đều đóng dấu ở góc dưới phải và hiện suốt clip. Omni
+              đóng dấu <b>✦ Gemini</b> trắng, to và lùi vào trong khung — rõ hơn nhiều so với
+              chữ <b>“Veo”</b> xám nhỏ sát mép của Veo. Bản upscale 1080p còn làm dấu Veo đậm
+              hơn bản 720p. Nếu góc dưới phải là vùng quan trọng của khung hình, cân nhắc bố
+              cục chừa chỗ hoặc chèn overlay/lower-third của kênh vào đó.
+            </p>
           </Field>
 
           <label className="flex items-center gap-2 text-sm text-neutral-300">
@@ -333,6 +417,78 @@ export default function ProjectSettings({
               className="h-4 w-4 accent-indigo-500" />
             Chế độ Storytelling (giọng đọc dẫn dắt, đọc nguyên văn nội dung gốc)
           </label>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-neutral-300">
+              <input type="checkbox" checked={autoHires}
+                onChange={(e) => setAutoHires(e.target.checked)}
+                className="h-4 w-4 accent-indigo-500" />
+              Tự tải ảnh độ phân giải cao{hiresInfo ? ` (${hiresInfo.label})` : " (2K/4K)"}
+            </label>
+            <p className="mt-1 text-xs text-neutral-600">
+              Ảnh Flow trả về chỉ là bản HD. Bật tuỳ chọn này để sau mỗi lần sinh ảnh tải thêm
+              bản phóng to — dùng khi <b>dựng video từ ảnh</b> và <b>export DaVinci Resolve</b>.
+              Trần độ phân giải theo tier tài khoản: TIER ONE → 2K, TIER TWO → 4K. Ảnh hiển thị
+              trong app vẫn là bản HD cho nhẹ.
+            </p>
+            {hiresInfo && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-neutral-500">
+                  {hiresInfo.done}/{hiresInfo.total} ảnh đã có bản {hiresInfo.label}
+                </span>
+                {hiresInfo.missing > 0 && (
+                  <button onClick={fetchMissingHires} disabled={busy}
+                    title="Tải bù bản độ phân giải cao cho các ảnh đã sinh trước đó"
+                    className="rounded-lg border border-neutral-700 px-2.5 py-1 text-xs hover:bg-neutral-800 disabled:opacity-40">
+                    ⬇ Tải bù {hiresInfo.missing} ảnh
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-neutral-300">
+              <input type="checkbox" checked={autoUpVideo}
+                onChange={(e) => setAutoUpVideo(e.target.checked)}
+                className="h-4 w-4 accent-indigo-500" />
+              Tự upscale video{upInfo ? ` (${upInfo.label})` : " (1080p/4K)"}
+            </label>
+            <p className="mt-1 text-xs text-neutral-600">
+              Video render ra cũng chỉ là bản HD. Bật để tự upscale sau mỗi lần render. Trần
+              theo tier: TIER ONE → Full HD 1080p, TIER TWO → 4K.{" "}
+              <b className="text-amber-500/90">Mỗi video mất ~1 phút</b> (Flow render lại, không
+              trả về ngay như ảnh). Đo thực tế: lên 1080p KHÔNG trừ credit; bản 4K (tier TWO)
+              chưa kiểm chứng, có thể tốn. Shot ghép từ nhiều clip (chained) không upscale được.
+            </p>
+            {(upInfo?.choices?.length ?? 0) > 1 && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="shrink-0 text-xs text-neutral-500">Mức upscale</span>
+                <select value={upscaleRes} onChange={(e) => setUpscaleRes(e.target.value)}
+                  title="Tier TWO có thể chọn Full HD thay vì 4K cho file nhẹ và rẻ hơn"
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs outline-none focus:border-indigo-500">
+                  <option value="">Cao nhất tier cho phép</option>
+                  {upInfo!.choices.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {upInfo && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-neutral-500">
+                  {upInfo.done}/{upInfo.total} video đã có bản {upInfo.label}
+                </span>
+                {upInfo.missing > 0 && (
+                  <button onClick={upscaleMissingVideos} disabled={busy}
+                    title="Upscale bù các video đã render trước đó (tốn credit)"
+                    className="rounded-lg border border-neutral-700 px-2.5 py-1 text-xs hover:bg-neutral-800 disabled:opacity-40">
+                    ⬆ Upscale {upInfo.missing} video
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           <Field label="🔒 Seed (khóa để tái lập ảnh giống hệt)">
             <input type="number" min={0} value={seed}

@@ -60,7 +60,11 @@ class UpscaleVideoRequest(BaseModel):
     media_id: str
     scene_id: str
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
-    resolution: str = "VIDEO_RESOLUTION_4K"
+    # Bỏ trống → suy ra theo tier (ONE → 1080p, TWO → 4K). Xin 4K trên tier ONE bị từ chối.
+    resolution: Optional[str] = None
+    project_id: str = ""
+    user_paygate_tier: str = "PAYGATE_TIER_ONE"
+    workflow_id: Optional[str] = None
 
 
 class UploadImageRequest(BaseModel):

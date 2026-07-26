@@ -25,7 +25,7 @@ let metrics = {
 // ─── URL → Log Type Classifier ─────────────────────────────
 
 // Visible log types — only these appear in the request log
-const _VISIBLE_TYPES = new Set(['GEN_IMG', 'GEN_VID', 'GEN_VID_REF', 'UPSCALE', 'TRACKING', 'URL_REFRESH']);
+const _VISIBLE_TYPES = new Set(['GEN_IMG', 'GEN_VID', 'GEN_VID_REF', 'UPSCALE', 'UPS_IMG', 'TRACKING', 'URL_REFRESH']);
 
 function _classifyApiUrl(url) {
   if (url.includes('uploadImage')) return 'UPLOAD';

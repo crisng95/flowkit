@@ -53,9 +53,15 @@ async def ws_handler(websocket):
         logger.info("Extension disconnected")
 
 
+# Responses normally arrive over HTTP (/api/ext/callback), but the extension falls back to
+# the WS when that POST fails. An upsampleImage reply carries a whole 2K/4K image as base64
+# (tens of MB), so the default 1 MiB frame cap would kill the connection on that fallback.
+WS_MAX_SIZE = int(os.environ.get("WS_MAX_SIZE", str(64 * 1024 * 1024)))
+
+
 async def run_ws_server():
     """Run WebSocket server for extension connections."""
-    async with websockets.serve(ws_handler, WS_HOST, WS_PORT):
+    async with websockets.serve(ws_handler, WS_HOST, WS_PORT, max_size=WS_MAX_SIZE):
         logger.info("WebSocket server listening on ws://%s:%d", WS_HOST, WS_PORT)
         await asyncio.Future()  # run forever
 

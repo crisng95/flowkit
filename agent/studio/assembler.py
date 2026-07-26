@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 from agent.config import BASE_DIR
-from agent.studio import db, media_store
+from agent.studio import db, hires, media_store
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +24,64 @@ def _local(web_path: str) -> Path:
     return media_store.MEDIA_DIR / web_path.replace("/media/", "", 1)
 
 
-def _res(aspect: str) -> tuple[int, int]:
-    return (720, 1280) if "PORTRAIT" in (aspect or "") else (1280, 720)
+def _res(aspect: str, short_side: int = 720) -> tuple[int, int]:
+    """Output frame size for a 16:9 project, given the SHORT side (720 = HD default).
+
+    Raised when the sources are hi-res (upsampled stills / upscaled videos) — encoding a
+    1080p or 4K source into a 720p frame throws the extra resolution away. See
+    `timeline_short_side()` for how it is derived from what the shots actually hold."""
+    long_side = round(short_side * 16 / 9 / 2) * 2   # even, ffmpeg/x264 dislikes odd dims
+    return ((short_side, long_side) if "PORTRAIT" in (aspect or "")
+            else (long_side, short_side))
+
+
+# Short side of a project's timeline, by what the media actually is.
+_SHORT_SIDE_BY_RES = {"VIDEO_RESOLUTION_1080P": 1080, "VIDEO_RESOLUTION_4K": 2160}
+# Upsampled stills are 2K/4K, but 1080p is the standard timeline to land them in.
+_STILL_SHORT_SIDE = 1080
+
+
+def timeline_short_side(shots: list[dict]) -> int:
+    """720 unless EVERY contributing shot carries a hi-res source, in which case the highest
+    resolution they share. A single HD leftover keeps the whole timeline at 720p rather than
+    upscaling it on encode — mixing is what makes an export look soft."""
+    contributing = [s for s in shots if s.get("video_path") or s.get("image_path")]
+    if not contributing:
+        return 720
+    sides = []
+    for s in contributing:
+        if s.get("video_path"):
+            if not hires.video_path_for(s):
+                return 720
+            sides.append(_SHORT_SIDE_BY_RES.get(s.get("upscale_res") or "", 1080))
+        else:
+            if not hires.path_for(s):
+                return 720
+            sides.append(_STILL_SHORT_SIDE)
+    return min(sides)
+
+
+def shot_video_path(shot: dict) -> Path | None:
+    """Local file to BUILD this shot from: the 1080p/4K upscale when it exists and still
+    matches the shot's current video, else the HD one. None if neither is on disk."""
+    for web in (hires.video_path_for(shot), shot.get("video_path")):
+        if web:
+            p = _local(web) if web.startswith("/media/") else \
+                STUDIO_MEDIA_DIR / web.replace("/studio-media/", "", 1)
+            if p.exists() and p.stat().st_size > 0:
+                return p
+    return None
+
+
+def shot_image_path(shot: dict) -> Path | None:
+    """Local file to BUILD this shot from: the 2K/4K copy when it exists and still matches
+    the shot's current image, else the HD one. None if neither is on disk."""
+    for web in (hires.path_for(shot), shot.get("image_path")):
+        if web:
+            p = _local(web)
+            if p.exists() and p.stat().st_size > 0:
+                return p
+    return None
 
 
 async def _run(args: list[str]) -> None:
@@ -337,8 +393,8 @@ async def _scene_clip(parts: list[dict], scene: dict, out: Path, w: int, h: int,
     # one silent sub-clip per shot image, then concat → scene video
     tmp = []
     for k, p in enumerate(parts):
-        src = _local(p["image_path"])
-        if not src.exists():
+        src = shot_image_path(p)
+        if not src:
             continue
         sub = out.with_name(f"{out.stem}_s{k}.mp4")
         await _image_clip(src, None, sub, w, h, durs[k], ken_burns)
@@ -392,17 +448,26 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (project_id,))
     out_dir = STUDIO_MEDIA_DIR / project_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    w, h = _res(project["aspect_ratio"])
     font = _caption_font(caption_font)
 
-    clip_paths, total = [], 0.0
+    # Resolve every scene's usable shots first, so the output resolution can be decided from
+    # what the stills actually are: all-2K/4K sources → render 1080p, else keep 720p.
+    per_scene, usable = [], []
     for si, sc in enumerate(scenes):
         parts = await db.query_all(
             "SELECT * FROM shot WHERE scene_id=? AND image_path IS NOT NULL ORDER BY idx",
             (sc["id"],))
-        parts = [p for p in parts if _local(p["image_path"]).exists()]
+        parts = [p for p in parts if shot_image_path(p)]
         if not parts:
             continue
+        usable.extend(parts)
+        per_scene.append((si, sc, parts))
+    # stills only here — ignore any video the shots may also have
+    w, h = _res(project["aspect_ratio"],
+                timeline_short_side([{**p, "video_path": None} for p in usable]))
+
+    clip_paths, total = [], 0.0
+    for si, sc, parts in per_scene:
         out = out_dir / f"scene{si:03d}.mp4"
         total += await _scene_clip(parts, sc, out, w, h, default_duration, ken_burns, font)
         clip_paths.append(out)
@@ -442,12 +507,14 @@ async def assemble(project_id: str) -> dict:
 
     out_dir = STUDIO_MEDIA_DIR / project_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    w, h = _res(project["aspect_ratio"])
+    w, h = _res(project["aspect_ratio"], timeline_short_side(shots))
 
     norm_paths = []
     for i, sh in enumerate(shots):
-        src = _local(sh["video_path"])
-        if not src.exists():
+        # Bản upscale 1080p/4K nếu còn đúng với video hiện tại, không thì bản HD. (Cũng xử lý
+        # được video chained nằm trong /studio-media/ — _local chỉ hiểu /media/.)
+        src = shot_video_path(sh)
+        if not src:
             continue
         narr = _local(sh["narration_path"]) if sh.get("narration_path") else None
         out = out_dir / f"norm{i:03d}.mp4"
