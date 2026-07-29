@@ -22,6 +22,7 @@ import {
   useEdgesState,
   useReactFlow,
   MarkerType,
+  SelectionMode,
   type Node,
   type Edge,
   type Connection,
@@ -2342,6 +2343,9 @@ function Editor({
             // (middle-drag still pans). Ctrl/Cmd+click adds single nodes to the selection.
             selectionOnDrag={boxSelect}
             panOnDrag={boxSelect ? [1] : true}
+            // Chạm vào là dính: khung chỉ cần cắt qua một phần node (mặc định của React Flow
+            // là phải trùm trọn cả node mới chọn được — rất khó với các node cao).
+            selectionMode={SelectionMode.Partial}
             selectionKeyCode="Shift"
             multiSelectionKeyCode={["Meta", "Control"]}
             edgesReconnectable
