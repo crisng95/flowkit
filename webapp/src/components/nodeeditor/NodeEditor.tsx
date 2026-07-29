@@ -102,6 +102,21 @@ const autoHandle = (type: string, d: any): string =>
 const effHandle = (type: string, d: any): string =>
   cleanHandle(String(d?.handle || "").trim()) || autoHandle(type, d);
 
+// Every "định danh" already spoken for in the graph, lowercased.
+const takenHandles = (ns: Node[]): Set<string> =>
+  new Set(
+    ns.filter((n) => HANDLE_TYPES.has(n.type || ""))
+      .map((n) => effHandle(n.type!, n.data as any).toLowerCase())
+  );
+
+// "Áo khoác" → "Áo khoác 2" (…3, …) so a copy never shadows the original's token.
+const freeHandle = (taken: Set<string>, base: string): string => {
+  if (!taken.has(base.toLowerCase())) return cleanHandle(base);
+  let k = 2;
+  while (taken.has(`${base} ${k}`.toLowerCase())) k++;
+  return cleanHandle(`${base} ${k}`);
+};
+
 const tokensIn = (text: string): string[] =>
   Array.from(String(text || "").matchAll(/\{([^{}\n]+)\}/g)).map((m) => m[1].trim());
 
@@ -283,6 +298,16 @@ function Shell({
 
 const fieldCls =
   "nodrag w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1 text-[11px] text-neutral-200 outline-none focus:border-indigo-500";
+
+// ─── Right-click menu styling ───────────────────────────────
+const menuItemCls =
+  "flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[11px] text-neutral-200 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
+const menuDangerCls =
+  "flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[11px] text-rose-300 hover:bg-rose-950/50";
+const menuHeadCls =
+  "truncate px-3 py-1.5 text-[10px] uppercase tracking-wide text-neutral-500";
+const menuSepCls = "my-1 border-t border-neutral-800";
+const menuKeyCls = "ml-auto pl-3 text-[10px] text-neutral-500";
 
 function Preview({
   nodeId,
@@ -1180,6 +1205,19 @@ function Editor({
   // assets/storyboard. {media_id, name}.
   const [projMedia, setProjMedia] = useState<{ media_id: string; name: string }[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Edge under the cursor — highlighted so it's obvious WHICH connection a right-click hits
+  // when several of them converge on the same node.
+  const [hoverEdge, setHoverEdge] = useState<string | null>(null);
+  // Right-click menu (on a connection, a node, the multi-selection, or empty canvas).
+  const [menu, setMenu] = useState<
+    | { x: number; y: number; kind: "edge"; id: string }
+    | { x: number; y: number; kind: "node"; id: string }
+    | { x: number; y: number; kind: "selection" }
+    | { x: number; y: number; kind: "pane"; at: { x: number; y: number } }
+    | null
+  >(null);
+  // Box-select mode: left-drag draws a selection rectangle instead of panning the canvas.
+  const [boxSelect, setBoxSelect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1202,20 +1240,25 @@ function Editor({
   const [histVer, setHistVer] = useState(0);
 
   // Thick edges + arrow markers; edges touching the active node animate (marching arrows)
-  // so connections are easy to follow on a touch screen.
+  // so connections are easy to follow on a touch screen. The one under the cursor (or picked
+  // with a click) turns rose and fattens, so you always know which line you're about to act on.
   const displayEdges = useMemo(
     () =>
       edges.map((e) => {
         const active = !!activeId && (e.source === activeId || e.target === activeId);
+        const hot = e.id === hoverEdge || !!e.selected;
+        const color = hot ? "#fb7185" : active ? "#818cf8" : "#6b7280";
         return {
           ...e,
-          animated: active,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12,
-                       color: active ? "#818cf8" : "#6b7280" },
-          style: { strokeWidth: active ? 5 : 3, stroke: active ? "#818cf8" : "#6b7280" },
+          animated: active || hot,
+          // A fat invisible hit area — a 3px line is near impossible to right-click where
+          // several connections converge on one node.
+          interactionWidth: 26,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color },
+          style: { strokeWidth: hot ? 6 : active ? 5 : 3, stroke: color },
         };
       }),
-    [edges, activeId]
+    [edges, activeId, hoverEdge]
   );
 
   const update = useCallback(
@@ -1244,15 +1287,7 @@ function Editor({
         const nid = `${src.type}-${Date.now()}`;
         // Two nodes sharing a "định danh" make every {token} mention of it ambiguous, so the
         // copy gets its own — "Áo khoác" → "Áo khoác 2".
-        if (rest.handle) {
-          const taken = new Set(
-            ns.filter((n) => HANDLE_TYPES.has(n.type || ""))
-              .map((n) => effHandle(n.type!, n.data as any).toLowerCase())
-          );
-          let k = 2;
-          while (taken.has(`${rest.handle} ${k}`.toLowerCase())) k++;
-          rest.handle = cleanHandle(`${rest.handle} ${k}`);
-        }
+        if (rest.handle) rest.handle = freeHandle(takenHandles(ns), rest.handle);
         return [
           ...ns,
           { id: nid, type: src.type, data: { ...rest, _type: src.type },
@@ -1260,6 +1295,123 @@ function Editor({
         ];
       });
     },
+    [setNodes]
+  );
+
+  // ── Connections: explicit, unambiguous removal ──
+  // Dragging an endpoint off the connector still works, but with several lines landing on one
+  // node you can't tell which one you grabbed. These are driven by the right-click menu, where
+  // each connection is named by the nodes it joins.
+  const removeEdge = useCallback(
+    (edgeId: string) => setEdges((es) => es.filter((e) => e.id !== edgeId)),
+    [setEdges]
+  );
+  const removeEdgesOf = useCallback(
+    (nodeId: string, dir: "in" | "out" | "all") =>
+      setEdges((es) =>
+        es.filter((e) =>
+          dir === "in" ? e.target !== nodeId
+          : dir === "out" ? e.source !== nodeId
+          : e.source !== nodeId && e.target !== nodeId
+        )
+      ),
+    [setEdges]
+  );
+
+  // A human name for a node in the connection menu: "🖼 Nguồn ảnh «Nam»".
+  const nodeLabel = useCallback(
+    (id: string) => {
+      const n = nodes.find((x) => x.id === id);
+      if (!n) return id;
+      const m = META[(n.type as string) || "output"] || META.output;
+      const h = HANDLE_TYPES.has(n.type || "") ? effHandle(n.type!, n.data as any) : "";
+      return `${m.icon} ${m.label}${h ? ` «${h}»` : ""}`;
+    },
+    [nodes]
+  );
+
+  // ── Group operations (select → copy / paste / duplicate / delete / move) ──
+  // Shift+drag (or the ▭ toggle) boxes a group; the whole group then drags as one, and these
+  // handle the rest. The clipboard is in-memory: pasting carries the wiring BETWEEN the copied
+  // nodes, not the links to nodes left behind.
+  const clipboard = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
+  const [clipCount, setClipCount] = useState(0);
+  // Where the cursor last was over the canvas, so Ctrl+V / "Dán tại đây" lands under it.
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
+
+  const selectedIds = useMemo(
+    () => new Set(nodes.filter((n) => n.selected).map((n) => n.id)),
+    [nodes]
+  );
+
+  const copySelection = useCallback(() => {
+    const sel = nodes.filter((n) => n.selected);
+    if (!sel.length) return false;
+    const ids = new Set(sel.map((n) => n.id));
+    clipboard.current = {
+      nodes: sel.map((n) => ({ ...n, position: { ...n.position }, data: { ...(n.data as any) } })),
+      edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ ...e })),
+    };
+    setClipCount(sel.length);
+    return true;
+  }, [nodes, edges]);
+
+  // Paste the clipboard at `at` (flow coords) keeping the group's internal layout, or offset
+  // from the original when no position is given. The pasted copy becomes the new selection.
+  const pasteClipboard = useCallback(
+    (at?: { x: number; y: number } | null) => {
+      const clip = clipboard.current;
+      if (!clip?.nodes.length) return;
+      const stamp = Date.now();
+      const idMap = new Map<string, string>(
+        clip.nodes.map((n, i) => [n.id, `${n.type}-${stamp}-${i}`])
+      );
+      const minX = Math.min(...clip.nodes.map((n) => n.position.x));
+      const minY = Math.min(...clip.nodes.map((n) => n.position.y));
+      const dx = at ? at.x - minX : 48;
+      const dy = at ? at.y - minY : 48;
+      setNodes((ns) => {
+        const taken = takenHandles(ns);
+        const made = clip.nodes.map((n) => {
+          const { _result, _ext, preview, result_media_id, result_web, result_ext, locked, ...rest } =
+            n.data as any;
+          if (rest.handle) {
+            rest.handle = freeHandle(taken, rest.handle);
+            taken.add(rest.handle.toLowerCase()); // …so two copies don't collide with each other
+          }
+          return {
+            id: idMap.get(n.id)!,
+            type: n.type,
+            selected: true,
+            position: { x: n.position.x + dx, y: n.position.y + dy },
+            data: { ...rest, _type: n.type },
+          } as Node;
+        });
+        return [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), ...made];
+      });
+      setEdges((es) => [
+        ...es.map((e) => (e.selected ? { ...e, selected: false } : e)),
+        ...clip.edges.map((e, i) => ({
+          id: `e-${stamp}-${i}`,
+          source: idMap.get(e.source)!,
+          target: idMap.get(e.target)!,
+        })),
+      ]);
+    },
+    [setNodes, setEdges]
+  );
+
+  const deleteSelection = useCallback(() => {
+    const ids = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    const anyEdge = edges.some((e) => e.selected);
+    if (!ids.size && !anyEdge) return;
+    setNodes((ns) => ns.filter((n) => !ids.has(n.id)));
+    setEdges((es) => es.filter((e) => !e.selected && !ids.has(e.source) && !ids.has(e.target)));
+    setActiveId((a) => (a && ids.has(a) ? null : a));
+  }, [nodes, edges, setNodes, setEdges]);
+
+  const selectAll = useCallback(
+    () => setNodes((ns) => ns.map((n) => (n.selected ? n : { ...n, selected: true }))),
     [setNodes]
   );
 
@@ -1433,17 +1585,24 @@ function Editor({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable)
-        return; // let inputs do their own text undo
+      const typing =
+        tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
+      if (e.key === "Escape") { setMenu(null); return; }
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (typing) return; // let inputs do their own undo / copy / paste
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+      else if (k === "a") { e.preventDefault(); selectAll(); }
+      else if (k === "c") { e.preventDefault(); copySelection(); }
+      else if (k === "x") { e.preventDefault(); if (copySelection()) deleteSelection(); }
+      else if (k === "v") { e.preventDefault(); pasteClipboard(lastPointer.current); }
+      else if (k === "d") { e.preventDefault(); if (copySelection()) pasteClipboard(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, selectAll, copySelection, deleteSelection, pasteClipboard]);
 
   useEffect(() => {
     api.options().then((o) => setImageModels(o.image_models || [])).catch(() => {});
@@ -2060,6 +2219,20 @@ function Editor({
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800">
               ⤢ Sắp xếp
             </button>
+            <button
+              onClick={() => setBoxSelect((b) => !b)}
+              title="Kéo chuột trái để khoanh vùng chọn nhiều node (giữ Shift cũng được). Ctrl+C/V/X/D · Del · kéo để di chuyển cả nhóm"
+              className={`rounded-lg border px-2 py-1.5 text-xs ${
+                boxSelect
+                  ? "border-indigo-500 bg-indigo-600/20 text-indigo-300"
+                  : "border-neutral-700 hover:bg-neutral-800"
+              }`}
+            >
+              ▭ Chọn vùng
+            </button>
+            {selectedIds.size > 1 && (
+              <span className="px-1 text-[11px] text-indigo-300">{selectedIds.size} node</span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <select
@@ -2116,7 +2289,15 @@ function Editor({
         </div>
       </div>
       {err && <div className="bg-rose-950/50 px-4 py-1.5 text-sm text-rose-300">{err}</div>}
-      <div className="flex-1" onDrop={onPaneDrop} onDragOver={onPaneDragOver}>
+      <div
+        className="relative flex-1"
+        onDrop={onPaneDrop}
+        onDragOver={onPaneDragOver}
+        // Remember where the cursor is so Ctrl+V drops the group under it.
+        onMouseMove={(e) => {
+          lastPointer.current = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        }}
+      >
         <NodeOps.Provider value={ops}>
           <ReactFlow
             nodes={nodes}
@@ -2128,8 +2309,41 @@ function Editor({
             onReconnect={onReconnect}
             onReconnectStart={onReconnectStart}
             onReconnectEnd={onReconnectEnd}
-            onNodeClick={(_, n) => setActiveId(n.id)}
-            onPaneClick={() => setActiveId(null)}
+            onNodeClick={(_, n) => { setActiveId(n.id); setMenu(null); }}
+            onPaneClick={() => { setActiveId(null); setMenu(null); }}
+            onEdgeMouseEnter={(_, e) => setHoverEdge(e.id)}
+            onEdgeMouseLeave={() => setHoverEdge(null)}
+            // Right-click menus — the unambiguous way to cut a connection, and the entry
+            // point for the group actions.
+            onEdgeContextMenu={(ev, e) => {
+              ev.preventDefault();
+              setMenu({ kind: "edge", id: e.id, x: ev.clientX, y: ev.clientY });
+            }}
+            onNodeContextMenu={(ev, n) => {
+              ev.preventDefault();
+              setActiveId(n.id);
+              setMenu({ kind: "node", id: n.id, x: ev.clientX, y: ev.clientY });
+            }}
+            onSelectionContextMenu={(ev) => {
+              ev.preventDefault();
+              setMenu({ kind: "selection", x: ev.clientX, y: ev.clientY });
+            }}
+            onPaneContextMenu={(ev) => {
+              ev.preventDefault();
+              const m = ev as unknown as MouseEvent;
+              setMenu({
+                kind: "pane",
+                x: m.clientX,
+                y: m.clientY,
+                at: rf.screenToFlowPosition({ x: m.clientX, y: m.clientY }),
+              });
+            }}
+            // Shift+drag always box-selects; the ▭ toggle makes a plain left-drag do it too
+            // (middle-drag still pans). Ctrl/Cmd+click adds single nodes to the selection.
+            selectionOnDrag={boxSelect}
+            panOnDrag={boxSelect ? [1] : true}
+            selectionKeyCode="Shift"
+            multiSelectionKeyCode={["Meta", "Control"]}
             edgesReconnectable
             deleteKeyCode={["Backspace", "Delete"]}
             connectionLineStyle={{ strokeWidth: 4, stroke: "#818cf8" }}
@@ -2150,9 +2364,164 @@ function Editor({
             />
           </ReactFlow>
         </NodeOps.Provider>
+        {menu && (
+          <>
+            {/* click anywhere (or right-click again) to dismiss */}
+            <div
+              className="fixed inset-0 z-[80]"
+              onMouseDown={() => setMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setMenu(null); }}
+            />
+            <div
+              className="fixed z-[81] max-h-[70vh] min-w-[230px] max-w-[340px] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 py-1 text-xs shadow-2xl"
+              style={{
+                left: Math.min(menu.x, Math.max(8, window.innerWidth - 350)),
+                top: Math.min(menu.y, Math.max(8, window.innerHeight - 320)),
+              }}
+            >
+              {menu.kind === "edge" && (() => {
+                const e = edges.find((x) => x.id === menu.id);
+                if (!e) return null;
+                return (
+                  <>
+                    <div className={menuHeadCls}>Kết nối</div>
+                    <div className="px-3 pb-2 text-[11px] leading-snug text-neutral-300">
+                      {nodeLabel(e.source)}
+                      <span className="mx-1 text-neutral-500">→</span>
+                      {nodeLabel(e.target)}
+                    </div>
+                    <div className={menuSepCls} />
+                    <button className={menuDangerCls}
+                      onClick={() => { removeEdge(e.id); setMenu(null); }}>
+                      🗑 Xóa kết nối này
+                    </button>
+                    <button className={menuItemCls}
+                      onClick={() => { removeEdgesOf(e.target, "in"); setMenu(null); }}>
+                      ✂ Ngắt mọi kết nối vào {nodeLabel(e.target)}
+                    </button>
+                  </>
+                );
+              })()}
+
+              {menu.kind === "node" && (() => {
+                const id = menu.id;
+                const ins = edges.filter((e) => e.target === id);
+                const outs = edges.filter((e) => e.source === id);
+                const inGroup = selectedIds.size > 1 && selectedIds.has(id);
+                return (
+                  <>
+                    <div className={menuHeadCls}>{nodeLabel(id)}</div>
+                    {inGroup && (
+                      <>
+                        <button className={menuItemCls}
+                          onClick={() => { copySelection(); setMenu(null); }}>
+                          ⧉ Sao chép {selectedIds.size} node <span className={menuKeyCls}>Ctrl+C</span>
+                        </button>
+                        <button className={menuItemCls}
+                          onClick={() => { if (copySelection()) pasteClipboard(null); setMenu(null); }}>
+                          ⎘ Nhân bản nhóm <span className={menuKeyCls}>Ctrl+D</span>
+                        </button>
+                        <button className={menuDangerCls}
+                          onClick={() => { deleteSelection(); setMenu(null); }}>
+                          🗑 Xóa {selectedIds.size} node <span className={menuKeyCls}>Del</span>
+                        </button>
+                        <div className={menuSepCls} />
+                      </>
+                    )}
+                    <button className={menuItemCls}
+                      onClick={() => { genNode(id); setMenu(null); }}>
+                      ⚡ Tạo riêng node này
+                    </button>
+                    <button className={menuItemCls}
+                      onClick={() => { duplicate(id); setMenu(null); }}>
+                      ⧉ Nhân bản node
+                    </button>
+                    <button className={menuDangerCls}
+                      onClick={() => { remove(id); setMenu(null); }}>
+                      ✕ Xóa node
+                    </button>
+                    {(ins.length > 0 || outs.length > 0) && (
+                      <>
+                        <div className={menuSepCls} />
+                        <div className={menuHeadCls}>Ngắt kết nối</div>
+                        {ins.map((e) => (
+                          <button key={e.id} className={menuItemCls}
+                            onMouseEnter={() => setHoverEdge(e.id)}
+                            onMouseLeave={() => setHoverEdge(null)}
+                            onClick={() => { removeEdge(e.id); setMenu(null); setHoverEdge(null); }}>
+                            <span className="text-sky-400">←</span> từ {nodeLabel(e.source)}
+                          </button>
+                        ))}
+                        {outs.map((e) => (
+                          <button key={e.id} className={menuItemCls}
+                            onMouseEnter={() => setHoverEdge(e.id)}
+                            onMouseLeave={() => setHoverEdge(null)}
+                            onClick={() => { removeEdge(e.id); setMenu(null); setHoverEdge(null); }}>
+                            <span className="text-emerald-400">→</span> tới {nodeLabel(e.target)}
+                          </button>
+                        ))}
+                        {ins.length + outs.length > 1 && (
+                          <button className={menuDangerCls}
+                            onClick={() => { removeEdgesOf(id, "all"); setMenu(null); }}>
+                            ✂ Ngắt tất cả ({ins.length + outs.length})
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+
+              {menu.kind === "selection" && (
+                <>
+                  <div className={menuHeadCls}>{selectedIds.size} node đã chọn</div>
+                  <button className={menuItemCls}
+                    onClick={() => { copySelection(); setMenu(null); }}>
+                    ⧉ Sao chép <span className={menuKeyCls}>Ctrl+C</span>
+                  </button>
+                  <button className={menuItemCls}
+                    onClick={() => { if (copySelection()) pasteClipboard(null); setMenu(null); }}>
+                    ⎘ Nhân bản nhóm <span className={menuKeyCls}>Ctrl+D</span>
+                  </button>
+                  <button className={menuItemCls}
+                    onClick={() => { if (copySelection()) deleteSelection(); setMenu(null); }}>
+                    ✂ Cắt <span className={menuKeyCls}>Ctrl+X</span>
+                  </button>
+                  <button className={menuDangerCls}
+                    onClick={() => { deleteSelection(); setMenu(null); }}>
+                    🗑 Xóa nhóm <span className={menuKeyCls}>Del</span>
+                  </button>
+                </>
+              )}
+
+              {menu.kind === "pane" && (
+                <>
+                  <button
+                    className={menuItemCls}
+                    disabled={!clipCount}
+                    onClick={() => { pasteClipboard(menu.at); setMenu(null); }}
+                  >
+                    📋 Dán {clipCount ? `${clipCount} node ` : ""}tại đây <span className={menuKeyCls}>Ctrl+V</span>
+                  </button>
+                  <button className={menuItemCls} onClick={() => { selectAll(); setMenu(null); }}>
+                    ☑ Chọn tất cả <span className={menuKeyCls}>Ctrl+A</span>
+                  </button>
+                  <button className={menuItemCls}
+                    onClick={() => { setBoxSelect((b) => !b); setMenu(null); }}>
+                    ▭ Chọn vùng: {boxSelect ? "đang bật" : "đang tắt"}
+                  </button>
+                  <div className={menuSepCls} />
+                  <button className={menuItemCls} onClick={() => { autoLayout(); setMenu(null); }}>
+                    ⤢ Tự sắp xếp
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
       <div className="border-t border-neutral-800 px-4 py-1 text-[11px] text-neutral-500">
-        ⓘ {"{định danh}"} trên mỗi node ảnh: gõ {"{tên}"} trong prompt để chỉ đích danh ảnh đó (vd. "cho {"{Nam}"} mặc {"{Áo khoác}"}") · ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ ·Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · Kéo đầu đường nối ra chỗ trống để xóa · ✕ xóa node
+        ⓘ {"{định danh}"} trên mỗi node ảnh: gõ {"{tên}"} trong prompt để chỉ đích danh ảnh đó (vd. "cho {"{Nam}"} mặc {"{Áo khoác}"}") · ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ ·Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · <b className="text-neutral-400">Chuột phải vào đường nối để xóa</b> (hoặc kéo đầu nối ra chỗ trống) · <b className="text-neutral-400">Shift+kéo</b> hoặc ▭ để chọn nhóm → Ctrl+C/V/X/D, Del, kéo để di chuyển cả nhóm
       </div>
       {lightbox && (
         <Lightbox

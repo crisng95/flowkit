@@ -18,6 +18,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Node editor: make a multi-node selection unmistakable — the custom nodes draw their own
+   card, so React Flow's default selection outline lands on an invisible wrapper. */
+.react-flow__node.selected > div {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+  border-radius: 0.75rem;
+}
+.react-flow__selection,
+.react-flow__nodesselection-rect {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid #6366f1;
+}
+/* the selected connection line keeps its rose highlight (set inline) — just widen the grab area */
+.react-flow__edge {
+  cursor: pointer;
+}
+
 /* slim scrollbars to match the dark theme */
 ::-webkit-scrollbar {
   width: 10px;
