@@ -324,12 +324,18 @@ LOCATION_GRID_LABELS = ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận c�
 
 
 def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
-    """Build the (style-less) body of an entity's reference-art prompt."""
-    base = (description or name).strip()
-    rule = _SHEET.get(entity_type)
-    if rule:
-        return f"{name}: {base}. {rule}"
-    return f"{name}: {base}. clean reference image"
+    """Build the (style-less) body of an entity's reference-art prompt.
+
+    The entity NAME is a LIBRARY LABEL, not art direction, so it is no longer prefixed onto
+    the prompt: the model read it as part of the scene description and painted whatever the
+    label happened to mention — a location named "DÂY PHƠI VÀ CON PHỐ LÚC RẠNG SÁNG" came back
+    with a clothesline hung across the street even when the description said nothing of the
+    sort. The name is only used as the body when there is no description at all.
+    Trailing dots are trimmed so the rule doesn't get glued on after ".." either.
+    """
+    base = ((description or "").strip() or (name or "").strip()).rstrip(" .")
+    rule = _SHEET.get(entity_type) or "clean reference image"
+    return f"{base}. {rule}" if base else rule
 
 
 # Cinematography spec injected into every shot-creating prompt so each frame's
