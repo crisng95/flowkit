@@ -15,29 +15,10 @@ import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
-const slug = (s: string) =>
-  (s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[\\/:*?"<>|\r\n\t]+/g, "")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "shot";
-
-const pad3 = (n: number) => String(n + 1).padStart(3, "0");
-
-// Trigger a browser download of a same-origin file with a chosen filename.
-function downloadFile(url: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+const slug = (s: string) => slugName(s);
 
 const parseRefs = (s: string | null): string[] => {
   try {

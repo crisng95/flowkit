@@ -5,7 +5,25 @@ import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import { useConfirm } from "../common/Confirm";
 import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
+
+// Which file a shot's ⬇ actually saves, and what to call it. The upscale is a SEPARATE file
+// (<media_id>_upsampled.mp4) and is only the right one while it still belongs to the current
+// video — re-rendering the shot leaves a stale upscale behind, which `upscale_media_id` catches.
+const videoDownload = (sh: Shot, sceneIdx: number) => {
+  const upscaled = !!sh.upscale_path && sh.upscale_media_id === sh.video_media_id;
+  const url = (upscaled ? sh.upscale_path : sh.video_path) || null;
+  if (!url) return null;
+  const res = upscaled ? sh.upscale_res?.split("_").pop()?.toLowerCase() : "";
+  return {
+    url,
+    name: `sc${pad3(sceneIdx)}-s${pad3(sh.idx)}-${slugName(sh.title || sh.description || "")}${
+      res ? `-${res}` : ""
+    }.mp4`,
+    title: upscaled ? `Tải video ${res} (bản upscale)` : "Tải video (bản HD)",
+  };
+};
 
 const parseRefs = (s: string | null): string[] => {
   try {
@@ -150,7 +168,9 @@ export default function ShotsTab({
                 {sc.heading}
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {list.map((sh) => (
+                {list.map((sh) => {
+                  const dl = videoDownload(sh, sc.idx);
+                  return (
                   <MediaCard
                     key={sh.id}
                     imageSrc={sh.image_path}
@@ -158,6 +178,9 @@ export default function ShotsTab({
                     title={sh.title}
                     index={sh.idx}
                     subtitle={sh.video_path ? "▶ video" : sh.status}
+                    downloadUrl={dl?.url}
+                    downloadName={dl?.name}
+                    downloadTitle={dl?.title}
                     selected={sel?.id === sh.id}
                     busy={running.has(sh.id)}
                     busyLabel="Đang render…"
@@ -196,7 +219,8 @@ export default function ShotsTab({
                       </button>
                     }
                   />
-                ))}
+                  );
+                })}
                 {!list.length && (
                   <div className="col-span-full rounded-xl border border-dashed border-neutral-800 py-6 text-center text-xs text-neutral-600">
                     Chưa có frame — làm Storyboard trước.
@@ -212,20 +236,29 @@ export default function ShotsTab({
         <ShotPanel
           shot={sel}
           project={project}
+          sceneIdx={Math.max(0, scenes.findIndex((s) => s.id === sel.scene_id))}
           running={running.has(sel.id)}
           onClose={() => setSel(null)}
           onChange={setShot}
           onGenVideo={() => genVideo(sel)}
         />
       )}
-      {lightbox && (
-        <Lightbox
-          imageSrc={lightbox.image_path}
-          videoSrc={lightbox.video_path}
-          title={lightbox.title}
-          onClose={() => setLightbox(null)}
-        />
-      )}
+      {lightbox && (() => {
+        const dl = videoDownload(
+          lightbox,
+          Math.max(0, scenes.findIndex((s) => s.id === lightbox.scene_id))
+        );
+        return (
+          <Lightbox
+            imageSrc={lightbox.image_path}
+            videoSrc={lightbox.video_path}
+            title={lightbox.title}
+            downloadUrl={dl?.url}
+            downloadName={dl?.name}
+            onClose={() => setLightbox(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -233,6 +266,7 @@ export default function ShotsTab({
 function ShotPanel({
   shot,
   project,
+  sceneIdx,
   running,
   onClose,
   onChange,
@@ -240,6 +274,7 @@ function ShotPanel({
 }: {
   shot: Shot;
   project: Project;
+  sceneIdx: number;
   running: boolean;
   onClose: () => void;
   onChange: (s: Shot) => void;
@@ -350,6 +385,18 @@ function ShotPanel({
         </button>
         {shot.video_path && (
           <>
+            {(() => {
+              const dl = videoDownload(shot, sceneIdx);
+              return dl ? (
+                <button
+                  onClick={() => downloadFile(dl.url, dl.name)}
+                  title={`${dl.title} → ${dl.name}`}
+                  className="w-full rounded-lg border border-emerald-800/70 py-2 text-sm text-emerald-300 hover:bg-emerald-950/40"
+                >
+                  ⬇ {dl.title}
+                </button>
+              ) : null;
+            })()}
             <button
               onClick={upscale}
               disabled={upBusy || chained}

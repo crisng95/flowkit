@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Thumb from "../Thumb";
+import { downloadFile } from "../../lib/download";
 
 interface Props {
   imageSrc?: string | null;
@@ -11,6 +12,11 @@ interface Props {
   busyLabel?: string;
   selected?: boolean;
   actions?: ReactNode;
+  // Saves the card's media to disk. `downloadUrl` may point at a DIFFERENT file than the one
+  // previewed (a shot card previews the HD clip but downloads the 1080p/4K upscale).
+  downloadUrl?: string | null;
+  downloadName?: string;
+  downloadTitle?: string;
   onClick?: () => void;
   onPreview?: () => void;
   onEdit?: () => void;
@@ -27,6 +33,9 @@ export default function MediaCard({
   busyLabel = "Đang tạo…",
   selected,
   actions,
+  downloadUrl,
+  downloadName,
+  downloadTitle,
   onClick,
   onPreview,
   onEdit,
@@ -86,6 +95,18 @@ export default function MediaCard({
               className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-neutral-700"
             >
               ✎
+            </button>
+          )}
+          {downloadUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadFile(downloadUrl, downloadName || downloadUrl.split("/").pop() || "media");
+              }}
+              title={downloadTitle || "Tải về máy"}
+              className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-emerald-600"
+            >
+              ⬇
             </button>
           )}
           {actions}
