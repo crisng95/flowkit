@@ -109,6 +109,19 @@ def _img_aspect(project: dict, data: dict | None = None) -> str:
         "VIDEO_ASPECT_RATIO_", "IMAGE_ASPECT_RATIO_") or "IMAGE_ASPECT_RATIO_LANDSCAPE"
 
 
+def _omni_duration(project: dict) -> int | None:
+    """Độ dài một clip Omni Flash theo ⚙ Cấu hình dự án — `video_model` là "4"/"6"/"8"/"10"
+    (hoặc cả model key `abra_r2v_10s`). None khi dự án đang dùng Veo. Cùng luật với
+    `_video_engine` bên api/studio.py, để node editor không tự ý chạy một độ dài khác."""
+    raw = str(project.get("video_model") or "").strip()
+    if raw in OMNI_FLASH_MODELS:
+        return int(raw)
+    for secs, key in OMNI_FLASH_MODELS.items():
+        if raw == key:
+            return int(secs)
+    return None
+
+
 def _vid_aspect(project: dict, data: dict | None = None) -> str:
     a = (data or {}).get("aspect")
     if a in _VID_ASPECT:
@@ -608,6 +621,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             prompt = inp["text"] or data.get("text") or ""
             aspect_v = _vid_aspect(project, data)
             kind_v = (data.get("model") or "omni").lower()
+            # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor
+            # cứng 8s nên chọn "Omni Flash 10s" ở cấu hình vẫn ra clip 8s.
+            dur_v = int(data.get("duration") or 0) or _omni_duration(project) or 8
             if kind_v == "omni" or kind_v in OMNI_FLASH_MODELS.values():
                 ref_ids = [r["media_id"] for r in inp["references"]]
                 if not ref_ids and inp["media_id"]:
@@ -616,7 +632,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     raise GraphError("Omni Flash cần ít nhất 1 ảnh tham chiếu/nguồn")
                 submit = lambda: client.generate_video_omni(
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
-                    duration_s=int(data.get("duration") or 8), aspect_ratio=aspect_v,
+                    duration_s=dur_v, aspect_ratio=aspect_v,
                     user_paygate_tier=project["paygate_tier"],
                     references=inp["references"] or None)
             else:   # Veo i2v — needs a start frame

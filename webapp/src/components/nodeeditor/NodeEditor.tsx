@@ -145,6 +145,9 @@ const NodeOps = createContext<{
   images: RefImage[];
   imageModels: string[];
   projectId: string;
+  // Omni Flash clip length from ⚙ Cấu hình dự án (null = project uses Veo). A video node
+  // without its own `duration` renders at this length.
+  projDur: number | null;
   // Every image-producing node in the graph, by its effective handle — feeds the prompt
   // autocomplete and the "Ảnh gốc" picker.
   handles: { id: string; type: string; handle: string; web?: string }[];
@@ -168,6 +171,7 @@ const NodeOps = createContext<{
   images: [],
   imageModels: [],
   projectId: "",
+  projDur: null,
   handles: [],
   handleDupes: new Set(),
   upstreamHandles: () => [],
@@ -795,16 +799,30 @@ function ImageNode({ id, data, type }: NodeProps) {
 }
 
 function VideoNode({ id, data }: NodeProps) {
-  const { update } = useContext(NodeOps);
+  const { update, projDur } = useContext(NodeOps);
   const d = data as any;
   const isOmni = (d.model || "omni") === "omni";
+  // No per-node duration → follow ⚙ Cấu hình dự án (the backend falls back the same way).
+  const eff = d.duration || projDur || 8;
   return (
     <Shell type="video" id={id} data={d}>
       <Preview nodeId={id} src={d._result} video label="Kết quả video" />
       <AspectModelRow id={id} data={d} videoModels />
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
       {isOmni && (
-        <Slider label="Thời lượng" value={d.duration || 8} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
+        <>
+          <Slider label="Thời lượng" value={eff} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
+          {/* A node saved back when the editor hard-coded 8s silently overrode a project set
+              to 10s — say so instead of quietly rendering the shorter clip. */}
+          {!!projDur && !!d.duration && d.duration !== projDur && (
+            <button
+              onClick={() => update(id, { duration: 0 })}
+              className="nodrag w-full rounded-md border border-amber-700/60 bg-amber-950/30 px-2 py-1 text-left text-[10px] text-amber-300 hover:bg-amber-900/40"
+            >
+              ⚠ Dự án đặt {projDur}s — bấm để dùng theo dự án
+            </button>
+          )}
+        </>
       )}
       <GenControls id={id} data={d} />
     </Shell>
@@ -1152,8 +1170,9 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
       })
     );
     nodes.push(
+      // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
-        model: "omni", aspect: "16:9", duration: 8, count: 1, _result: seed.videoSrc || "",
+        model: "omni", aspect: "16:9", count: 1, _result: seed.videoSrc || "",
       })
     );
     nodes.push(mk("o", "output", 660, 110, { _result: seed.videoSrc || "", _ext: "mp4" }));
@@ -1185,19 +1204,30 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
 }
 
 // ─── Editor ─────────────────────────────────────────────────
+// "10" / "abra_r2v_10s" → 10; anything else (Veo, empty) → null. Mirrors _omni_duration()
+// in agent/studio/graph.py.
+const omniDuration = (videoModel?: string | null): number | null => {
+  const m = String(videoModel || "").trim().match(/^(?:abra_r2v_)?(\d+)s?$/);
+  const n = m ? Number(m[1]) : NaN;
+  return [4, 6, 8, 10].includes(n) ? n : null;
+};
+
 function Editor({
   target,
   entities,
   projectId,
+  videoModel,
   onClose,
   onApplied,
 }: {
   target: EditorTarget;
   entities: Entity[];
   projectId: string;
+  videoModel?: string | null;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {
+  const projDur = useMemo(() => omniDuration(videoModel), [videoModel]);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [imageModels, setImageModels] = useState<string[]>([]);
@@ -1820,7 +1850,9 @@ function Editor({
     collage: { cols: 0, gap: 8, bg: "#000000" },
     watermark: { position: "bottom-right", scale: 0.18, opacity: 0.85 },
     note: { text: "" },
-    video: { aspect: "16:9", model: "omni", duration: 8, count: 1 },
+    // No `duration`: a fresh video node follows ⚙ Cấu hình dự án (VideoNode shows the
+    // effective value, the backend falls back the same way).
+    video: { aspect: "16:9", model: "omni", count: 1 },
     filter: { brightness: 1, contrast: 1, saturation: 1, sharpness: 1, blur: 0, rotate: 0 },
     text: { text: "", anchor: "bottom", color: "#ffffff", font_scale: 0.06, stroke: true },
     upscale: { scale: 2, sharpen: true },
@@ -2178,8 +2210,8 @@ function Editor({
   };
 
   const ops = useMemo(
-    () => ({ update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, handles, handleDupes, upstreamHandles }),
-    [update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, handles, handleDupes, upstreamHandles]
+    () => ({ update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, handles, handleDupes, upstreamHandles }),
+    [update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, handles, handleDupes, upstreamHandles]
   );
 
   return (
@@ -2542,6 +2574,7 @@ export default function NodeEditor(props: {
   target: EditorTarget;
   entities: Entity[];
   projectId: string;
+  videoModel?: string | null;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {

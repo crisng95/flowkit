@@ -3166,13 +3166,24 @@ async def _generate_shot_video(shot: dict) -> dict:
         # Video vừa render chỉ là bản HD. Nếu dự án bật "tự upscale video", kéo bản
         # 1080p/4K ngay (best-effort — hỏng chỉ ghi log, video HD đã có). Chỉ áp dụng cho
         # clip đơn: nhánh chained ở trên không upscale được.
-        if project.get("auto_upscale_video"):
-            await hires.auto_upscale_video(
-                await _shot_or_404(shot["id"]), project, await _current_tier(), _poll_video)
+        await _maybe_auto_upscale_video(shot["id"], project)
         return await _shot_or_404(shot["id"])
     except HTTPException:
         await db.update("shot", shot["id"], {"status": "error", "updated_at": db.now()})
         raise
+
+
+async def _maybe_auto_upscale_video(sid: str, project: dict) -> None:
+    """Kéo bản 1080p/4K ngay sau khi shot nhận video MỚI, khi dự án bật 'tự upscale video'.
+
+    Hook này trước đây chỉ nằm trong `_generate_shot_video` (tab Shots), nên video tạo từ
+    Node Editor — hoặc gán bằng apply-media / chọn từ ứng viên — không bao giờ được upscale
+    dù ô đó đã tích. Best-effort: `hires.auto_upscale_video` tự nuốt lỗi, bản HD đã lưu xong.
+    """
+    if not project.get("auto_upscale_video"):
+        return
+    await hires.auto_upscale_video(
+        await _shot_or_404(sid), project, await _current_tier(), _poll_video)
 
 
 @router.post("/shots/{sid}/prompts")
@@ -3362,6 +3373,10 @@ async def run_shot_graph(sid: str, body: SaveGraphRequest, goal: str | None = No
                                         only_node=body.only_node, propagate=body.propagate)
     except graph_mod.GraphError as e:
         raise HTTPException(400, str(e))
+    # Chỉ lượt chạy đầy đủ mới ghi media lên shot; `only_node` chỉ trả kết quả node, việc
+    # gán đi qua apply-media (đã có hook riêng ở đó).
+    if not body.only_node and out.get("ext") == "mp4":
+        await _maybe_auto_upscale_video(sid, project)
     return {**out, "shot": await _shot_or_404(sid)}
 
 
@@ -3552,6 +3567,8 @@ async def apply_shot_media(sid: str, body: ApplyMediaRequest):
     slot = "vid" if col == "video" else "img"
     await _rename_flow_media(project, body.media_id,
                              f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_{slot}")
+    if col == "video":
+        await _maybe_auto_upscale_video(sid, {**project, "paygate_tier": await _current_tier()})
     return {"ok": True, "path": web, "shot": await _shot_or_404(sid)}
 
 
