@@ -82,6 +82,29 @@ const META: Record<string, { label: string; icon: string; color: string }> = {
 // "refs" intentionally dropped — use one "Nguồn ảnh" (source) node per reference image.
 const PALETTE = ["source", "prompt", "image", "editImage", "removebg", "replacebg", "filter", "colorgrade", "text", "upscale", "crop", "vignette", "border", "blend", "collage", "watermark", "video", "note", "output"];
 
+// ─── Handles ("định danh") ──────────────────────────────────
+// Every node that PRODUCES a picture/clip carries a handle: writing "{handle}" in a
+// downstream prompt turns that exact image into its own reference part of the request, so
+// the model is told what ROLE the picture plays ("mặc {Áo khoác} cho {Nam}") instead of
+// receiving an anonymous pile of reference images. Mirrors _handle_of() in agent/studio/graph.py.
+const HANDLE_TYPES = new Set([
+  "source", "image", "editImage", "removebg", "replacebg", "filter", "colorgrade",
+  "text", "upscale", "crop", "vignette", "border", "blend", "collage", "watermark", "video",
+]);
+
+// Braces delimit the token in a prompt, so they can't appear inside a handle.
+const cleanHandle = (s: string) => s.replace(/[{}\r\n]/g, "").replace(/\s+/g, " ").slice(0, 40);
+
+// The handle used when the user hasn't typed one — must match the backend fallback.
+const autoHandle = (type: string, d: any): string =>
+  type === "source" ? (d?.label || "source") : type === "video" ? "video" : "image";
+
+const effHandle = (type: string, d: any): string =>
+  cleanHandle(String(d?.handle || "").trim()) || autoHandle(type, d);
+
+const tokensIn = (text: string): string[] =>
+  Array.from(String(text || "").matchAll(/\{([^{}\n]+)\}/g)).map((m) => m[1].trim());
+
 const prettyModel = (m: string) =>
   m.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -92,6 +115,9 @@ const NodeOps = createContext<{
   remove: (id: string) => void;
   duplicate: (id: string) => void;
   bindEntitySource: (fromId: string, entityId: string) => void;
+  // Wire an already-placed node into whatever a prompt node feeds, so picking its {handle}
+  // in that prompt actually delivers the picture to the generator.
+  bindNodeSource: (fromId: string, nodeId: string) => void;
   preview: (src: string, video: boolean) => void;
   genNode: (id: string, propagate?: boolean) => void;
   genningId: string | null;
@@ -103,11 +129,20 @@ const NodeOps = createContext<{
   images: RefImage[];
   imageModels: string[];
   projectId: string;
+  // Every image-producing node in the graph, by its effective handle — feeds the prompt
+  // autocomplete and the "Ảnh gốc" picker.
+  handles: { id: string; type: string; handle: string; web?: string }[];
+  // Handles that are ambiguous: shared by 2+ nodes AND actually written as {token} in a
+  // prompt, so the request really would bind the wrong picture.
+  handleDupes: Set<string>;
+  // Effective handles of the nodes feeding `id` directly.
+  upstreamHandles: (id: string) => { id: string; handle: string }[];
 }>({
   update: () => {},
   remove: () => {},
   duplicate: () => {},
   bindEntitySource: () => {},
+  bindNodeSource: () => {},
   preview: () => {},
   genNode: () => {},
   genningId: null,
@@ -117,6 +152,9 @@ const NodeOps = createContext<{
   images: [],
   imageModels: [],
   projectId: "",
+  handles: [],
+  handleDupes: new Set(),
+  upstreamHandles: () => [],
 });
 
 const handleStyle = (color: string) => ({
@@ -127,24 +165,90 @@ const handleStyle = (color: string) => ({
   boxShadow: "0 0 0 1px rgba(255,255,255,0.15)",
 });
 
+// The node's "định danh": the token a downstream prompt uses to give this picture a role.
+// Left blank it falls back to `autoHandle` (shown as the placeholder), which is what the
+// backend does too — so an untouched graph behaves exactly as before.
+function HandleField({ id, type, data }: { id: string; type: string; data: any }) {
+  const { update, handleDupes } = useContext(NodeOps);
+  // Local state for the same reason PromptNode keeps one: writing straight to node data
+  // round-trips through React Flow's store, which reverts the value for a frame and jumps
+  // the caret to the end. An external change (auto-fill on picking an asset) still adopts.
+  const [typed, setTyped] = useState<string>(data.handle ?? "");
+  const pushed = useRef<string>(data.handle ?? "");
+  useEffect(() => {
+    const incoming = data.handle ?? "";
+    if (incoming !== pushed.current) {
+      setTyped(incoming);
+      pushed.current = incoming;
+    }
+  }, [data.handle]);
+  const onType = (v: string) => {
+    const c = cleanHandle(v);
+    setTyped(c);
+    pushed.current = c;
+    update(id, { handle: c });
+  };
+  const auto = autoHandle(type, data);
+  const eff = typed.trim() || auto;
+  const dup = handleDupes.has(eff.toLowerCase());
+  return (
+    <div className="px-3 pb-2">
+      <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
+        Định danh — gõ trong prompt
+      </div>
+      <div
+        className={`flex items-center rounded-md border bg-indigo-950/30 px-1.5 ${
+          dup ? "border-amber-500/70" : "border-indigo-700/50"
+        }`}
+        title="Gõ {tên này} trong prompt của node tạo/sửa ảnh để chỉ đích danh ảnh này"
+      >
+        <span className="select-none text-[12px] font-semibold text-indigo-400">{"{"}</span>
+        <input
+          value={typed}
+          // The fallback name is what generation ACTUALLY uses when the box is empty, so it's
+          // shown as bright as a typed value (just italic) — a dim placeholder would read as
+          // "no name yet" and hide the very token the user needs to type.
+          placeholder={auto}
+          onChange={(e) => onType(e.target.value)}
+          className="nodrag min-w-0 flex-1 bg-transparent px-1 py-1 text-[12px] font-semibold text-indigo-200 outline-none placeholder:font-normal placeholder:italic placeholder:text-indigo-300/70"
+        />
+        <span className="select-none text-[12px] font-semibold text-indigo-400">{"}"}</span>
+      </div>
+      {dup && (
+        <div className="mt-0.5 text-[10px] text-amber-400">
+          ⚠ Trùng định danh — prompt sẽ không rõ dùng ảnh nào
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Shell({
   type,
   id,
+  data,
   children,
   inputs = true,
   outputs = true,
+  clip = true,
 }: {
   type: string;
   id?: string;
+  data?: any;
   children: React.ReactNode;
   inputs?: boolean;
   outputs?: boolean;
+  // Nodes that pop a menu out past their own edge (the prompt autocomplete) must not clip,
+  // otherwise the list is sliced off at the node border and only its first row shows.
+  clip?: boolean;
 }) {
   const { remove, duplicate } = useContext(NodeOps);
   const m = META[type] || META.output;
   return (
     <div
-      className="w-[228px] overflow-hidden rounded-xl border border-neutral-700/80 bg-[#0e1411] shadow-xl"
+      className={`w-[228px] rounded-xl border border-neutral-700/80 bg-[#0e1411] shadow-xl ${
+        clip ? "overflow-hidden" : ""
+      }`}
       style={{ borderTopColor: m.color, borderTopWidth: 3 }}
     >
       <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
@@ -169,6 +273,7 @@ function Shell({
           </span>
         )}
       </div>
+      {id && data && HANDLE_TYPES.has(type) && <HandleField id={id} type={type} data={data} />}
       <div className="space-y-2 px-3 pb-3">{children}</div>
       {inputs && <Handle type="target" position={Position.Left} style={handleStyle(m.color)} />}
       {outputs && <Handle type="source" position={Position.Right} style={handleStyle(m.color)} />}
@@ -307,6 +412,10 @@ function SourceNode({ id, data }: NodeProps) {
         media_id: img.media_id,
         web: img.web,
         label: img.label,
+        // An asset carries a name worth using as the token; a storyboard frame's label is a
+        // code like "SC001-S001-…" that reads badly in a prompt, so leave those blank and let
+        // the user name the role. Never clobber a handle the user typed.
+        ...(d.handle ? {} : { handle: img.kind === "entity" ? img.label : "" }),
       });
   };
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,7 +449,7 @@ function SourceNode({ id, data }: NodeProps) {
   const live = d.entity_id ? images.find((x) => x.entity_id === d.entity_id) : undefined;
   const displaySrc = live?.web || d.web;
   return (
-    <Shell type="source" id={id} inputs={false}>
+    <Shell type="source" id={id} data={d} inputs={false}>
       <Preview nodeId={id} src={displaySrc} label="Chọn / tải ảnh" />
       <select className={fieldCls} value={selected} onChange={(e) => pick(e.target.value)}>
         <option value="">{d.web ? "(ảnh hiện tại)" : "— chọn ảnh —"}</option>
@@ -377,7 +486,7 @@ function SourceNode({ id, data }: NodeProps) {
 }
 
 function PromptNode({ id, data }: NodeProps) {
-  const { update, entities, bindEntitySource } = useContext(NodeOps);
+  const { update, entities, bindEntitySource, bindNodeSource, handles } = useContext(NodeOps);
   const d = data as any;
   // Local state for the textarea so typing updates synchronously and the caret stays put.
   // Binding `value` straight to node data round-trips through React Flow's store, which
@@ -426,26 +535,43 @@ function PromptNode({ id, data }: NodeProps) {
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setAll(v);
-    setMenu(entities.length ? detect(v, e.target.selectionStart ?? v.length) : null);
+    setMenu(entities.length || handles.length ? detect(v, e.target.selectionStart ?? v.length) : null);
     setHi(0);
   };
 
-  const matches = useMemo(() => {
+  // Suggestions = every picture already wired into this graph (by its "định danh"), then any
+  // project asset not yet on the canvas. Picking either inserts "{token}" AND makes sure the
+  // picture reaches the generator, so the mention actually binds to an image.
+  type Sugg = { token: string; sub: string; nodeId?: string; entityId?: string; web?: string };
+  const matches = useMemo<Sugg[]>(() => {
     if (!menu) return [];
     const q = menu.query.trim().toLowerCase();
-    return entities.filter((e) => !q || e.name.toLowerCase().includes(q)).slice(0, 8);
-  }, [menu, entities]);
+    const out: Sugg[] = [];
+    const seen = new Set<string>();
+    for (const h of handles) {
+      if (h.id === id || seen.has(h.handle.toLowerCase())) continue;
+      seen.add(h.handle.toLowerCase());
+      out.push({ token: h.handle, sub: META[h.type]?.label || h.type, nodeId: h.id, web: h.web });
+    }
+    for (const e of entities) {
+      if (!e.media_id || seen.has(e.name.toLowerCase())) continue;
+      seen.add(e.name.toLowerCase());
+      out.push({ token: e.name, sub: "Asset — thêm Nguồn ảnh", entityId: e.id,
+                 web: e.image_path || undefined });
+    }
+    return out.filter((s) => !q || s.token.toLowerCase().includes(q)).slice(0, 8);
+  }, [menu, entities, handles, id]);
 
-  // Replace the "{query" with "{Name}", drop the caret after "}", AND auto-add a "Nguồn ảnh"
-  // node for that entity wired to whatever this prompt feeds (so the {Name} actually binds).
-  const pick = (ent: Entity) => {
+  // Replace the "{query" with "{token}" and drop the caret after "}".
+  const pick = (s: Sugg) => {
     if (!menu) return;
     const caret = taRef.current?.selectionStart ?? text.length;
-    const next = text.slice(0, menu.start) + "{" + ent.name + "}" + text.slice(caret);
+    const next = text.slice(0, menu.start) + "{" + s.token + "}" + text.slice(caret);
     setAll(next);
-    caretRef.current = menu.start + ent.name.length + 2;
+    caretRef.current = menu.start + s.token.length + 2;
     setMenu(null);
-    bindEntitySource(id, ent.id);
+    if (s.entityId) bindEntitySource(id, s.entityId);
+    else if (s.nodeId) bindNodeSource(id, s.nodeId);
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
@@ -458,7 +584,7 @@ function PromptNode({ id, data }: NodeProps) {
   };
 
   return (
-    <Shell type="prompt" id={id} inputs={false}>
+    <Shell type="prompt" id={id} inputs={false} clip={!menu}>
       <div className="relative">
         <textarea
           ref={taRef}
@@ -470,24 +596,37 @@ function PromptNode({ id, data }: NodeProps) {
           onBlur={() => setTimeout(() => setMenu(null), 150)}
         />
         {menu && matches.length > 0 && (
-          <div className="nodrag nowheel absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-auto rounded-md border border-neutral-700 bg-neutral-900 shadow-xl">
-            {matches.map((e, i) => (
+          // Wider than the 228px node so a name + its source type fit on one line, and tall
+          // enough for the full 8 suggestions instead of scrolling one row at a time.
+          <div className="nodrag nowheel absolute left-0 top-full z-[60] mt-1 max-h-72 w-[288px] overflow-auto rounded-md border border-neutral-600 bg-neutral-900 shadow-2xl">
+            {matches.map((s, i) => (
               <button
-                key={e.id}
+                key={s.nodeId || s.entityId}
                 type="button"
-                onMouseDown={(ev) => { ev.preventDefault(); pick(e); }}
-                className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] ${
+                onMouseDown={(ev) => { ev.preventDefault(); pick(s); }}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] ${
                   i === hi ? "bg-indigo-600 text-white" : "text-neutral-300 hover:bg-neutral-800"
                 }`}
               >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${e.media_id ? "bg-emerald-400" : "bg-neutral-600"}`} />
-                <span className="truncate">{e.name}</span>
+                {s.web ? (
+                  <img src={s.web} className="h-7 w-7 shrink-0 rounded object-cover" />
+                ) : (
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-neutral-800 text-neutral-500">
+                    🖼
+                  </span>
+                )}
+                <span className="truncate">{s.token}</span>
+                <span className="ml-auto shrink-0 pl-1 text-[9px] uppercase tracking-wide opacity-60">
+                  {s.sub}
+                </span>
               </button>
             ))}
           </div>
         )}
       </div>
-      <div className="text-[10px] text-neutral-500">{'ⓘ gõ "{" để chèn tên entity'}</div>
+      <div className="text-[10px] text-neutral-500">
+        {'ⓘ gõ "{" để gọi đích danh một ảnh (định danh) — ảnh đó sẽ gắn vào đúng chỗ này trong prompt'}
+      </div>
     </Shell>
   );
 }
@@ -596,13 +735,34 @@ function GenControls({ id, data }: { id: string; data: any }) {
 }
 
 function ImageNode({ id, data, type }: NodeProps) {
-  const { update, imageModels } = useContext(NodeOps);
+  const { update, imageModels, upstreamHandles } = useContext(NodeOps);
   const d = data as any;
+  const isEdit = (type || "image") === "editImage";
+  // "Sửa ảnh" has two distinct roles for its inputs: ONE picture is the base being edited,
+  // the rest are references the prompt addresses by {handle}. Without saying which is which
+  // the base was just "whichever edge happened to be last".
+  const ups = isEdit ? upstreamHandles(id) : [];
   return (
-    <Shell type={type || "image"} id={id}>
+    <Shell type={type || "image"} id={id} data={d}>
       <Preview nodeId={id} src={d._result || d.preview} label="Kết quả ảnh" />
+      {isEdit && (
+        <label className="block">
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Ảnh gốc (được sửa)</div>
+          <select className={fieldCls} value={d.base_handle || ""} onChange={(e) => update(id, { base_handle: e.target.value })}>
+            <option value="">Tự động (ảnh nối cuối)</option>
+            {ups.map((u) => (
+              <option key={u.id} value={u.handle}>{u.handle}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <AspectModelRow id={id} data={d} models={imageModels} />
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
+      {isEdit && ups.length > 1 && (
+        <div className="text-[10px] text-neutral-500">
+          ⓘ ảnh nối vào khác: gọi bằng {"{định danh}"} trong prompt
+        </div>
+      )}
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -613,7 +773,7 @@ function VideoNode({ id, data }: NodeProps) {
   const d = data as any;
   const isOmni = (d.model || "omni") === "omni";
   return (
-    <Shell type="video" id={id}>
+    <Shell type="video" id={id} data={d}>
       <Preview nodeId={id} src={d._result} video label="Kết quả video" />
       <AspectModelRow id={id} data={d} videoModels />
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
@@ -647,7 +807,7 @@ function FilterNode({ id, data }: NodeProps) {
   const d = data as any;
   const num = (k: string, dflt: number) => (d[k] ?? dflt);
   return (
-    <Shell type="filter" id={id}>
+    <Shell type="filter" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả filter" />
       <Slider label="Sáng" value={num("brightness", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { brightness: v })} />
       <Slider label="Tương phản" value={num("contrast", 1)} min={0} max={2} step={0.05} onChange={(v) => update(id, { contrast: v })} />
@@ -676,7 +836,7 @@ function TextNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="text" id={id}>
+    <Shell type="text" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả chèn chữ" />
       <textarea
         className={`${fieldCls} nowheel h-14 resize-none leading-snug`}
@@ -710,7 +870,7 @@ function UpscaleNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="upscale" id={id}>
+    <Shell type="upscale" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả upscale" />
       <Slider label="Phóng to" value={d.scale ?? 2} min={1} max={4} step={0.5} suffix="×" onChange={(v) => update(id, { scale: v })} />
       <ToggleChips id={id} data={d} items={[{ key: "sharpen", label: "Làm nét" }]} />
@@ -723,7 +883,7 @@ function CropNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="crop" id={id}>
+    <Shell type="crop" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả crop" />
       <label className="block">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Khung tỉ lệ</div>
@@ -743,7 +903,7 @@ function VignetteNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="vignette" id={id}>
+    <Shell type="vignette" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả vignette" />
       <Slider label="Độ tối viền" value={d.strength ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => update(id, { strength: v })} />
       <GenControls id={id} data={d} />
@@ -756,7 +916,7 @@ function BlendNode({ id, data }: NodeProps) {
   const d = data as any;
   const mode = d.mode || "alpha";
   return (
-    <Shell type="blend" id={id}>
+    <Shell type="blend" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả ghép" />
       <label className="block">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Kiểu</div>
@@ -778,7 +938,7 @@ function RemoveBgNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="removebg" id={id}>
+    <Shell type="removebg" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả tách nền" />
       <label className="block">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Nền mới</div>
@@ -799,7 +959,7 @@ function BorderNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="border" id={id}>
+    <Shell type="border" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả khung viền" />
       <div className="flex items-end gap-2">
         <div className="flex-1">
@@ -820,7 +980,7 @@ function ColorGradeNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="colorgrade" id={id}>
+    <Shell type="colorgrade" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả color grade" />
       <label className="block">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Tông màu</div>
@@ -840,7 +1000,7 @@ function CollageNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="collage" id={id}>
+    <Shell type="collage" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả ghép lưới" />
       <Slider label="Số cột (0 = tự)" value={d.cols ?? 0} min={0} max={6} step={1} onChange={(v) => update(id, { cols: v })} />
       <div className="flex items-end gap-2">
@@ -863,7 +1023,7 @@ function WatermarkNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="watermark" id={id}>
+    <Shell type="watermark" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả watermark" />
       <label className="block">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Vị trí logo</div>
@@ -885,7 +1045,7 @@ function ReplaceBgNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
   return (
-    <Shell type="replacebg" id={id}>
+    <Shell type="replacebg" id={id} data={d}>
       <Preview nodeId={id} src={d._result} label="Kết quả thay nền" />
       <textarea
         className={`${fieldCls} nowheel h-12 resize-none leading-snug`}
@@ -1079,6 +1239,17 @@ function Editor({
         const { _result, _ext, preview, result_media_id, result_web, result_ext, locked, ...rest } =
           src.data as any;
         const nid = `${src.type}-${Date.now()}`;
+        // Two nodes sharing a "định danh" make every {token} mention of it ambiguous, so the
+        // copy gets its own — "Áo khoác" → "Áo khoác 2".
+        if (rest.handle) {
+          const taken = new Set(
+            ns.filter((n) => HANDLE_TYPES.has(n.type || ""))
+              .map((n) => effHandle(n.type!, n.data as any).toLowerCase())
+          );
+          let k = 2;
+          while (taken.has(`${rest.handle} ${k}`.toLowerCase())) k++;
+          rest.handle = cleanHandle(`${rest.handle} ${k}`);
+        }
         return [
           ...ns,
           { id: nid, type: src.type, data: { ...rest, _type: src.type },
@@ -1170,6 +1341,85 @@ function Editor({
       });
     },
     [entities, nodes, edges, setNodes, setEdges]
+  );
+
+  // ── Handles ("định danh") ──
+  // Every image-producing node, by the token a prompt uses to address it.
+  const handles = useMemo(
+    () =>
+      nodes
+        .filter((n) => HANDLE_TYPES.has(n.type || ""))
+        .map((n) => {
+          const d = n.data as any;
+          return {
+            id: n.id,
+            type: n.type!,
+            handle: effHandle(n.type!, d),
+            web: results[n.id]?.web || d._result || d.result_web || d.web,
+          };
+        })
+        .filter((h) => !!h.handle),
+    [nodes, results]
+  );
+
+  // A repeated handle only misleads the model once a prompt actually writes it as {token} —
+  // two untouched "image" nodes nobody references are harmless, so stay quiet about those.
+  const handleDupes = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const h of handles) {
+      const k = h.handle.toLowerCase();
+      count.set(k, (count.get(k) || 0) + 1);
+    }
+    const used = new Set<string>();
+    for (const n of nodes) {
+      const d = n.data as any;
+      if (n.type === "prompt" || n.type === "editImage" || n.type === "replacebg")
+        for (const t of tokensIn(d.text || "")) used.add(t.toLowerCase());
+      if (d.base_handle) used.add(String(d.base_handle).toLowerCase());
+    }
+    return new Set([...count].filter(([k, c]) => c > 1 && used.has(k)).map(([k]) => k));
+  }, [handles, nodes]);
+
+  const upstreamHandles = useCallback(
+    (id: string) => {
+      const ups = new Set(edges.filter((e) => e.target === id).map((e) => e.source));
+      return handles.filter((h) => ups.has(h.id)).map((h) => ({ id: h.id, handle: h.handle }));
+    },
+    [edges, handles]
+  );
+
+  // Wire an existing node into whatever `fromId` (a prompt node) already feeds, so a {handle}
+  // just typed into that prompt actually reaches the generator. Skips any wire that would
+  // close a loop (e.g. referencing the very node this prompt drives).
+  const bindNodeSource = useCallback(
+    (fromId: string, nodeId: string) => {
+      setEdges((es) => {
+        const reaches = (from: string, to: string) => {
+          const seen = new Set<string>();
+          const stack = [from];
+          while (stack.length) {
+            const cur = stack.pop()!;
+            if (cur === to) return true;
+            if (seen.has(cur)) continue;
+            seen.add(cur);
+            for (const e of es) if (e.source === cur) stack.push(e.target);
+          }
+          return false;
+        };
+        const add = es
+          .filter((e) => e.source === fromId)
+          .map((e) => e.target)
+          .filter(
+            (t) =>
+              t !== nodeId &&
+              !es.some((e) => e.source === nodeId && e.target === t) &&
+              !reaches(t, nodeId)
+          )
+          .map((t) => ({ id: `e-${nodeId}-${t}`, source: nodeId, target: t }));
+        return add.length ? [...es, ...add] : es;
+      });
+    },
+    [setEdges]
   );
 
   const undo = useCallback(() => restoreHist(histIdx.current - 1), [restoreHist]);
@@ -1312,9 +1562,13 @@ function Editor({
         // Sync the prompt node to the target's CURRENT description (e.g. after "Đa dạng góc
         // máy" / an edit) so the node editor and the storyboard table use the same prompt.
         // Only when it was untouched since seeding, so manual prompt edits are preserved.
-        // Legacy nodes have no seed_prompt → treat as unedited so old stale graphs refresh.
+        // Only the SEEDED prompt node (id "p", from defaultGraph) is refreshed — a prompt
+        // node the user added themselves carries its own text and must never be replaced
+        // by the target's description. Legacy seeded nodes have no seed_prompt → treat as
+        // unedited so old stale graphs still refresh.
         if (n.type === "prompt" && target.prompt != null) {
-          const unedited = d.seed_prompt == null || d.text === d.seed_prompt;
+          const unedited =
+            d.seed_prompt == null ? n.id === "p" : d.text === d.seed_prompt;
           if (unedited && d.text !== target.prompt) {
             d.text = target.prompt;
             d.seed_prompt = target.prompt;
@@ -1384,7 +1638,9 @@ function Editor({
   // Build a fresh node of `type` at `pos` (defaults to a small random offset). Used by the
   // palette "+ " buttons AND by dragging a palette chip onto the canvas.
   const NODE_DEFAULTS: Record<string, any> = {
-    prompt: { text: "" },
+    // seed_prompt "" marks this as a hand-authored prompt: once the user types anything
+    // text !== seed_prompt, so the load-time sync to target.prompt leaves it alone.
+    prompt: { text: "", seed_prompt: "" },
     refs: { entity_ids: [] },
     image: { aspect: "16:9", model: "", count: 1 },
     editImage: { aspect: "16:9", model: "", count: 1 },
@@ -1495,11 +1751,21 @@ function Editor({
   }, [nodes, edges, setNodes, rf]);
 
   // ── Graph presets (templates) — reuse a chain across shots/assets ──
+  // A preset is a STRUCTURE, not a result: strip the per-asset output ids and the locks,
+  // otherwise loading it elsewhere would reuse the preset author's media (a locked node with
+  // a stored result_media_id is served as-is by the runner instead of regenerating).
+  const stripAssetState = (g: { nodes: any[]; edges: any[] }) => ({
+    ...g,
+    nodes: g.nodes.map((n) => {
+      const { result_media_id, result_web, result_ext, locked, ...data } = n.data || {};
+      return { ...n, data };
+    }),
+  });
   const saveAsPreset = async () => {
     const name = window.prompt("Tên preset cho sơ đồ node hiện tại:");
     if (!name?.trim()) return;
     try {
-      const r = await graphApi.saveTemplate(name.trim(), serialize(), goal);
+      const r = await graphApi.saveTemplate(name.trim(), stripAssetState(serialize()), goal);
       setTemplates(r.templates);
     } catch (e: any) {
       setErr(e.message);
@@ -1509,12 +1775,17 @@ function Editor({
     const t = templates.find((x) => x.id === tid);
     if (!t) return;
     if (!window.confirm(`Thay sơ đồ hiện tại bằng preset "${t.name}"?`)) return;
-    const ns: Node[] = (t.graph.nodes || []).map((n: any) => ({
-      id: n.id,
-      type: n.type || n.data?._type || "prompt",
-      position: n.position || { x: 0, y: 0 },
-      data: { ...n.data, _type: n.type || n.data?._type },
-    }));
+    const ns: Node[] = (t.graph.nodes || []).map((n: any) => {
+      // Also strip here, so presets saved BEFORE stripAssetState existed don't drag another
+      // asset's locked results into this graph.
+      const { result_media_id, result_web, result_ext, locked, ...data } = n.data || {};
+      return {
+        id: n.id,
+        type: n.type || n.data?._type || "prompt",
+        position: n.position || { x: 0, y: 0 },
+        data: { ...data, _type: n.type || n.data?._type },
+      };
+    });
     const es: Edge[] = (t.graph.edges || []).map((e: any, i: number) => ({
       id: e.id || `e${i}`, source: e.source, target: e.target,
     }));
@@ -1707,8 +1978,8 @@ function Editor({
   };
 
   const ops = useMemo(
-    () => ({ update, remove, duplicate, bindEntitySource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId }),
-    [update, remove, duplicate, bindEntitySource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId]
+    () => ({ update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, handles, handleDupes, upstreamHandles }),
+    [update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, handles, handleDupes, upstreamHandles]
   );
 
   return (
@@ -1832,7 +2103,7 @@ function Editor({
         </NodeOps.Provider>
       </div>
       <div className="border-t border-neutral-800 px-4 py-1 text-[11px] text-neutral-500">
-        ⓘ ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ · Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · Kéo đầu đường nối ra chỗ trống để xóa · ✕ xóa node
+        ⓘ {"{định danh}"} trên mỗi node ảnh: gõ {"{tên}"} trong prompt để chỉ đích danh ảnh đó (vd. "cho {"{Nam}"} mặc {"{Áo khoác}"}") · ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ ·Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · Kéo đầu đường nối ra chỗ trống để xóa · ✕ xóa node
       </div>
       {lightbox && (
         <Lightbox

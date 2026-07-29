@@ -372,12 +372,20 @@ class FlowClient:
                           project_id: str,
                           aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
                           user_paygate_tier: str = "PAYGATE_TIER_ONE",
-                          character_media_ids: list[str] = None) -> dict:
+                          character_media_ids: list[str] = None,
+                          references: list[dict] = None,
+                          base_handle: str = "base") -> dict:
         """Edit an existing image using IMAGE_INPUT_TYPE_BASE_IMAGE.
 
         If character_media_ids is provided, appends them as IMAGE_INPUT_TYPE_REFERENCE
         after the base image. Order: [base_image, char_A, char_B, ...].
         This helps Google Flow detect characters for consistent edits.
+
+        `references` ({"handle", "media_id"}, like generate_images) are extra pictures the
+        prompt can address BY NAME: each `{handle}` becomes its own reference part, so an
+        instruction such as "thay áo bằng {Áo khoác}" binds that mention to that exact image
+        rather than leaving the model to guess which extra input means what. `base_handle`
+        names the edited image itself, so the prompt can refer to it too (e.g. "{Ảnh gốc}").
         """
         ts = int(time.time() * 1000)
         ctx = self._client_context(project_id, user_paygate_tier)
@@ -385,15 +393,30 @@ class FlowClient:
         image_inputs = [
             {"name": source_media_id, "imageInputType": "IMAGE_INPUT_TYPE_BASE_IMAGE"}
         ]
-        if character_media_ids:
-            for mid in character_media_ids:
+        extra_ids = list(dict.fromkeys(
+            [r["media_id"] for r in (references or []) if r.get("media_id")]
+            + list(character_media_ids or [])))
+        for mid in extra_ids:
+            if mid != source_media_id:
                 image_inputs.append({"name": mid, "imageInputType": "IMAGE_INPUT_TYPE_REFERENCE"})
 
         # Bind the source into the structuredPrompt as a reference part (same mechanism as
         # generate_images), not only as a bare BASE_IMAGE input — otherwise the model may not
         # actually condition on the image and the edit comes out as a fresh, unreferenced gen.
-        parts = [{"reference": {"media": {"handle": "base", "mediaId": source_media_id}}},
-                 {"text": prompt}]
+        # Named references are then split out of the prompt text the same way.
+        base_part = {"reference": {"media": {"handle": base_handle or "base",
+                                             "mediaId": source_media_id}}}
+        if references:
+            # The base may also be addressed by name; drop the duplicate mention so it isn't
+            # attached twice.
+            body_parts = _build_structured_parts(prompt, references + [
+                {"handle": base_handle or "base", "media_id": source_media_id}])
+            parts = [base_part] + [
+                p for p in body_parts
+                if p.get("reference", {}).get("media", {}).get("mediaId") != source_media_id
+            ]
+        else:
+            parts = [base_part, {"text": prompt}]
 
         request_item = {
             "clientContext": {**ctx, "sessionId": f";{ts}"},

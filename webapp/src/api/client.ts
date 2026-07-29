@@ -38,6 +38,17 @@ export interface Project {
   updated_at: number;
 }
 
+// Hệ quả của một lần lưu/sửa kịch bản. Scene được ĐỐI CHIẾU (giữ id → shot sống sót), nên
+// cần nói rõ cái gì đã đổi: body_changed = scene còn đó nhưng nội dung khác ⇒ storyboard và
+// lời đọc của nó đã cũ; removed/shots_removed = scene biến mất khỏi kịch bản, shot mất theo.
+export interface ScriptChanges {
+  kept: number;
+  added: number;
+  removed: number;
+  shots_removed: number;
+  body_changed: string[];
+}
+
 export interface Candidate {
   media_id: string;
   primary_media_id: string;
@@ -545,6 +556,7 @@ export interface ScriptResult {
   script: string;
   scenes: Scene[];
   estimated_duration?: number;
+  changes?: ScriptChanges;
 }
 
 // Thumbnail URL for a Flow media key (backend caches locally). Pass the studio

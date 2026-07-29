@@ -555,15 +555,50 @@ async def set_project_cover(pid: str, body: SetMediaRequest):
 
 @router.delete("/projects/{pid}")
 async def delete_project(pid: str):
+    """Xoá dự án kèm TOÀN BỘ dòng con của nó.
+
+    SQLite ở đây không bật khoá ngoại và schema cũng không khai báo ON DELETE CASCADE, nên
+    xoá mỗi dòng `project` sẽ để lại scene/shot/entity/history mồ côi — vô hình trong giao
+    diện (mọi truy vấn đều join qua project/scene) nhưng vẫn nằm trong DB mãi mãi."""
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
         raise HTTPException(404, "Project không tồn tại")
+    # shot nối với dự án qua scene → phải xoá theo scene_id, không có cột project_id
+    await db.execute(
+        "DELETE FROM shot WHERE scene_id IN (SELECT id FROM scene WHERE project_id=?)", (pid,))
+    for table in ("scene", "entity", "media_history", "asset", "job"):
+        await db.execute(f"DELETE FROM {table} WHERE project_id=?", (pid,))
     await db.delete("project", pid)
     # dọn media local của project
     folder = media_store.MEDIA_DIR / pid
     if folder.exists():
         shutil.rmtree(folder, ignore_errors=True)
+    out_folder = assembler.STUDIO_MEDIA_DIR / pid
+    if out_folder.exists():
+        shutil.rmtree(out_folder, ignore_errors=True)
     return {"ok": True}
+
+
+@router.post("/maintenance/purge-orphans")
+async def purge_orphans(dry_run: bool = True):
+    """Dọn các dòng mồ côi do những lần xoá/lưu kịch bản TRƯỚC khi hai lỗi trên được sửa:
+    shot không còn scene, và scene/entity/history không còn project. `dry_run=true` (mặc
+    định) chỉ đếm, không xoá."""
+    counts = {
+        "shots": (await db.query_one(
+            "SELECT COUNT(*) n FROM shot WHERE scene_id NOT IN (SELECT id FROM scene)"))["n"],
+    }
+    for table in ("scene", "entity", "media_history", "asset", "job"):
+        counts[table] = (await db.query_one(
+            f"SELECT COUNT(*) n FROM {table} "
+            "WHERE project_id IS NULL OR project_id NOT IN (SELECT id FROM project)"))["n"]
+    if dry_run:
+        return {"dry_run": True, "orphans": counts}
+    await db.execute("DELETE FROM shot WHERE scene_id NOT IN (SELECT id FROM scene)")
+    for table in ("scene", "entity", "media_history", "asset", "job"):
+        await db.execute(f"DELETE FROM {table} WHERE project_id IS NULL "
+                         f"OR project_id NOT IN (SELECT id FROM project)")
+    return {"dry_run": False, "removed": counts}
 
 
 # ─── Script + scenes ────────────────────────────────────────
@@ -575,21 +610,95 @@ async def _project_or_404(pid: str) -> dict:
     return row
 
 
-async def _save_scenes(pid: str, script: str) -> list[dict]:
-    """Re-parse script → replace project's scenes in DB. Returns scene rows."""
-    await db.execute("DELETE FROM scene WHERE project_id=?", (pid,))
+async def _purge_shots_of_scene(scene_id: str) -> int:
+    """Xoá shot của một scene kèm file media của chúng. Trả về số shot đã xoá."""
+    rows = await db.query_all("SELECT * FROM shot WHERE scene_id=?", (scene_id,))
+    for sh in rows:
+        for p in (sh.get("image_path"), sh.get("image_hires_path"),
+                  sh.get("video_path"), sh.get("upscale_path")):
+            f = _media_abs(p)
+            if f and f.is_file():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        await db.delete("shot", sh["id"])
+    return len(rows)
+
+
+async def _save_scenes(pid: str, script: str) -> tuple[list[dict], dict]:
+    """Re-parse script → RECONCILE the project's scenes in place. Returns (rows, summary).
+
+    Trước đây hàm này DELETE sạch scene rồi tạo lại với id mới. Vì `shot.scene_id` trỏ tới id
+    cũ (SQLite ở đây không bật khoá ngoại), mọi shot trở thành MỒ CÔI: storyboard trống trơn
+    trong khi shot + ảnh vẫn nằm lại trong DB, vô hình và không xoá được qua giao diện. Nên chỉ
+    cần sửa một chữ trong kịch bản là mất toàn bộ storyboard.
+
+    Giờ scene được ĐỐI CHIẾU và cập nhật tại chỗ (giữ nguyên id → shot sống sót):
+      1. khớp theo heading đã chuẩn hoá;
+      2. phần còn lại khớp theo THỨ TỰ, để đổi lời một heading không làm mất shot của nó.
+    Scene thật sự biến mất khỏi kịch bản mới bị xoá, kèm shot + file media (nếu không lại đẻ
+    ra mồ côi mới).
+    """
     parsed = brain.parse_scenes(script)
-    ts = db.now()
-    for s in parsed:
-        await db.insert("scene", {
-            "id": db.new_id(), "project_id": pid, "idx": s["idx"],
-            "heading": s["heading"], "slug": s["slug"],
-            "action": s["body"].strip(), "dialog": None,
-            "location_entity_id": None, "source_segment": None,
-            "source_start": None, "source_end": None, "created_at": ts,
-        })
-    return await db.query_all(
+    old = await db.query_all(
         "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+
+    def key(h: str) -> str:
+        return re.sub(r"\s+", " ", (h or "").strip()).casefold()
+
+    # ── pass 1: khớp heading giống hệt (ưu tiên scene gần vị trí cũ nhất)
+    by_head: dict[str, list[dict]] = {}
+    for o in old:
+        by_head.setdefault(key(o["heading"]), []).append(o)
+    match: dict[int, dict] = {}          # idx scene mới → row scene cũ
+    used: set[str] = set()
+    for s in parsed:
+        cands = [o for o in by_head.get(key(s["heading"]), []) if o["id"] not in used]
+        if cands:
+            best = min(cands, key=lambda o: abs((o["idx"] or 0) - s["idx"]))
+            match[s["idx"]] = best
+            used.add(best["id"])
+
+    # ── pass 2: phần dư khớp theo thứ tự (heading bị sửa lời vẫn giữ được shot)
+    left_old = [o for o in old if o["id"] not in used]
+    left_new = [s for s in parsed if s["idx"] not in match]
+    for s, o in zip(left_new, left_old):
+        match[s["idx"]] = o
+        used.add(o["id"])
+
+    ts = db.now()
+    summary = {"kept": 0, "added": 0, "removed": 0, "shots_removed": 0,
+               "body_changed": []}
+    for s in parsed:
+        o = match.get(s["idx"])
+        body = s["body"].strip()
+        if o:
+            if (o.get("action") or "").strip() != body:
+                summary["body_changed"].append(s["heading"])
+            await db.update("scene", o["id"], {
+                "idx": s["idx"], "heading": s["heading"], "slug": s["slug"],
+                "action": body})
+            summary["kept"] += 1
+        else:
+            await db.insert("scene", {
+                "id": db.new_id(), "project_id": pid, "idx": s["idx"],
+                "heading": s["heading"], "slug": s["slug"],
+                "action": body, "dialog": None,
+                "location_entity_id": None, "source_segment": None,
+                "source_start": None, "source_end": None, "created_at": ts,
+            })
+            summary["added"] += 1
+
+    for o in old:
+        if o["id"] not in used:
+            summary["shots_removed"] += await _purge_shots_of_scene(o["id"])
+            await db.delete("scene", o["id"])
+            summary["removed"] += 1
+
+    rows = await db.query_all(
+        "SELECT * FROM scene WHERE project_id=? ORDER BY idx", (pid,))
+    return rows, summary
 
 
 @router.get("/projects/{pid}/scenes")
@@ -615,8 +724,8 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
     if ch and not (p.get("culture_hint") or "").strip():
         fields["culture_hint"] = ch
     await db.update("project", pid, fields)
-    scenes = await _save_scenes(pid, script)
-    return {"script": script, "scenes": scenes,
+    scenes, changes = await _save_scenes(pid, script)
+    return {"script": script, "scenes": scenes, "changes": changes,
             "estimated_duration": result.get("estimated_duration"),
             "culture_hint": fields.get("culture_hint") or p.get("culture_hint")}
 
@@ -625,8 +734,8 @@ async def generate_script(pid: str, body: GenerateScriptRequest):
 async def save_script(pid: str, body: SaveScriptRequest):
     await _project_or_404(pid)
     await db.update("project", pid, {"script_raw": body.script, "updated_at": db.now()})
-    scenes = await _save_scenes(pid, body.script)
-    return {"script": body.script, "scenes": scenes}
+    scenes, changes = await _save_scenes(pid, body.script)
+    return {"script": body.script, "scenes": scenes, "changes": changes}
 
 
 @router.post("/projects/{pid}/script/chat")
@@ -639,8 +748,8 @@ async def script_chat(pid: str, body: ScriptChatRequest):
     if not script:
         raise HTTPException(502, "AI không trả về script")
     await db.update("project", pid, {"script_raw": script, "updated_at": db.now()})
-    scenes = await _save_scenes(pid, script)
-    return {"script": script, "scenes": scenes}
+    scenes, changes = await _save_scenes(pid, script)
+    return {"script": script, "scenes": scenes, "changes": changes}
 
 
 # ─── Assets (entities) ──────────────────────────────────────

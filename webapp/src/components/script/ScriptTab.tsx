@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type Project, type Scene } from "../../api/client";
+import { api, type Project, type Scene,
+  type ScriptChanges,
+} from "../../api/client";
 import ScreenplayPreview from "./ScreenplayPreview";
 
 export default function ScriptTab({
@@ -50,9 +52,15 @@ export default function ScriptTab({
 
   const hasScript = script.trim().length > 0;
 
-  const onResult = (r: { script: string; scenes: Scene[] }) => {
+  // Lưu/sửa kịch bản giờ ĐỐI CHIẾU scene thay vì xoá sạch, nên phải nói rõ hệ quả: scene nào
+  // đổi nội dung thì storyboard/lời đọc của nó đã CŨ (phải tách beat / vẽ lại), scene bị xoá
+  // thì shot của nó cũng mất theo. Trước đây mọi thứ diễn ra âm thầm.
+  const [changes, setChanges] = useState<ScriptChanges | null>(null);
+
+  const onResult = (r: { script: string; scenes: Scene[]; changes?: ScriptChanges }) => {
     setScript(r.script);
     setScenes(r.scenes);
+    setChanges(r.changes ?? null);
     setDirty(false);
     if (r.script.trim()) setView("preview"); // show the formatted page after AI writes/edits
     onScriptChange?.(r.script);
@@ -157,6 +165,41 @@ export default function ScriptTab({
             onChat={(instr) => wrap("chat", () => api.scriptChat(project.id, instr))}
           />
         </div>
+
+        {changes && (changes.body_changed.length > 0 || changes.removed > 0 || changes.added > 0) && (
+
+          <div className="mx-4 mb-2 rounded-lg bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+
+            <b>Kịch bản đã đổi:</b>{" "}
+
+            {changes.added > 0 && <>+{changes.added} cảnh mới. </>}
+
+            {changes.removed > 0 && (
+
+              <>Đã xoá {changes.removed} cảnh (kèm {changes.shots_removed} shot). </>
+
+            )}
+
+            {changes.body_changed.length > 0 && (
+
+              <>
+
+                {changes.body_changed.length} cảnh đổi nội dung — storyboard và lời đọc của
+
+                chúng giờ đã CŨ, cần tách beat / vẽ lại ảnh:{" "}
+
+                <span className="opacity-80">{changes.body_changed.slice(0, 3).join(" · ")}</span>
+
+                {changes.body_changed.length > 3 && <> …+{changes.body_changed.length - 3}</>}
+
+              </>
+
+            )}
+
+          </div>
+
+        )}
+
 
         {err && (
           <div className="mx-8 mb-3 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">

@@ -345,6 +345,18 @@ async def _poll_video(client, media_id, scene_key, timeout=240, interval=8):
     return None
 
 
+def _handle_of(data: dict, fallback: str) -> str:
+    """The `{token}` this node's image binds to inside a downstream prompt.
+
+    Every image-producing node can carry a user-typed `handle` ("định danh"): writing
+    `{handle}` in a prompt then turns that exact image into its own reference part of the
+    structuredPrompt (see flow_client._build_structured_parts), so the model knows WHICH
+    role the picture plays instead of receiving an anonymous pile of reference images.
+    Braces are stripped — the token in the prompt supplies them."""
+    h = str(data.get("handle") or "").replace("{", "").replace("}", "").strip()
+    return h or fallback
+
+
 def _reuse_locked(data: dict, ext: str, handle: str, force: bool = False):
     """Stored output of a gen node, to skip regenerating it. Reused when the node is locked
     (so a full run keeps media the user is happy with) OR `force` (a per-node gen: only the
@@ -440,7 +452,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
         #    reuses. See run_graph docstring.
         if t in _GEN_TYPES and nid != only_node:
             ext = "mp4" if t == "video" else "png"
-            handle = "video" if t == "video" else "image"
+            handle = _handle_of(data, "video" if t == "video" else "image")
             if allowed is None:                       # full run
                 force = False
             elif refresh and nid in refresh:          # being refreshed → reuse only if locked
@@ -465,14 +477,17 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             # stored media_id.
             mid = data.get("media_id")
             web = data.get("web")
-            handle = data.get("label") or "source"
             eid = data.get("entity_id")
+            auto = data.get("label") or "source"
             if eid:
                 ent = await db.query_one(
                     "SELECT name, media_id, image_path FROM entity WHERE id=?", (eid,))
                 if ent and ent.get("media_id"):
                     mid, web = ent["media_id"], ent.get("image_path")
-                    handle = ent.get("name") or handle
+                    auto = ent.get("name") or auto
+            # An explicit "định danh" wins over the auto label, so an uploaded picture (whose
+            # label is just a filename) can be addressed as {Áo khoác} from the prompt.
+            handle = _handle_of(data, auto)
             if not web and mid:
                 web = await media_store.ensure_local(mid, pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": handle}
@@ -504,22 +519,42 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 user_paygate_tier=project["paygate_tier"],
                 references=inp["references"] or None,
                 image_model=_img_model(project, data)), pid)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
+                            "handle": _handle_of(data, "image")}
 
         elif t == "editImage":
+            # Which upstream picture is the one being EDITED (the base) vs. the ones merely
+            # referenced by name in the prompt. `base_handle` lets the user say so explicitly;
+            # otherwise fall back to the last upstream image (previous behaviour).
             src = inp["media_id"]
+            want = str(data.get("base_handle") or "").strip()
+            if want:
+                hit = next((r for r in inp["references"] if r.get("handle") == want), None)
+                if hit:
+                    src = hit["media_id"]
             if not src:
                 raise GraphError("editImage cần ảnh nguồn")
-            logger.info("editImage: source=%s prompt=%r", src,
-                        (inp["text"] or data.get("text") or "")[:80])
+            # The base is named by the handle of the node it came from, so the prompt can
+            # address the edited picture itself as well (e.g. "giữ nguyên nền của {Ảnh gốc}").
+            base_h = next((r.get("handle") for r in inp["references"]
+                           if r.get("media_id") == src and r.get("handle")), None) or "base"
+            edit_prompt = inp["text"] or data.get("text") or ""
+            logger.info("editImage: source=%s prompt=%r", src, edit_prompt[:80])
+            # Everything else feeding this node stays available as a NAMED reference, so a
+            # prompt like "mặc {Áo khoác} cho nhân vật" binds that picture to that role
+            # instead of arriving as an anonymous extra image.
+            extra = [r for r in inp["references"] if r.get("media_id") != src]
             # The edit prompt is used VERBATIM (no compose_prompt wrapping) — the user's exact
             # instruction edits the source. `exclude=src` skips the echoed input so the result
             # is the edited image, not the original.
             mid, web = await _img_gen_retry(lambda: client.edit_image(
-                inp["text"] or data.get("text") or "", src, flow_pid,
+                edit_prompt, src, flow_pid,
                 aspect_ratio=_img_aspect(project, data),
-                user_paygate_tier=project["paygate_tier"]), pid, exclude=src)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+                user_paygate_tier=project["paygate_tier"],
+                references=extra[:9] or None,
+                base_handle=base_h), pid, exclude=src)
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
+                            "handle": _handle_of(data, "image")}
 
         elif t == "removebg":
             # AI background swap via edit (no extra ML dep). Replaces the background with a
@@ -537,7 +572,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             mid, web = await _img_gen_retry(lambda: client.edit_image(
                 prompt, src, flow_pid, aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"]), pid, exclude=src)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
+                            "handle": _handle_of(data, "image")}
 
         elif t == "replacebg":
             # AI background SWAP with a background IMAGE: composite the subject (1st input) onto
@@ -562,7 +598,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 project_id=flow_pid, aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
                 references=seen_rb[:10], image_model=_img_model(project, data)), pid)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
+                            "handle": _handle_of(data, "image")}
 
         elif t == "note":
             pass  # a canvas comment/label — produces nothing, ignored by the executor
@@ -591,14 +628,16 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     project_id=flow_pid, scene_id=target["id"],
                     aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
             mid, web = await _vid_gen_retry(submit, target["id"], pid)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4", "handle": "video"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4",
+                            "handle": _handle_of(data, "video")}
 
         elif t in _LOCAL_TYPES:
             # Local Pillow processing (no AI): filter / text / upscale / blend. Result is
             # re-uploaded to Flow so the chain (→ edit / video / output) keeps a media_id.
             out_img = await _run_local_node(t, data, inp, pid)
             mid, web = await _save_and_upload(out_img, pid, flow_pid)
-            outputs[nid] = {"media_id": mid, "web": web, "ext": "png", "handle": "image"}
+            outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
+                            "handle": _handle_of(data, "image")}
 
         elif t == "output":
             # The Output node designates the final result: whatever media flows into it.
