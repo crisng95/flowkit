@@ -1183,6 +1183,7 @@ function Editor({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
   // Run results keyed by node id — kept apart from node.data so a graph reload
   // (e.g. after onApplied refreshes the parent) doesn't wipe the previews.
   const [results, setResults] = useState<Record<string, { web: string; ext: string }>>({});
@@ -1192,6 +1193,8 @@ function Editor({
   const [presetSel, setPresetSel] = useState("");
   // Undo/redo history of durable graph snapshots (structure + settings + positions),
   // ignoring transient run-result previews so a generation doesn't pollute history.
+  // Signature of the graph last written to the server — drives the debounced autosave below.
+  const savedSig = useRef<string | null>(null);
   const histRef = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const histIdx = useRef(-1);
   const lastSig = useRef("");
@@ -1507,6 +1510,9 @@ function Editor({
     // graph can win the race (esp. under StrictMode's double-invoke) and every "Nguồn ảnh"
     // node disappears even though the shot has reference entities.
     let cancelled = false;
+    // The graph about to be loaded is by definition already saved — don't let the autosave
+    // mistake it for an edit and write it straight back.
+    savedSig.current = null;
     // Saved graphs are serialized WITHOUT the transient _result preview, so re-seed the
     // shot/entity's current media onto the Output node and the gen node(s) feeding it —
     // otherwise reopening a graph for an already-generated image shows blank previews.
@@ -1575,25 +1581,28 @@ function Editor({
           }
         }
       }
-      if (curSrc) {
-        const outIds = new Set(nodes.filter((n) => n.type === "output").map((n) => n.id));
-        const feedsOut = new Set(
-          edges.filter((e) => outIds.has(e.target)).map((e) => e.source)
-        );
-        const GEN = ["image", "editImage", "video"];
-        for (const n of nodes) {
-          const d = n.data as any;
-          const seedHere = outIds.has(n.id) || (GEN.includes(n.type!) && feedsOut.has(n.id));
-          if (seedHere) {
-            // The Output (and the gen node feeding it) shows the target's CURRENT committed
-            // image, so a quick-gen done outside the editor isn't shown as the stale old one.
-            d._result = curSrc;
-            d._ext = curExt;
-          } else if (d.result_web && !d._result) {
-            // intermediate nodes keep their own last produced result
-            d._result = d.result_web;
-            d._ext = d.result_ext || "png";
-          }
+      // Restoring each node's own stored result must NOT depend on the target having a
+      // committed image: a graph whose result was never applied (quick-gen on a mid-chain
+      // node, a brand-new shot/entity) still has result_web on those nodes, and gating the
+      // whole loop on `curSrc` made every preview come back blank as if nothing was saved.
+      const outIds = new Set(nodes.filter((n) => n.type === "output").map((n) => n.id));
+      const feedsOut = new Set(
+        edges.filter((e) => outIds.has(e.target)).map((e) => e.source)
+      );
+      const GEN = ["image", "editImage", "video"];
+      for (const n of nodes) {
+        const d = n.data as any;
+        const seedHere =
+          !!curSrc && (outIds.has(n.id) || (GEN.includes(n.type!) && feedsOut.has(n.id)));
+        if (seedHere) {
+          // The Output (and the gen node feeding it) shows the target's CURRENT committed
+          // image, so a quick-gen done outside the editor isn't shown as the stale old one.
+          d._result = curSrc;
+          d._ext = curExt;
+        } else if (d.result_web && !d._result) {
+          // every other node keeps its own last produced result
+          d._result = d.result_web;
+          d._ext = d.result_ext || "png";
         }
       }
       ensureRefSources(nodes, edges);
@@ -1845,7 +1854,38 @@ function Editor({
     });
   };
 
-  const save = () => graphApi.save(target.kind, target.id, serialize(), goal);
+  // The button used to fire a floating promise: no confirmation on success and a rejection
+  // swallowed into the console, so "Lưu" looked identical whether it worked or failed.
+  const save = async () => {
+    try {
+      await graphApi.save(target.kind, target.id, serialize(), goal);
+      savedSig.current = sigOf(nodes, edges);   // keep the autosave from re-writing the same graph
+      setErr(null);
+      setSaveMsg("✓ Đã lưu");
+      setTimeout(() => setSaveMsg(null), 2000);
+    } catch (e: any) {
+      setErr(e.message || "Lưu đồ thị lỗi");
+    }
+  };
+
+  // Autosave. Before this, the graph reached the server only from a run or the "Lưu" button,
+  // so uploading a picture into a "Nguồn ảnh" node, rewiring, or changing a setting and then
+  // closing the editor threw the work away. Keyed on the same durable signature the undo
+  // history uses (positions + settings + structure, results excluded — those are persisted by
+  // applyOutputs), and skipped for the first settle, which is just the graph we loaded.
+  useEffect(() => {
+    if (!nodes.length) return;
+    const sig = sigOf(nodes, edges);
+    if (savedSig.current === null || savedSig.current === sig) {
+      savedSig.current = sig;
+      return;
+    }
+    const tid = setTimeout(() => {
+      savedSig.current = sig;
+      graphApi.save(target.kind, target.id, serializeGraph(nodes, edges), goal).catch(() => {});
+    }, 700);
+    return () => clearTimeout(tid);
+  }, [nodes, edges, sigOf, target.kind, target.id, goal]);
 
   // After a generation commits, the entity/shot may SHOW a different image than the raw node
   // media (e.g. a location grid gets position labels overlaid). Reflect that committed image
@@ -2006,6 +2046,7 @@ function Editor({
         </div>
         <div className="ml-auto flex items-center gap-2">
           {done && <span className="text-xs text-emerald-400">✓ Đã tạo & áp dụng</span>}
+          {saveMsg && <span className="text-xs text-emerald-400">{saveMsg}</span>}
           <div className="flex items-center gap-1">
             <button onClick={undo} disabled={!canUndo} title="Hoàn tác (Ctrl+Z)"
               className="rounded-lg border border-neutral-700 px-2 py-1.5 text-xs hover:bg-neutral-800 disabled:opacity-30">
@@ -2061,7 +2102,15 @@ function Editor({
           >
             {busy ? "Đang chạy…" : "▶ Run"}
           </button>
-          <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800">
+          <button
+            // Flush before leaving: an edit made inside the autosave debounce window would
+            // otherwise die with the component.
+            onClick={() => {
+              graphApi.save(target.kind, target.id, serialize(), goal).catch(() => {});
+              onClose();
+            }}
+            className="rounded-lg px-3 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800"
+          >
             Đóng
           </button>
         </div>
