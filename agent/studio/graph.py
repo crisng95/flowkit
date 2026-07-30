@@ -606,8 +606,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 "from the second reference image. Keep the subject's identity, pose and colours "
                 "intact; match the subject's lighting, perspective and scale to the new "
                 "background for a believable result. " + extra).strip()
+            # Like editImage: the instruction goes in VERBATIM (no compose_prompt). Style /
+            # culture / header / footer would fight the two source pictures and repaint the
+            # subject — an edit must only do what it was told.
             mid, web = await _img_gen_retry(lambda: client.generate_images(
-                prompt=brain.compose_prompt(project, rb_prompt),
+                prompt=rb_prompt,
                 project_id=flow_pid, aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
                 references=seen_rb[:10], image_model=_img_model(project, data)), pid)

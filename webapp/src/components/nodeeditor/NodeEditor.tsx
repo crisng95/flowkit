@@ -793,6 +793,13 @@ function ImageNode({ id, data, type }: NodeProps) {
           ⓘ ảnh nối vào khác: gọi bằng {"{định danh}"} trong prompt
         </div>
       )}
+      {/* Sửa ảnh đi thẳng vào Flow, không qua compose_prompt của dự án — nói rõ để khỏi
+          tưởng style/culture vẫn được áp như node Tạo ảnh. */}
+      {isEdit && (
+        <div className="text-[10px] text-neutral-500">
+          ⓘ prompt dùng nguyên văn — không áp style/culture/header/footer dự án
+        </div>
+      )}
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -1098,6 +1105,7 @@ function ReplaceBgNode({ id, data }: NodeProps) {
         onChange={(e) => update(id, { text: e.target.value })}
       />
       <div className="text-[10px] text-neutral-500">ⓘ nối CHỦ THỂ trước, ẢNH NỀN sau</div>
+      <div className="text-[10px] text-neutral-500">ⓘ prompt dùng nguyên văn — không áp style/culture dự án</div>
       <div className="text-[10px] text-amber-400/80">⚠ Dùng AI (tốn credit)</div>
       <GenControls id={id} data={d} />
     </Shell>
