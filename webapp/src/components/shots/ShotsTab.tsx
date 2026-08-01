@@ -200,6 +200,16 @@ export default function ShotsTab({
                                 sh.description ||
                                 sh.title,
                               refEntityIds: parseRefs(sh.ref_entity_ids),
+                              // Other shots in the same scene — pre-seeded as Omni Flash reference
+                              // sources so the user can keep character/lighting consistent across
+                              // shots without manually adding source nodes.
+                              refShotImages: list
+                                .filter((x) => x.id !== sh.id && x.image_media_id && x.image_path)
+                                .map((x) => ({
+                                  media_id: x.image_media_id!,
+                                  web: x.image_path!,
+                                  label: `S${String(x.idx + 1).padStart(2, "0")} ${(x.title || x.description || "").slice(0, 30)}`.trim(),
+                                })),
                               imageMediaId: sh.image_media_id,
                               imageSrc: sh.image_path,
                               videoSrc: sh.video_path,

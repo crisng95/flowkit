@@ -621,7 +621,13 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             pass  # a canvas comment/label — produces nothing, ignored by the executor
 
         elif t == "video":
-            prompt = inp["text"] or data.get("text") or ""
+            body = inp["text"] or data.get("text") or ""
+            # Apply the same project-level header/footer/style/culture as the image node,
+            # so prompt_header / prompt_footer set in ⚙ Cấu hình dự án actually reach the
+            # video model. editImage / replacebg deliberately bypass compose_prompt because
+            # they operate verbatim, but a plain "Tạo video" generation should honour the
+            # project's visual identity just like "Tạo ảnh".
+            prompt = brain.compose_prompt(project, body)
             aspect_v = _vid_aspect(project, data)
             kind_v = (data.get("model") or "omni").lower()
             # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor

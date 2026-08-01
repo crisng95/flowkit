@@ -51,6 +51,10 @@ export interface EditorTarget {
   goal?: "image" | "video";
   prompt?: string | null;
   refEntityIds?: string[];
+  // Other storyboard shot frames to pre-seed as source nodes in the default graph.
+  // Pass same-scene shots (excluding the one being edited) so the user can reference them
+  // as start images or composition references without manually adding source nodes.
+  refShotImages?: Array<{ media_id: string; web: string; label: string }>;
   imageMediaId?: string | null;
   imageSrc?: string | null;
   videoSrc?: string | null;
@@ -831,6 +835,9 @@ function VideoNode({ id, data }: NodeProps) {
           )}
         </>
       )}
+      <div className="text-[10px] text-neutral-500">
+        ⓘ prompt áp style/header/footer dự án (như node Tạo ảnh)
+      </div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -1164,6 +1171,7 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
   const prompt = seed.prompt ?? "";
   const goal = seed.goal || (seed.kind === "shot" ? "video" : "image");
   const byId = new Map(entities.map((e) => [e.id, e]));
+  const shotRefs = (seed.refShotImages ?? []).filter((s) => s.media_id && s.web);
 
   const nodes: Node[] = [mk("p", "prompt", 0, 20, { text: prompt, seed_prompt: prompt })];
   const edges: Edge[] = [];
@@ -1177,6 +1185,16 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
         label: seed.title,
       })
     );
+    // Extra storyboard frames from the same scene — useful as additional Omni Flash references
+    // (e.g. "make the character do X, matching the pose of frame 3"). Laid out below the
+    // start-image source and wired to the video node so they're immediately available.
+    shotRefs.forEach((s, k) => {
+      const sid = `sref${k}`;
+      nodes.push(mk(sid, "source", 0, 420 + k * 160, {
+        media_id: s.media_id, web: s.web, label: s.label,
+      }));
+      edges.push({ id: `esr${k}`, source: sid, target: "v" });
+    });
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
@@ -1202,6 +1220,16 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
       })
     );
     edges.push({ id: `es${k}`, source: `src${k}`, target: "i" });
+  });
+  // Storyboard shot frames from the same scene — let the user reference a nearby frame's
+  // composition, lighting or character pose while editing this shot's image.
+  const entityCount = refIds.length;
+  shotRefs.forEach((s, k) => {
+    const sid = `sshot${k}`;
+    nodes.push(mk(sid, "source", 0, 200 + (entityCount + k) * 150, {
+      media_id: s.media_id, web: s.web, label: s.label,
+    }));
+    edges.push({ id: `ess${k}`, source: sid, target: "i" });
   });
   nodes.push(
     mk("i", "image", 340, 80, { aspect: "16:9", model: "", count: 1, _result: seed.imageSrc || "" })

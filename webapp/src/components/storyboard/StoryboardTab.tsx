@@ -847,6 +847,16 @@ export default function StoryboardTab({
                               title: sh.title,
                               prompt: sh.description || sh.visual_prompt || sh.title,
                               refEntityIds: parseRefs(sh.ref_entity_ids),
+                              // Other shots in the same scene that already have a frame image —
+                              // pre-seeded as source nodes so the user can reference them for
+                              // composition/lighting/character continuity without adding nodes manually.
+                              refShotImages: shots
+                                .filter((x) => x.id !== sh.id && x.image_media_id && x.image_path)
+                                .map((x) => ({
+                                  media_id: x.image_media_id!,
+                                  web: x.image_path!,
+                                  label: `S${String(x.idx + 1).padStart(2, "0")} ${(x.title || x.description || "").slice(0, 30)}`.trim(),
+                                })),
                               imageMediaId: sh.image_media_id,
                               imageSrc: sh.image_path,
                               videoSrc: sh.video_path,
