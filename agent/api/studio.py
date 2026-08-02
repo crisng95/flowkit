@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -23,6 +24,7 @@ from agent.config import (
     UPSAMPLE_VIDEO_RESOLUTIONS, VIDEO_POLL_TIMEOUT,
 )
 from agent.services.flow_client import get_flow_client
+from agent.services.music_client import get_music_client
 from agent.studio import (
     db, media_store, brain, assembler, davinci_xml, vntext, align, hires,
     accounts, graph as graph_mod,
@@ -3921,6 +3923,92 @@ async def clear_bgm(pid: str):
         except OSError:
             pass
     await db.update("project", pid, {"bgm_path": None, "updated_at": db.now()})
+    return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+
+
+_BGM_URL_EXT = {".mp3", ".wav", ".aac", ".m4a", ".ogg", ".flac"}
+
+
+async def _download_bgm_file(pid: str, url: str) -> Path:
+    """Tải file nhạc từ 1 URL trực tiếp (Flow Music trả URL tĩnh public, không cần auth) →
+    studio_media/{pid}/bgm.<ext>. Dọn file bgm cũ trước — 1 bgm/project, giống upload/copy."""
+    ext = os.path.splitext(url.split("?")[0])[1].lower()
+    if ext not in _BGM_URL_EXT:
+        ext = ".m4a"
+    out_dir = assembler.STUDIO_MEDIA_DIR / pid
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("bgm.*"):
+        old.unlink(missing_ok=True)
+    dest = out_dir / f"bgm{ext}"
+    async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
+        resp = await c.get(url)
+    if resp.status_code >= 400:
+        raise HTTPException(502, f"Tải nhạc thất bại ({resp.status_code})")
+    dest.write_bytes(resp.content)
+    return dest
+
+
+class GenerateBgmRequest(BaseModel):
+    prompt: str                              # mô tả nhạc cụ/nhịp/tâm trạng, tiếng Anh khuyến nghị
+    conversation_id: Optional[str] = None    # tiếp tục 1 conversation cũ (vd "làm chậm hơn")
+    volume: Optional[float] = None
+    timeout: Optional[float] = None
+
+
+class SelectBgmRequest(BaseModel):
+    audio_url: str
+    volume: Optional[float] = None
+
+
+@router.post("/projects/{pid}/bgm/generate")
+async def generate_bgm(pid: str, body: GenerateBgmRequest):
+    """Tạo nhạc nền bằng Google Flow Music (`/api/music/*`) từ mô tả tự nhiên — nhạc cụ,
+    nhịp, tâm trạng... (bài mẫu thường dài ~2:30-2:55, đủ để loop-to-fit gần như liền mạch
+    với hầu hết video, xem `assembler.apply_bgm`).
+
+    Flow Music tự quyết định sinh 1 hay 2 bản (A/B) cho 1 lượt, không chọn được số lượng:
+    - Ra đúng 1 bản → set làm bgm luôn, trả project đã cập nhật.
+    - Ra 2 bản → KHÔNG tự chọn hộ (tránh chọn nhầm bản không ưng) — trả cả 2 kèm
+      `audio_url` để nghe thử, gọi `POST .../bgm/select` với audio_url đã ưng để áp dụng.
+    """
+    await _project_or_404(pid)
+    music_client = get_music_client()
+    if not music_client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await music_client.create_song(
+        body.prompt, conversation_id=body.conversation_id, timeout=body.timeout)
+    songs = result.get("songs") or []
+    if not songs:
+        raise HTTPException(502, result.get("error") or "Flow Music không tạo được bài nào")
+
+    if len(songs) > 1:
+        return {
+            "pending_selection": True,
+            "conversation_id": result.get("conversation_id"),
+            "songs": songs,
+        }
+
+    song = songs[0]
+    dest = await _download_bgm_file(pid, song["audio_url"])
+    fields = {"bgm_path": str(dest), "updated_at": db.now()}
+    if body.volume is not None:
+        fields["bgm_volume"] = min(max(float(body.volume), 0.0), 1.0)
+    await db.update("project", pid, fields)
+    project = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+    return {**project, "generated": song, "conversation_id": result.get("conversation_id")}
+
+
+@router.post("/projects/{pid}/bgm/select")
+async def select_bgm(pid: str, body: SelectBgmRequest):
+    """Áp 1 bài đã biết audio_url làm nhạc nền dự án — dùng sau `bgm/generate` khi Flow
+    Music ra 2 bản (A/B), hoặc để gắn bất kỳ bài nào khác trong thư viện flowmusic.app
+    (`GET /api/music/conversations/{id}` → lấy audio_url từ 1 clip cũ)."""
+    await _project_or_404(pid)
+    dest = await _download_bgm_file(pid, body.audio_url)
+    fields = {"bgm_path": str(dest), "updated_at": db.now()}
+    if body.volume is not None:
+        fields["bgm_volume"] = min(max(float(body.volume), 0.0), 1.0)
+    await db.update("project", pid, fields)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
 
 

@@ -107,9 +107,10 @@ tham chiếu) → Storyboard (chia frame) → Shot (ảnh frame + video) → Gh�
   nối tiếp (clip sau bắt đầu từ frame cuối của clip trước) rồi concat thành một shot liền.
 - **Caption từ khoá định giờ:** cụm từ then chốt được vẽ lên video đúng lúc lời đọc chạm
   tới, và xuất kèm vào XML/SRT cho Resolve.
-- **Nhạc nền:** tải một file nhạc cho dự án → khi ghép, nhạc tự được lặp cho đủ độ dài và
-  trộn **dưới** giọng đọc ở mức âm lượng cấu hình được (giọng đọc giữ nguyên). Không có file
-  thì bỏ qua.
+- **Nhạc nền:** tải file nhạc cho dự án, hoặc **sinh bằng Flow Music** từ mô tả tự nhiên
+  (`POST /projects/{pid}/bgm/generate`) — ra 2 bản thì nghe thử rồi chọn 1 bằng
+  `POST …/bgm/select`. Khi ghép, nhạc tự được lặp cho đủ độ dài và trộn **dưới** giọng đọc ở
+  mức âm lượng cấu hình được (giọng đọc giữ nguyên). Không có file thì bỏ qua.
 - **Xuất DaVinci Resolve XML (FCP7/xmeml):** track video + track title (caption) + track
   audio (lời đọc từng scene), kèm `captions.srt` (chạy được cả bản Resolve Free).
 - **Node Editor:** đồ thị tuỳ biến cho asset/shot (tạo ảnh → sửa ảnh → tạo video), có
@@ -134,7 +135,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | Storytelling | `POST /scenes/{sid}/beats`, `POST /projects/{pid}/voiceover`, `POST /shots/{sid}/narration` |
 | Node graph | `GET/PUT /shots/{sid}/graph`, `POST /shots/{sid}/graph/run` (tương tự cho `/entities/{eid}/graph`) |
 | Ghép & Xuất | `POST /projects/{pid}/assemble`, `…/assemble-images`, `…/export`, `…/export/davinci-xml`, `GET /fonts` |
-| Nhạc nền | `POST /projects/{pid}/bgm` (upload), `POST …/bgm/copy` (chép từ dự án khác), `DELETE /projects/{pid}/bgm` |
+| Nhạc nền | `POST /projects/{pid}/bgm` (upload), `POST …/bgm/copy` (chép từ dự án khác), `POST …/bgm/generate` (sinh bằng Flow Music), `POST …/bgm/select` (áp 1 bài đã sinh/có sẵn), `DELETE /projects/{pid}/bgm` |
 
 ---
 
