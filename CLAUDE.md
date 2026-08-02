@@ -40,6 +40,11 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   hữu. `/studio/projects` chỉ trả dự án của account hiện tại, mọi endpoint đụng tới dự án
   của account khác trả 403. Chưa xác định được account → không lọc, chỉ cảnh báo trên UI.
   Xem [agent/studio/accounts.py](agent/studio/accounts.py).
+- **Hai kiểu nhạc, đừng lẫn.** `project.bgm_path` = MỘT bài trộn chìm dưới lời đọc (⚙ cấu
+  hình dự án). Bảng `music_track` = playlist nhiều bài của chế độ music video
+  (`project.music_mode`): nhạc là tiếng duy nhất, các bài cách nhau `music_gap` giây, và tổng
+  thời lượng playlist quyết định độ dài video — hình được lặp cho phủ kín, thừa thì cắt.
+  Xem [agent/studio/music.py](agent/studio/music.py) + tab "Nhạc" trong workspace.
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

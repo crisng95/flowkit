@@ -85,6 +85,18 @@ CREATE TABLE IF NOT EXISTS asset (
 
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 
+-- Playlist nhạc của dự án (music video): NHIỀU bài phát nối tiếp, cách nhau `project.music_gap`
+-- giây im lặng. Khác `project.bgm_path` (một bài duy nhất trộn CHÌM dưới lời đọc) — ở đây nhạc
+-- là tiếng chính và tổng thời lượng playlist quyết định độ dài video.
+CREATE TABLE IF NOT EXISTS music_track (
+  id TEXT PRIMARY KEY, project_id TEXT, idx INTEGER,
+  title TEXT, path TEXT, duration REAL,
+  source TEXT,              -- flowmusic | upload
+  audio_url TEXT, meta_json TEXT,
+  created_at REAL
+);
+CREATE INDEX IF NOT EXISTS idx_track_project ON music_track(project_id, idx);
+
 -- Tài khoản Google đã từng đăng nhập Flow qua extension. id = email viết thường (Flow chỉ
 -- có một account hoạt động tại một thời điểm — theo phiên Chrome), `sub` giữ id Google bền
 -- vững để nhận ra cùng một người nếu email đổi.
@@ -166,6 +178,12 @@ _MIGRATIONS = [
     # Độ phân giải upscale MONG MUỐN. Rỗng = kịch trần của tier. Tier TWO có thể chọn 1080p
     # thay vì 4K cho nhẹ/rẻ; giá trị vượt trần tier bị hạ xuống chứ không làm Flow từ chối.
     ("project", "upscale_res", "TEXT"),
+    # Music video: nhạc (playlist `music_track`) là tiếng chính thay cho lời đọc, và tổng thời
+    # lượng playlist quyết định độ dài video — hình được lặp lại cho phủ kín. 0 = video thường
+    # (dùng `bgm_path` trộn chìm dưới narration như cũ).
+    ("project", "music_mode", "INTEGER DEFAULT 0"),
+    # Khoảng lặng chèn GIỮA hai bài liên tiếp (giây). Không cộng vào sau bài cuối.
+    ("project", "music_gap", "REAL DEFAULT 3.0"),
     # Chủ sở hữu dự án = tài khoản Flow đã tạo nó (account.id). Media/media_id của Flow chỉ
     # resolve được bằng token của đúng account đó, nên dự án không dùng chung được giữa các
     # account. NULL = dự án có từ trước khi có phân tài khoản (được nhận về cho account đầu

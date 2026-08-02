@@ -4,25 +4,35 @@ import {
   musicApi,
   type Project,
   type MusicSong,
+  type MusicStatus,
   type MusicConversation,
 } from "../../api/client";
 import { useConfirm } from "../common/Confirm";
 
-// Sinh/quản lý nhạc nền bằng Flow Music: tạo mới (1 hoặc 2 bản A/B, nghe thử rồi chọn),
-// hoặc chọn lại 1 bài đã tạo trước đó trong tài khoản flowmusic.app (kèm xoá).
+// Sinh/quản lý nhạc bằng Flow Music: tạo mới (1 hoặc 2 bản A/B, nghe thử rồi chọn), hoặc
+// chọn lại 1 bài đã tạo trước đó trong tài khoản flowmusic.app (kèm xoá).
+//
+// Hai chế độ dùng chung màn hình này:
+//   "bgm"      — chọn MỘT bài làm nhạc nền chìm dưới lời đọc, chọn xong đóng luôn.
+//   "playlist" — thêm bài vào playlist music video; chọn xong KHÔNG đóng để thêm tiếp bài kế.
 export default function MusicManager({
   project,
   volume,
+  mode = "bgm",
   onApplied,
+  onTracks,
   onClose,
 }: {
   project: Project;
   volume: number;
-  onApplied: (p: Project) => void;
+  mode?: "bgm" | "playlist";
+  onApplied?: (p: Project) => void;
+  onTracks?: (s: MusicStatus) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"new" | "library">("new");
   const [err, setErr] = useState<string | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
 
   // ── Tạo mới ──────────────────────────────────────────────
   const [prompt, setPrompt] = useState("");
@@ -34,12 +44,19 @@ export default function MusicManager({
     setBusy(true);
     setErr(null);
     setCandidates(null);
+    setAdded(null);
     try {
-      const r = await api.generateBgm(project.id, prompt.trim(), null, volume);
+      const r =
+        mode === "playlist"
+          ? await api.generateTrack(project.id, prompt.trim())
+          : await api.generateBgm(project.id, prompt.trim(), null, volume);
       if ("pending_selection" in r) {
         setCandidates(r.songs);
+      } else if (mode === "playlist") {
+        onTracks?.(r as MusicStatus);
+        setAdded((r as any).generated?.title || "Bài vừa sinh");
       } else {
-        onApplied(r);
+        onApplied?.(r as Project);
         onClose();
       }
     } catch (e: any) {
@@ -53,9 +70,14 @@ export default function MusicManager({
     setBusy(true);
     setErr(null);
     try {
-      const p = await api.selectBgm(project.id, song.audio_url, volume);
-      onApplied(p);
-      onClose();
+      if (mode === "playlist") {
+        // Không đóng: thêm xong thường muốn thêm luôn bài kế cho đủ playlist.
+        onTracks?.(await api.addTrack(project.id, song.audio_url, song.title));
+        setAdded(song.title || "(không tên)");
+      } else {
+        onApplied?.(await api.selectBgm(project.id, song.audio_url, volume));
+        onClose();
+      }
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -124,7 +146,9 @@ export default function MusicManager({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
-          <h3 className="font-semibold">🎧 Nhạc nền — Flow Music</h3>
+          <h3 className="font-semibold">
+            {mode === "playlist" ? "🎧 Thêm bài vào playlist — Flow Music" : "🎧 Nhạc nền — Flow Music"}
+          </h3>
           <button onClick={onClose} className="ml-auto text-neutral-500 hover:text-neutral-300">
             ✕
           </button>
@@ -148,6 +172,11 @@ export default function MusicManager({
         <div className="flex-1 overflow-auto p-5">
           {err && (
             <div className="mb-3 rounded-lg bg-rose-950/40 px-3 py-2 text-sm text-rose-300">{err}</div>
+          )}
+          {added && (
+            <div className="mb-3 rounded-lg bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
+              Đã thêm “{added}” vào playlist. Thêm tiếp bài khác, hoặc đóng để xem playlist.
+            </div>
           )}
 
           {tab === "new" && (
@@ -177,7 +206,8 @@ export default function MusicManager({
                     Flow Music ra {candidates.length} bản — nghe thử rồi chọn 1:
                   </p>
                   {candidates.map((s) => (
-                    <SongCard key={s.clip_id} song={s} busy={busy} onPick={() => pick(s)} />
+                    <SongCard key={s.clip_id} song={s} busy={busy} mode={mode}
+                      onPick={() => pick(s)} />
                   ))}
                 </div>
               )}
@@ -221,7 +251,8 @@ export default function MusicManager({
                         </p>
                       )}
                       {expandedSongs?.map((s) => (
-                        <SongCard key={s.clip_id} song={s} busy={busy} onPick={() => pick(s)} />
+                        <SongCard key={s.clip_id} song={s} busy={busy} mode={mode}
+                          onPick={() => pick(s)} />
                       ))}
                     </div>
                   )}
@@ -238,10 +269,12 @@ export default function MusicManager({
 function SongCard({
   song,
   busy,
+  mode,
   onPick,
 }: {
   song: MusicSong;
   busy: boolean;
+  mode: "bgm" | "playlist";
   onPick: () => void;
 }) {
   const mins = song.duration_s ? Math.floor(song.duration_s / 60) : 0;
@@ -264,7 +297,7 @@ function SongCard({
         disabled={busy}
         className="mt-2 w-full rounded-md bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 disabled:opacity-40"
       >
-        ✓ Dùng bài này làm nhạc nền
+        {mode === "playlist" ? "＋ Thêm vào playlist" : "✓ Dùng bài này làm nhạc nền"}
       </button>
     </div>
   );

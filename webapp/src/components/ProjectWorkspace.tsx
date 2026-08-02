@@ -5,13 +5,14 @@ import AssetsTab from "./assets/AssetsTab";
 import StoryboardTab from "./storyboard/StoryboardTab";
 import ShotsTab from "./shots/ShotsTab";
 import AssembleTab from "./assemble/AssembleTab";
+import MusicTab from "./music/MusicTab";
 import AllImages from "./AllImages";
 import NodeEditor, { type EditorTarget } from "./nodeeditor/NodeEditor";
 import ProjectSettings from "./settings/ProjectSettings";
 import { JobsProvider } from "../jobs/JobsContext";
 import JobProgress from "./common/JobProgress";
 
-const TABS = ["Script", "Assets", "Storyboard", "Shots", "Assemble", "Ảnh"] as const;
+const TABS = ["Script", "Assets", "Storyboard", "Shots", "Nhạc", "Assemble", "Ảnh"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ProjectWorkspace({
@@ -136,6 +137,7 @@ export default function ProjectWorkspace({
           />
         )}
         {pane("Shots", <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
+        {pane("Nhạc", <MusicTab key={project.id} project={project} />)}
         {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
         {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
       </div>

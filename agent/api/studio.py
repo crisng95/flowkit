@@ -27,7 +27,7 @@ from agent.services.flow_client import get_flow_client
 from agent.services.music_client import get_music_client
 from agent.studio import (
     db, media_store, brain, assembler, davinci_xml, vntext, align, hires,
-    accounts, graph as graph_mod,
+    accounts, music as music_mod, graph as graph_mod,
 )
 from agent.studio.jobs import get_job_manager
 
@@ -647,7 +647,7 @@ async def delete_project(pid: str):
     # shot nối với dự án qua scene → phải xoá theo scene_id, không có cột project_id
     await db.execute(
         "DELETE FROM shot WHERE scene_id IN (SELECT id FROM scene WHERE project_id=?)", (pid,))
-    for table in ("scene", "entity", "media_history", "asset", "job"):
+    for table in ("scene", "entity", "media_history", "asset", "job", "music_track"):
         await db.execute(f"DELETE FROM {table} WHERE project_id=?", (pid,))
     await db.delete("project", pid)
     # dọn media local của project
@@ -669,14 +669,14 @@ async def purge_orphans(dry_run: bool = True):
         "shots": (await db.query_one(
             "SELECT COUNT(*) n FROM shot WHERE scene_id NOT IN (SELECT id FROM scene)"))["n"],
     }
-    for table in ("scene", "entity", "media_history", "asset", "job"):
+    for table in ("scene", "entity", "media_history", "asset", "job", "music_track"):
         counts[table] = (await db.query_one(
             f"SELECT COUNT(*) n FROM {table} "
             "WHERE project_id IS NULL OR project_id NOT IN (SELECT id FROM project)"))["n"]
     if dry_run:
         return {"dry_run": True, "orphans": counts}
     await db.execute("DELETE FROM shot WHERE scene_id NOT IN (SELECT id FROM scene)")
-    for table in ("scene", "entity", "media_history", "asset", "job"):
+    for table in ("scene", "entity", "media_history", "asset", "job", "music_track"):
         await db.execute(f"DELETE FROM {table} WHERE project_id IS NULL "
                          f"OR project_id NOT IN (SELECT id FROM project)")
     return {"dry_run": False, "removed": counts}
@@ -4010,6 +4010,155 @@ async def select_bgm(pid: str, body: SelectBgmRequest):
         fields["bgm_volume"] = min(max(float(body.volume), 0.0), 1.0)
     await db.update("project", pid, fields)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
+
+
+# ─── Playlist nhạc (music video) ────────────────────────────
+# Khác bgm ở trên (một bài chìm dưới lời đọc): playlist là NHIỀU bài phát nối tiếp, cách nhau
+# `music_gap` giây, và tổng thời lượng của nó quyết định độ dài video. Xem agent/studio/music.py.
+
+
+class MusicSettingsRequest(BaseModel):
+    music_mode: Optional[bool] = None
+    gap: Optional[float] = None
+
+
+class AddTrackRequest(BaseModel):
+    audio_url: str
+    title: Optional[str] = None
+
+
+class GenerateTrackRequest(BaseModel):
+    prompt: str
+    conversation_id: Optional[str] = None
+    title: Optional[str] = None
+    timeout: Optional[float] = None
+
+
+class ReorderTracksRequest(BaseModel):
+    ids: list[str]
+
+
+class RenameTrackRequest(BaseModel):
+    title: str
+
+
+async def _track_or_404(tid: str) -> dict:
+    row = await db.query_one("SELECT * FROM music_track WHERE id=?", (tid,))
+    if not row:
+        raise HTTPException(404, "Bài nhạc không tồn tại")
+    await _assert_owner_of(row.get("project_id"))
+    return row
+
+
+async def _download_track(pid: str, url: str) -> Path:
+    """Tải một bài từ URL (Flow Music trả URL tĩnh public) vào thư mục music của dự án.
+
+    Mỗi bài một file riêng (tên theo id) — playlist giữ nhiều bài cùng lúc nên KHÔNG dọn
+    file cũ như bgm."""
+    out_dir = music_mod.track_dir(pid)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{db.new_id()}{music_mod.safe_ext(url)}"
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c:
+        resp = await c.get(url)
+    if resp.status_code >= 400:
+        raise HTTPException(502, f"Tải nhạc thất bại ({resp.status_code})")
+    dest.write_bytes(resp.content)
+    return dest
+
+
+@router.get("/projects/{pid}/music")
+async def music_status(pid: str):
+    """Playlist + đối chiếu thời lượng nhạc với thời lượng hình (`shortfall` = còn thiếu)."""
+    project = await _project_or_404(pid)
+    return await music_mod.status(project)
+
+
+@router.patch("/projects/{pid}/music/settings")
+async def music_settings(pid: str, body: MusicSettingsRequest):
+    await _project_or_404(pid)
+    fields: dict = {}
+    if body.music_mode is not None:
+        fields["music_mode"] = 1 if body.music_mode else 0
+    if body.gap is not None:
+        fields["music_gap"] = max(0.0, float(body.gap))
+    if fields:
+        fields["updated_at"] = db.now()
+        await db.update("project", pid, fields)
+    return await music_mod.status(await _project_or_404(pid))
+
+
+@router.post("/projects/{pid}/music/upload")
+async def upload_track(pid: str, file: UploadFile = File(...), title: str = Form(None)):
+    """Thêm một bài nhạc từ file trên máy vào playlist."""
+    await _project_or_404(pid)
+    ext = music_mod.safe_ext(file.filename or "", default="")
+    if not ext:
+        raise HTTPException(400, f"Định dạng nhạc không hỗ trợ: {file.filename}")
+    out_dir = music_mod.track_dir(pid)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{db.new_id()}{ext}"
+    dest.write_bytes(await file.read())
+    await music_mod.add_track(
+        pid, dest, title=title or Path(file.filename or dest.name).stem, source="upload")
+    return await music_status(pid)
+
+
+@router.post("/projects/{pid}/music/add")
+async def add_track_from_url(pid: str, body: AddTrackRequest):
+    """Thêm vào playlist một bài đã biết `audio_url` — bản A/B vừa sinh, hoặc bài cũ trong
+    thư viện flowmusic.app (`GET /api/music/conversations/{id}`)."""
+    await _project_or_404(pid)
+    dest = await _download_track(pid, body.audio_url)
+    await music_mod.add_track(pid, dest, title=body.title or dest.stem,
+                              source="flowmusic", audio_url=body.audio_url)
+    return await music_status(pid)
+
+
+@router.post("/projects/{pid}/music/generate")
+async def generate_track(pid: str, body: GenerateTrackRequest):
+    """Sinh một bài bằng Flow Music rồi thêm thẳng vào playlist.
+
+    Flow Music tự quyết định trả 1 hay 2 bản (A/B) và không chọn được số lượng. Ra 2 bản
+    thì KHÔNG tự chọn hộ — trả cả hai kèm `audio_url` để nghe thử rồi gọi `.../music/add`."""
+    await _project_or_404(pid)
+    client = get_music_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.create_song(
+        body.prompt, conversation_id=body.conversation_id, timeout=body.timeout)
+    songs = result.get("songs") or []
+    if not songs:
+        raise HTTPException(502, result.get("error") or "Flow Music không tạo được bài nào")
+    if len(songs) > 1:
+        return {"pending_selection": True,
+                "conversation_id": result.get("conversation_id"), "songs": songs}
+    song = songs[0]
+    dest = await _download_track(pid, song["audio_url"])
+    await music_mod.add_track(pid, dest, title=body.title or song.get("title") or dest.stem,
+                              source="flowmusic", audio_url=song["audio_url"], meta=song)
+    return {**(await music_status(pid)), "generated": song,
+            "conversation_id": result.get("conversation_id")}
+
+
+@router.post("/projects/{pid}/music/reorder")
+async def reorder_tracks(pid: str, body: ReorderTracksRequest):
+    await _project_or_404(pid)
+    await music_mod.reorder(pid, body.ids)
+    return await music_status(pid)
+
+
+@router.patch("/music-tracks/{tid}")
+async def rename_track(tid: str, body: RenameTrackRequest):
+    row = await _track_or_404(tid)
+    await db.update("music_track", tid, {"title": body.title.strip() or row["title"]})
+    return await music_status(row["project_id"])
+
+
+@router.delete("/music-tracks/{tid}")
+async def delete_track(tid: str):
+    row = await _track_or_404(tid)
+    await music_mod.delete_track(row)
+    return await music_status(row["project_id"])
 
 
 @router.post("/projects/{pid}/export/davinci-xml")

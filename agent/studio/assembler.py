@@ -310,6 +310,34 @@ async def apply_bgm(project: dict, final: Path) -> bool:
     return True
 
 
+async def apply_soundtrack(project: dict, final: Path) -> dict | None:
+    """Chế độ music video: playlist nhạc là tiếng DUY NHẤT và độ dài của nó quyết định độ dài
+    video — hình ngắn hơn thì lặp lại cho phủ kín, dài hơn thì cắt ở đúng lúc nhạc dứt.
+
+    Trả None khi dự án không bật `music_mode` hoặc playlist rỗng; lúc đó khâu gọi quay về
+    `apply_bgm` (một bài chìm dưới lời đọc) như cũ."""
+    if not project.get("music_mode"):
+        return None
+    # import cục bộ: music.py dùng lại _run/probe_duration của module này → tránh vòng import.
+    from agent.studio import music as music_mod
+    built = await music_mod.build_soundtrack(project)
+    if not built:
+        return None
+    sound, target = built
+    if target <= 0:
+        logger.warning("soundtrack rỗng (%s), bỏ qua chế độ music video", sound)
+        return None
+    fitted = final.with_name(f"{final.stem}_music.mp4")
+    try:
+        info = await music_mod.fit_video_to_soundtrack(final, sound, target, fitted)
+    except RuntimeError as e:
+        logger.warning("ghép nhạc thất bại, giữ video không nhạc: %s", e)
+        fitted.unlink(missing_ok=True)
+        return None
+    fitted.replace(final)
+    return {**info, "soundtrack": f"/studio-media/{project['id']}/{sound.name}"}
+
+
 async def concat_videos(paths: list[Path], out: Path) -> None:
     """Concatenate clips (same codec params from Flow) into one mp4."""
     lst = out.with_name(f"{out.stem}_concat.txt")
@@ -481,7 +509,9 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
     final = out_dir / "final.mp4"
     await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                 "-c", "copy", str(final)])
-    bgm = await apply_bgm(project, final)
+    # Music video: playlist nhạc thay hết tiếng và quyết định độ dài; ngược lại là bgm cũ.
+    music = await apply_soundtrack(project, final)
+    bgm = False if music else await apply_bgm(project, final)
 
     duration = await probe_duration(final)
     await db.execute("DELETE FROM asset WHERE project_id=? AND kind='final_video'", (project_id,))
@@ -490,7 +520,7 @@ async def assemble_from_images(project_id: str, ken_burns: bool = True,
         "path": str(final), "meta_json": None, "created_at": db.now()})
     web = f"/studio-media/{project_id}/final.mp4"
     return {"final_path": str(final), "web_path": web, "clips": len(clip_paths),
-            "duration": duration, "mode": "images", "bgm": bgm}
+            "duration": duration, "mode": "images", "bgm": bgm, "music": music}
 
 
 async def assemble(project_id: str) -> dict:
@@ -530,7 +560,8 @@ async def assemble(project_id: str) -> dict:
     final = out_dir / "final.mp4"
     await _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
                 "-c", "copy", str(final)])
-    bgm = await apply_bgm(project, final)
+    music = await apply_soundtrack(project, final)
+    bgm = False if music else await apply_bgm(project, final)
 
     duration = await probe_duration(final)
     # record asset
@@ -540,4 +571,4 @@ async def assemble(project_id: str) -> dict:
         "path": str(final), "meta_json": None, "created_at": db.now()})
     web = f"/studio-media/{project_id}/final.mp4"
     return {"final_path": str(final), "web_path": web, "clips": len(norm_paths),
-            "duration": duration, "bgm": bgm}
+            "duration": duration, "bgm": bgm, "music": music}

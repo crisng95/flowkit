@@ -75,6 +75,36 @@ export interface MusicConversation {
   last_message_at: string;
 }
 
+/** Một bài trong playlist nhạc của dự án (chế độ music video). */
+export interface MusicTrack {
+  id: string;
+  project_id: string;
+  idx: number;
+  title: string;
+  path: string;
+  duration: number;
+  source: string; // flowmusic | upload
+  audio_url: string | null;
+  /** /studio-media/... — phát trực tiếp trong trình duyệt. */
+  web_path: string | null;
+}
+
+/** Playlist + đối chiếu thời lượng nhạc với thời lượng hình. */
+export interface MusicStatus {
+  tracks: MusicTrack[];
+  gap: number;
+  music_mode: boolean;
+  music_duration: number;
+  video_duration: number;
+  video_measured: boolean;
+  /** Hình còn thiếu bao nhiêu giây so với nhạc (sẽ lặp hình để bù khi ghép). */
+  shortfall: number;
+}
+
+export type GenerateTrackResult =
+  | (MusicStatus & { generated: MusicSong; conversation_id: string | null })
+  | { pending_selection: true; conversation_id: string | null; songs: MusicSong[] };
+
 export type GenerateBgmResult =
   | (Project & { generated: MusicSong; conversation_id: string | null })
   | { pending_selection: true; conversation_id: string | null; songs: MusicSong[] };
@@ -194,6 +224,47 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ prompt, conversation_id: conversationId ?? null, volume }),
     }),
+  // ── Playlist nhạc (music video) ────────────────────────────
+  // Nhiều bài phát nối tiếp, cách nhau `gap` giây; tổng thời lượng playlist quyết định độ dài
+  // video (hình được lặp cho phủ kín khi ghép). Khác hẳn bgm ở trên — một bài chìm dưới lời đọc.
+  musicStatus: (id: string) => req<MusicStatus>(`/projects/${id}/music`),
+  musicSettings: (id: string, body: { music_mode?: boolean; gap?: number }) =>
+    req<MusicStatus>(`/projects/${id}/music/settings`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  uploadTrack: async (id: string, file: File, title?: string): Promise<MusicStatus> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (title) fd.append("title", title);
+    const res = await fetch(`/api/studio/projects/${id}/music/upload`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+    return res.json();
+  },
+  // Sinh 1 bài bằng Flow Music rồi thêm vào playlist. Ra 2 bản A/B → `pending_selection`,
+  // nghe thử rồi gọi `addTrack` với bản đã ưng.
+  generateTrack: (id: string, prompt: string, conversationId?: string | null) =>
+    req<GenerateTrackResult>(`/projects/${id}/music/generate`, {
+      method: "POST",
+      body: JSON.stringify({ prompt, conversation_id: conversationId ?? null }),
+    }),
+  addTrack: (id: string, audioUrl: string, title?: string | null) =>
+    req<MusicStatus>(`/projects/${id}/music/add`, {
+      method: "POST",
+      body: JSON.stringify({ audio_url: audioUrl, title }),
+    }),
+  reorderTracks: (id: string, ids: string[]) =>
+    req<MusicStatus>(`/projects/${id}/music/reorder`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  renameTrack: (tid: string, title: string) =>
+    req<MusicStatus>(`/music-tracks/${tid}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+  deleteTrack: (tid: string) => req<MusicStatus>(`/music-tracks/${tid}`, { method: "DELETE" }),
+
   // Áp 1 bài đã biết audio_url (1 trong 2 bản A/B, hoặc bài cũ trong "Bài đã tạo") làm bgm.
   selectBgm: (id: string, audioUrl: string, volume?: number) =>
     req<Project>(`/projects/${id}/bgm/select`, {
@@ -570,14 +641,27 @@ export interface GraphTemplate {
   created_at?: string;
 }
 
+/** Cách khâu ghép khớp hình vào playlist nhạc (chỉ có khi dự án bật music_mode). */
+export interface MusicFit {
+  duration: number;        // độ dài video sau khi khớp
+  target: number;          // độ dài playlist nhạc
+  source_duration: number; // độ dài hình trước khi lặp
+  loops: number;           // số vòng lặp thêm; 0 = hình vốn đã đủ dài
+  reencoded: boolean;
+  soundtrack: string;
+}
+
 export const assemble = {
   build: (pid: string) =>
-    req<{ web_path: string; clips: number; duration: number }>(
+    req<{ web_path: string; clips: number; duration: number; music: MusicFit | null }>(
       `/projects/${pid}/assemble`,
       { method: "POST" }
     ),
   buildFromImages: (pid: string, kenBurns = true) =>
-    req<{ web_path: string; clips: number; duration: number; mode: string }>(
+    req<{
+      web_path: string; clips: number; duration: number; mode: string;
+      music: MusicFit | null;
+    }>(
       `/projects/${pid}/assemble-images?ken_burns=${kenBurns}`,
       { method: "POST" }
     ),

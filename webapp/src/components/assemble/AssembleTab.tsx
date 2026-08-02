@@ -8,6 +8,10 @@ export default function AssembleTab({ project }: { project: Project }) {
   const [finalUrl, setFinalUrl] = useState<string | null>(null);
   const [xmlUrl, setXmlUrl] = useState<string | null>(null);
   const [srtUrl, setSrtUrl] = useState<string | null>(null);
+  // Chế độ music video: khâu ghép trả về cách nó khớp hình vào độ dài playlist.
+  const [musicInfo, setMusicInfo] = useState<
+    { duration: number; target: number; source_duration: number; loops: number } | null
+  >(null);
   const [xmlInfo, setXmlInfo] = useState<{ clips: number; captions: number; bgm: boolean; missing: number; missingTitles: string[] } | null>(null);
   const [meta, setMeta] = useState<any>(null);
   const [kenBurns, setKenBurns] = useState(true);
@@ -55,12 +59,14 @@ export default function AssembleTab({ project }: { project: Project }) {
     run("assemble", async () => {
       const r = await asm.build(project.id);
       setFinalUrl(r.web_path + "?t=" + Date.now());
+      setMusicInfo(r.music ?? null);
     });
 
   const doAssembleImages = () =>
     run("assemble-img", async () => {
       const r = await asm.buildFromImages(project.id, kenBurns);
       setFinalUrl(r.web_path + "?t=" + Date.now());
+      setMusicInfo(r.music ?? null);
     });
 
   const doExport = () =>
@@ -132,6 +138,14 @@ export default function AssembleTab({ project }: { project: Project }) {
       {finalUrl && (
         <div className="mb-6">
           <h3 className="mb-2 text-sm font-medium text-neutral-300">Video hoàn chỉnh</h3>
+          {musicInfo && (
+            <p className="mb-2 text-xs text-indigo-300">
+              🎵 Khớp theo playlist nhạc: {musicInfo.duration.toFixed(1)}s
+              {musicInfo.loops > 0
+                ? ` — hình dài ${musicInfo.source_duration.toFixed(1)}s nên được lặp cho phủ kín`
+                : " — hình đủ dài, phần thừa đã cắt ở lúc nhạc dứt"}
+            </p>
+          )}
           <video src={finalUrl} controls className="w-full rounded-xl border border-neutral-800" />
           <a href={finalUrl} download className="mt-2 inline-block text-sm text-indigo-400 hover:text-indigo-300">
             ⭳ Tải final.mp4
