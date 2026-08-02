@@ -32,6 +32,9 @@ class FlowClient:
         self._extension_ws = None  # Set by WS server when extension connects
         self._pending: dict[str, asyncio.Future] = {}
         self._flow_key: Optional[str] = None
+        # Tài khoản Google đang đăng nhập Flow trong Chrome ({email, name, picture, sub}).
+        # Extension đẩy lên khi kết nối / đổi account; agent không tự suy ra được.
+        self._identity: Optional[dict] = None
         # Single-flight queue (video-app.md §9.1): the extension is ONE shared WS channel,
         # so every mutating Flow command (generate / edit / upscale / upload / rename /
         # get-url) is serialized through this lock — only one is in flight at a time. This
@@ -55,6 +58,8 @@ class FlowClient:
     def clear_extension(self):
         """Called when extension disconnects."""
         self._extension_ws = None
+        # Identity KHÔNG bị xoá: extension rớt không có nghĩa người dùng đăng xuất, và xoá đi
+        # sẽ làm mọi dự án "mất chủ" trong lúc mất kết nối. Extension gửi lại khi nối lại.
         self._ws_disconnect_count += 1
         self._ws_last_disconnect_at = time.time()
         # Cancel all pending futures (copy to avoid RuntimeError on concurrent modification)
@@ -74,6 +79,30 @@ class FlowClient:
         return self._extension_ws is not None
 
     @property
+    def identity(self) -> Optional[dict]:
+        """Tài khoản Flow đang đăng nhập, hoặc None khi chưa xác định được."""
+        return self._identity
+
+    async def fetch_identity(self, refresh: bool = True) -> Optional[dict]:
+        """Hỏi extension tài khoản đang đăng nhập (refresh=False → lấy bản extension đang giữ).
+
+        Chỉ dùng khi cần chắc chắn mới nhất (ví dụ ngay trước khi tạo dự án). Luồng thường
+        đã có extension tự đẩy `identity` lúc kết nối và mỗi 45 phút."""
+        if not self._extension_ws:
+            return self._identity
+        res = await self._send("get_identity", {"refresh": refresh}, timeout=20, serialize=False)
+        data = res.get("result") if isinstance(res, dict) else None
+        if isinstance(data, dict) and (data.get("email") or data.get("sub")):
+            self._set_identity(data)
+        return self._identity
+
+    def _set_identity(self, data: dict) -> None:
+        prev = (self._identity or {}).get("email")
+        self._identity = data
+        if data.get("email") != prev:
+            logger.info("Tài khoản Flow: %s", data.get("email") or data.get("sub"))
+
+    @property
     def ws_stats(self) -> dict:
         uptime = None
         if self._ws_connected_at and self.connected:
@@ -90,6 +119,12 @@ class FlowClient:
         if data.get("type") == "token_captured":
             self._flow_key = data.get("flowKey")
             logger.info("Flow key captured from extension")
+            return
+
+        if data.get("type") == "identity":
+            ident = data.get("identity") or {}
+            if ident.get("email") or ident.get("sub"):
+                self._set_identity(ident)
             return
 
         if data.get("type") == "extension_ready":

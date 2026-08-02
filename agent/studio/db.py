@@ -85,6 +85,14 @@ CREATE TABLE IF NOT EXISTS asset (
 
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 
+-- Tài khoản Google đã từng đăng nhập Flow qua extension. id = email viết thường (Flow chỉ
+-- có một account hoạt động tại một thời điểm — theo phiên Chrome), `sub` giữ id Google bền
+-- vững để nhận ra cùng một người nếu email đổi.
+CREATE TABLE IF NOT EXISTS account (
+  id TEXT PRIMARY KEY, email TEXT, name TEXT, picture TEXT, sub TEXT,
+  paygate_tier TEXT, created_at REAL, last_seen_at REAL
+);
+
 -- Lịch sử media (§13#8): mỗi lần một ảnh/video được gán cho shot/entity → 1 dòng,
 -- để xem lại & khôi phục bản cũ thay vì ghi đè mất.
 CREATE TABLE IF NOT EXISTS media_history (
@@ -158,6 +166,11 @@ _MIGRATIONS = [
     # Độ phân giải upscale MONG MUỐN. Rỗng = kịch trần của tier. Tier TWO có thể chọn 1080p
     # thay vì 4K cho nhẹ/rẻ; giá trị vượt trần tier bị hạ xuống chứ không làm Flow từ chối.
     ("project", "upscale_res", "TEXT"),
+    # Chủ sở hữu dự án = tài khoản Flow đã tạo nó (account.id). Media/media_id của Flow chỉ
+    # resolve được bằng token của đúng account đó, nên dự án không dùng chung được giữa các
+    # account. NULL = dự án có từ trước khi có phân tài khoản (được nhận về cho account đầu
+    # tiên nhìn thấy — xem _adopt_orphan_projects).
+    ("project", "account_id", "TEXT"),
     # Location entities get extra angle views (besides the primary establishing shot) so a
     # shot has several angles of the place to reference — JSON list of {media_id,
     # primary_media_id, path}. Stops shots from copying one fixed location framing.

@@ -35,6 +35,11 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
 
 ## Notes
 
+- **Mỗi dự án thuộc về một tài khoản Flow.** Extension đọc account đang đăng nhập từ
+  `labs.google/fx/api/auth/session` và đẩy lên agent; `project.account_id` ghi lại chủ sở
+  hữu. `/studio/projects` chỉ trả dự án của account hiện tại, mọi endpoint đụng tới dự án
+  của account khác trả 403. Chưa xác định được account → không lọc, chỉ cảnh báo trên UI.
+  Xem [agent/studio/accounts.py](agent/studio/accounts.py).
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

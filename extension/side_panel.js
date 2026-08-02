@@ -100,6 +100,14 @@ function updateStatus(data) {
     tokenEl.className = 'bad';
   }
 
+  // Tài khoản Flow đang đăng nhập — dự án/media đều thuộc về nó, nên phải nhìn thấy ngay
+  // khi Chrome đang ở account nào.
+  const accEl = document.getElementById('account-status');
+  if (accEl) {
+    accEl.textContent = data.account || 'chưa rõ tài khoản';
+    accEl.className = data.account ? 'ok' : 'warn';
+  }
+
   // Metrics
   const m = data.metrics || {};
   document.getElementById('m-total').textContent   = m.requestCount || 0;

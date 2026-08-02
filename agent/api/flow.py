@@ -103,6 +103,7 @@ async def extension_status():
     return {
         "connected": client.connected,
         "flow_key_present": client._flow_key is not None,
+        "account": client.identity,
     }
 
 

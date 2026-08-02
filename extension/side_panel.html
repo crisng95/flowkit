@@ -202,6 +202,11 @@
     #token-status.bad  { color: var(--red); }
     #token-status.warn { color: var(--yellow); }
 
+    #account-status      { margin-left: auto; max-width: 45%; overflow: hidden;
+                           text-overflow: ellipsis; white-space: nowrap; }
+    #account-status.ok   { color: var(--green); }
+    #account-status.warn { color: var(--yellow); }
+
     /* ── Log section ────────────────────────────────── */
     .log-header {
       display: flex;
@@ -524,6 +529,7 @@
     STATE
     <span id="state-badge" class="off">off</span>
     <span id="token-status" class="bad">no token</span>
+    <span id="account-status" class="warn">chưa rõ tài khoản</span>
   </div>
 
   <!-- Request log -->

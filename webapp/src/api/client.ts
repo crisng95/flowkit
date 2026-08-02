@@ -100,6 +100,17 @@ export interface Health {
   extension_connected: boolean;
   ffmpeg: boolean;
   tts: boolean;
+  /** Tài khoản Google đang đăng nhập Flow; null = chưa xác định được. */
+  account: FlowAccount | null;
+}
+
+/** Tài khoản Flow — chủ sở hữu của project + media sinh ra dưới nó. */
+export interface FlowAccount {
+  id: string;
+  email: string | null;
+  name: string | null;
+  picture: string | null;
+  paygate_tier?: string | null;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -123,7 +134,13 @@ export const api = {
   health: () => req<Health>("/health"),
   options: () => req<any>("/options"),
   credits: () => req<any>("/credits"),
-  listProjects: () => req<{ projects: Project[] }>("/projects"),
+  listProjects: () => req<{ projects: Project[]; account: string | null }>("/projects"),
+  accounts: () =>
+    req<{
+      current: FlowAccount | null;
+      accounts: (FlowAccount & { projects: number })[];
+      unowned_projects: number;
+    }>("/accounts"),
   flowProjects: () => req<{ projects: FlowProject[] }>("/flow-projects"),
   createProject: (body: any) =>
     req<Project>("/projects", { method: "POST", body: JSON.stringify(body) }),

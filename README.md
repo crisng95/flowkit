@@ -114,6 +114,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | Nhóm | Endpoint tiêu biểu |
 |------|--------------------|
 | Hệ thống | `GET /health`, `GET /options`, `GET /credits`, `GET/PUT /settings` |
+| Tài khoản | `GET /accounts` (tài khoản Flow hiện tại + các account đã thấy, kèm số dự án) |
 | Bảo trì | `POST /maintenance/purge-orphans?dry_run=false` (dọn dòng mồ côi trong DB) |
 | Dự án | `GET/POST /projects`, `GET/PATCH/DELETE /projects/{pid}`, `PUT /projects/{pid}/cover` |
 | Kịch bản | `POST /projects/{pid}/script/generate`, `PUT /projects/{pid}/script`, `POST …/script/chat`, `GET …/scenes` |

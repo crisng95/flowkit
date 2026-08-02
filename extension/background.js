@@ -11,6 +11,7 @@ const API_KEY = 'AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY';
 
 let ws = null;
 let flowKey = null;
+let identity = null;   // { email, name, picture, sub } — Google account signed into Flow
 let callbackSecret = null;  // Auth secret for HTTP callback, received from server on WS connect
 let state = 'off'; // off | idle | running
 let manualDisconnect = false;
@@ -69,12 +70,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'keepAlive') keepAlive();
   if (alarm.name === 'token-refresh') {
     await captureTokenFromFlowTab();
+    await fetchIdentity();
   }
 });
 
 async function init() {
-  const data = await chrome.storage.local.get(['flowKey', 'metrics', 'callbackSecret']);
+  const data = await chrome.storage.local.get(['flowKey', 'metrics', 'callbackSecret', 'identity']);
   if (data.flowKey) flowKey = data.flowKey;
+  if (data.identity) identity = data.identity;
   if (data.metrics) Object.assign(metrics, data.metrics);
   if (data.callbackSecret) callbackSecret = data.callbackSecret;
   connectToAgent();
@@ -105,6 +108,9 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'token_captured', flowKey }));
     }
+    // Listener này chạy rất dày → chỉ dò tài khoản khi CHƯA biết (lần đầu / vừa đăng nhập
+    // lại). Đổi account giữa chừng do alarm 45 phút và get_identity bắt.
+    if (!identity) fetchIdentity();
   },
   { urls: ['https://aisandbox-pa.googleapis.com/*', 'https://labs.google/*'] },
   ['requestHeaders', 'extraHeaders'],
@@ -156,6 +162,107 @@ async function captureTokenFromFlowTab() {
   }
 }
 
+// ─── Account identity ───────────────────────────────────────
+// Mọi thứ trên Flow — project, media, credit — thuộc về TÀI KHOẢN Google đang đăng nhập
+// trong Chrome. Agent cần biết tài khoản đó để không trộn dự án của account này sang
+// account khác (media_id của account A không resolve được bằng token của account B).
+//
+// Nguồn chính: `/fx/api/auth/session` — Flow là một app NextAuth, endpoint này trả
+// `{ user: { email, name, image }, access_token }` theo cookie phiên. Gọi thẳng từ service
+// worker (đã có host permission labs.google/*) nên không phải cào DOM.
+// Dự phòng: tokeninfo của chính bearer ya29 → cho `sub` (id Google bền vững) và thường cả
+// email; dùng khi endpoint session đổi shape.
+
+async function _identityFromSession() {
+  const res = await fetch('https://labs.google/fx/api/auth/session', {
+    credentials: 'include',
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const u = (await res.json())?.user || {};
+  if (!u.email) return null;
+  return {
+    email: String(u.email).trim().toLowerCase(),
+    name: u.name || null,
+    picture: u.image || null,
+    sub: u.id || null,
+    source: 'session',
+  };
+}
+
+/** Cùng endpoint, nhưng fetch TỪ TRONG tab Flow: request cùng origin nên cookie phiên chắc
+ *  chắn được gửi kèm — dùng khi fetch từ service worker về rỗng (cookie SameSite). */
+async function _identityFromFlowTab() {
+  const tabs = await chrome.tabs.query({
+    url: ['https://labs.google/fx/tools/flow*', 'https://labs.google/fx/*/tools/flow*'],
+  });
+  if (!tabs.length) return null;
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tabs[0].id },
+    func: async () => {
+      try {
+        const r = await fetch('/fx/api/auth/session', { headers: { accept: 'application/json' } });
+        return r.ok ? await r.json() : null;
+      } catch { return null; }
+    },
+  });
+  const u = res?.result?.user;
+  if (!u?.email) return null;
+  return {
+    email: String(u.email).trim().toLowerCase(),
+    name: u.name || null,
+    picture: u.image || null,
+    sub: u.id || null,
+    source: 'flow-tab',
+  };
+}
+
+async function _identityFromTokenInfo() {
+  if (!flowKey) return null;
+  const res = await fetch(
+    'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(flowKey),
+  );
+  if (!res.ok) return null;
+  const d = await res.json();
+  if (!d?.email && !d?.sub) return null;
+  return {
+    email: d.email ? String(d.email).trim().toLowerCase() : null,
+    name: null,
+    picture: null,
+    sub: d.sub || null,
+    source: 'tokeninfo',
+  };
+}
+
+/** Lấy tài khoản đang đăng nhập; báo agent khi đổi account. Trả về identity hoặc null. */
+async function fetchIdentity({ notify = true } = {}) {
+  let next = null;
+  for (const probe of [_identityFromSession, _identityFromFlowTab, _identityFromTokenInfo]) {
+    try {
+      next = await probe();
+      if (next) break;
+    } catch (e) {
+      console.warn('[FlowAgent] identity probe failed:', probe.name, e?.message || e);
+    }
+  }
+  if (!next) {
+    console.warn('[FlowAgent] Không xác định được tài khoản Flow (chưa đăng nhập?)');
+    return identity;   // giữ giá trị cũ, đừng xoá — mạng lỗi không có nghĩa là đã đăng xuất
+  }
+  const changed = next.email !== identity?.email || next.sub !== identity?.sub;
+  identity = { ...next, fetchedAt: Date.now() };
+  chrome.storage.local.set({ identity });
+  if (changed) console.log('[FlowAgent] Tài khoản Flow:', identity.email || identity.sub);
+  if (notify) sendIdentityToAgent();
+  return identity;
+}
+
+function sendIdentityToAgent() {
+  if (identity && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'identity', identity }));
+  }
+}
+
 // ─── WebSocket to Agent ─────────────────────────────────────
 
 function connectToAgent() {
@@ -185,6 +292,10 @@ function connectToAgent() {
       flowKeyPresent: !!flowKey,
       tokenAge: flowKey && metrics.tokenCapturedAt ? Date.now() - metrics.tokenCapturedAt : null,
     }));
+    // Agent không giữ state qua lần khởi động — gửi lại tài khoản đã biết ngay, rồi dò lại
+    // nền phòng khi người dùng đã đổi account trong lúc agent tắt.
+    sendIdentityToAgent();
+    fetchIdentity();
     if (flowKey) {
       ws.send(JSON.stringify({ type: 'token_captured', flowKey }));
     }
@@ -211,6 +322,9 @@ function connectToAgent() {
             metrics,
           },
         });
+      } else if (msg.method === 'get_identity') {
+        const id = msg.params?.refresh === false ? identity : await fetchIdentity({ notify: false });
+        sendToAgent({ id: msg.id, result: id || null });
       } else if (msg.type === 'callback_secret') {
         callbackSecret = msg.secret;
         chrome.storage.local.set({ callbackSecret: msg.secret });
@@ -640,6 +754,7 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
       agentConnected: ws?.readyState === WebSocket.OPEN,
       flowKeyPresent: !!flowKey,
       manualDisconnect,
+      account: identity?.email || identity?.sub || null,
       tokenAge: metrics.tokenCapturedAt ? Date.now() - metrics.tokenCapturedAt : null,
       metrics: {
         requestCount: metrics.requestCount,

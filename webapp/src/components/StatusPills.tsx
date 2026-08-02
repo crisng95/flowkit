@@ -49,8 +49,31 @@ export default function StatusPills() {
     };
   }, []);
 
+  // Dự án và media gắn chặt với tài khoản Flow đang đăng nhập trong Chrome, nên phải luôn
+  // nhìn thấy mình đang là ai — đăng nhập nhầm account là thấy thiếu dự án / gen hỏng.
+  const account = health?.account ?? null;
+
   return (
     <div className="flex items-center gap-2">
+      {health && (
+        <span
+          className={`inline-flex max-w-[16rem] items-center gap-1.5 truncate rounded-full px-2.5 py-1 text-xs ${
+            account
+              ? "bg-neutral-800 text-neutral-300"
+              : "bg-amber-500/15 text-amber-300"
+          }`}
+          title={
+            account
+              ? `Tài khoản Flow: ${account.email ?? account.id}. Chỉ dự án của tài khoản này hiện ở đây.`
+              : "Chưa xác định được tài khoản Flow — đang hiện TẤT CẢ dự án. Mở labs.google/fx/tools/flow và đăng nhập, rồi tải lại extension."
+          }
+        >
+          {account?.picture && (
+            <img src={account.picture} alt="" className="h-4 w-4 rounded-full" />
+          )}
+          <span className="truncate">{account?.email ?? "Chưa rõ tài khoản"}</span>
+        </span>
+      )}
       {tier && (
         <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300" title="Paygate tier (từ Flow credits)">
           {tier.replace("PAYGATE_TIER_", "Tier ")}

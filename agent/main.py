@@ -137,6 +137,9 @@ async def health():
         "version": "0.2.0",
         "extension_connected": client.connected,
         "ws": client.ws_stats,
+        # Tài khoản Google đang đăng nhập Flow trong Chrome (extension báo lên) — mọi project
+        # và media đều thuộc về nó. null = chưa xác định được.
+        "account": (client.identity or {}).get("email"),
     }
 
 

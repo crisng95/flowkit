@@ -25,7 +25,7 @@ from agent.config import (
 from agent.services.flow_client import get_flow_client
 from agent.studio import (
     db, media_store, brain, assembler, davinci_xml, vntext, align, hires,
-    graph as graph_mod,
+    accounts, graph as graph_mod,
 )
 from agent.studio.jobs import get_job_manager
 
@@ -258,6 +258,44 @@ async def _current_tier() -> str:
     return _tier_cache["value"] or "PAYGATE_TIER_ONE"
 
 
+# ─── Chủ sở hữu dự án (xem agent/studio/accounts.py) ─────────
+
+async def _assert_owner(project: dict) -> None:
+    """Chặn khi dự án thuộc tài khoản Flow KHÁC tài khoản đang đăng nhập.
+
+    Bỏ qua khi: dự án chưa có chủ (tạo trước lúc có phân tài khoản), hoặc chưa xác định được
+    tài khoản hiện tại — mất extension không được phép khoá người dùng khỏi dữ liệu của họ."""
+    owner = project.get("account_id")
+    if not owner:
+        return
+    me = await accounts.current_id()
+    if not me or me == owner:
+        return
+    raise HTTPException(
+        403,
+        f"Dự án “{project.get('title') or project.get('id')}” thuộc tài khoản "
+        f"{await accounts.owner_label(owner)}, nhưng Chrome đang đăng nhập Flow bằng {me}. "
+        f"Đăng nhập lại đúng tài khoản đó rồi mở dự án.")
+
+
+async def _assert_owner_of(project_id: Optional[str]) -> None:
+    if not project_id or not await accounts.multi_account():
+        return
+    row = await db.query_one("SELECT * FROM project WHERE id=?", (project_id,))
+    if row:
+        await _assert_owner(row)
+
+
+async def _assert_owner_of_scene(scene_id: Optional[str]) -> None:
+    if not scene_id or not await accounts.multi_account():
+        return
+    row = await db.query_one(
+        "SELECT project.* FROM project JOIN scene ON scene.project_id = project.id "
+        "WHERE scene.id=?", (scene_id,))
+    if row:
+        await _assert_owner(row)
+
+
 # ─── Health / options / settings ────────────────────────────
 
 @router.get("/health")
@@ -269,6 +307,9 @@ async def health():
         "extension_connected": client.connected,
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "tts": omni,
+        # probe=False: /health bị poll 15s/lần, không được phép chờ một vòng WS hỏi extension.
+        # Extension tự đẩy identity lúc kết nối; /credits mới là chỗ chịu hỏi lại.
+        "account": _account_public(await accounts.current(probe=False)),
     }
 
 
@@ -334,9 +375,41 @@ async def put_settings(body: dict):
 
 @router.get("/credits")
 async def credits():
+    """Credit + tài khoản đang đăng nhập.
+
+    Webapp poll endpoint này sẵn rồi, nên nó cũng là chỗ rẻ nhất để báo "đang là ai" và để
+    agent cập nhật bảng `account` — không cần thêm một vòng poll riêng."""
     client = _require_extension()
     result = await client.get_credits()
-    return result.get("data", result)
+    data = result.get("data", result)
+    if isinstance(data, dict):
+        acc = await accounts.current()
+        data = {**data, "account": _account_public(acc)}
+        if acc and data.get("userPaygateTier") and acc.get("paygate_tier") != data["userPaygateTier"]:
+            await db.update("account", acc["id"], {"paygate_tier": data["userPaygateTier"]})
+            accounts.invalidate()
+    return data
+
+
+def _account_public(acc: Optional[dict]) -> Optional[dict]:
+    if not acc:
+        return None
+    return {k: acc.get(k) for k in ("id", "email", "name", "picture", "paygate_tier")}
+
+
+@router.get("/accounts")
+async def list_accounts():
+    """Các tài khoản Flow máy này từng thấy + tài khoản hiện tại (cho UI cảnh báo/đối chiếu)."""
+    me = await accounts.current()
+    rows = await accounts.list_accounts()
+    counts = await db.query_all(
+        "SELECT account_id, COUNT(*) AS n FROM project GROUP BY account_id")
+    by_acc = {r["account_id"]: r["n"] for r in counts}
+    return {
+        "current": _account_public(me),
+        "accounts": [{**_account_public(r), "projects": by_acc.get(r["id"], 0)} for r in rows],
+        "unowned_projects": by_acc.get(None, 0),
+    }
 
 
 # ─── Flow projects (live, for import) ───────────────────────
@@ -459,8 +532,18 @@ async def all_flow_media(images_only: bool = True):
 
 @router.get("/projects")
 async def list_projects():
-    rows = await db.query_all("SELECT * FROM project ORDER BY updated_at DESC")
-    return {"projects": rows}
+    """Chỉ dự án của tài khoản Flow đang đăng nhập (+ dự án chưa có chủ).
+
+    Chưa xác định được tài khoản → trả hết kèm `account: null` để webapp hiện cảnh báo, thay
+    vì để người dùng nhìn danh sách trống khi extension rớt."""
+    me = await accounts.current_id()
+    if me and await accounts.multi_account():
+        rows = await db.query_all(
+            "SELECT * FROM project WHERE account_id IS NULL OR account_id=? "
+            "ORDER BY updated_at DESC", (me,))
+    else:
+        rows = await db.query_all("SELECT * FROM project ORDER BY updated_at DESC")
+    return {"projects": rows, "account": me}
 
 
 @router.post("/projects")
@@ -489,6 +572,9 @@ async def create_project(body: CreateProjectRequest):
         "aspect_ratio": (body.aspect_ratio or kv.get("aspect_ratio")
                          or "VIDEO_ASPECT_RATIO_LANDSCAPE"),
         "paygate_tier": await _current_tier(),   # từ /api/flow/credits, không do user chọn
+        # Chủ sở hữu = tài khoản Flow vừa tạo project bên Flow; NULL khi chưa nhận diện được
+        # (extension cũ / chưa đăng nhập) — dự án sẽ được nhận về ở lần nhận diện đầu tiên.
+        "account_id": await accounts.current_id(),
         "storytelling": 1 if body.storytelling else 0,
         "script_lang": (body.script_lang or "Vietnamese").strip() or "Vietnamese",
         "image_text_lang": (body.image_text_lang or "Vietnamese").strip() or "Vietnamese",
@@ -511,17 +597,12 @@ async def create_project(body: CreateProjectRequest):
 
 @router.get("/projects/{pid}")
 async def get_project(pid: str):
-    row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
-    if not row:
-        raise HTTPException(404, "Project không tồn tại")
-    return row
+    return await _project_or_404(pid)
 
 
 @router.patch("/projects/{pid}")
 async def update_project(pid: str, body: UpdateProjectRequest):
-    row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
-    if not row:
-        raise HTTPException(404, "Project không tồn tại")
+    await _project_or_404(pid)
     data = {k: v for k, v in body.model_dump(exclude_none=True).items()}
     if "storytelling" in data:
         data["storytelling"] = 1 if data["storytelling"] else 0
@@ -560,9 +641,7 @@ async def delete_project(pid: str):
     SQLite ở đây không bật khoá ngoại và schema cũng không khai báo ON DELETE CASCADE, nên
     xoá mỗi dòng `project` sẽ để lại scene/shot/entity/history mồ côi — vô hình trong giao
     diện (mọi truy vấn đều join qua project/scene) nhưng vẫn nằm trong DB mãi mãi."""
-    row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
-    if not row:
-        raise HTTPException(404, "Project không tồn tại")
+    await _project_or_404(pid)
     # shot nối với dự án qua scene → phải xoá theo scene_id, không có cột project_id
     await db.execute(
         "DELETE FROM shot WHERE scene_id IN (SELECT id FROM scene WHERE project_id=?)", (pid,))
@@ -607,6 +686,7 @@ async def _project_or_404(pid: str) -> dict:
     row = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
     if not row:
         raise HTTPException(404, "Project không tồn tại")
+    await _assert_owner(row)
     return row
 
 
@@ -866,6 +946,7 @@ async def _entity_or_404(eid: str) -> dict:
     row = await db.query_one("SELECT * FROM entity WHERE id=?", (eid,))
     if not row:
         raise HTTPException(404, "Entity không tồn tại")
+    await _assert_owner_of(row.get("project_id"))
     return row
 
 
@@ -993,16 +1074,27 @@ async def library_entities(exclude_project: Optional[str] = None):
 
     Một dự án có thể đóng vai 'thư viện' chứa nhân vật/bối cảnh/đạo cụ; dự án khác chỉ
     việc import lại entity có sẵn (không phải gen lại).
+
+    Chỉ lấy asset của dự án thuộc tài khoản đang đăng nhập: import một entity của account
+    khác sẽ kéo theo `media_id` mà token hiện tại không resolve nổi.
     """
+    me = await accounts.current_id()
+    scope = "AND (p.account_id IS NULL OR p.account_id = ?) " if me and await accounts.multi_account() else ""
+    params: tuple = ()
+    if exclude_project:
+        params += (exclude_project,)
+    if scope:
+        params += (me,)
     rows = await db.query_all(
         "SELECT e.*, p.title AS project_title FROM entity e "
         "JOIN project p ON e.project_id = p.id "
         "WHERE e.media_id IS NOT NULL "
         + ("AND e.project_id != ? " if exclude_project else "")
+        + scope
         # Newer projects first: later videos tend to reference the most recent work, so surface
         # the freshest project's assets at the top. NULL created_at (legacy rows) sinks to the end.
         + "ORDER BY (p.created_at IS NULL), p.created_at DESC, p.title, e.type, e.name",
-        (exclude_project,) if exclude_project else ())
+        params)
     return {"entities": rows}
 
 
@@ -1272,6 +1364,7 @@ async def _scene_or_404(sid: str) -> dict:
     row = await db.query_one("SELECT * FROM scene WHERE id=?", (sid,))
     if not row:
         raise HTTPException(404, "Scene không tồn tại")
+    await _assert_owner_of(row.get("project_id"))
     return row
 
 
@@ -1279,6 +1372,7 @@ async def _shot_or_404(sid: str) -> dict:
     row = await db.query_one("SELECT * FROM shot WHERE id=?", (sid,))
     if not row:
         raise HTTPException(404, "Shot không tồn tại")
+    await _assert_owner_of_scene(row.get("scene_id"))
     return row
 
 
@@ -2715,6 +2809,8 @@ async def import_project_zip(file: UploadFile = File(...)):
     proj = {k: remap(v) for k, v in old_proj.items()}
     proj.update({"id": new_pid, "bgm_path": new_bgm,
                  "title": (old_proj.get("title") or "Imported") + " (nhập)",
+                 # Chủ sở hữu là người ĐANG nhập, không phải account ghi trong file zip.
+                 "account_id": await accounts.current_id(),
                  "created_at": ts, "updated_at": ts})
     await db.insert("project", proj)
 
@@ -3926,9 +4022,7 @@ async def sync_project_media(pid: str):
     ứng (entity / shot ảnh / shot video / các view phụ / lịch sử media) và xoá file cache
     local. Một media coi là CÒN nếu media_id HOẶC primary_media_id của nó còn trên Flow
     (đối chiếu rộng để tránh xoá nhầm)."""
-    project = await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
-    if not project:
-        raise HTTPException(404, "Không tìm thấy project")
+    project = await _project_or_404(pid)
     flow_id = project.get("flow_project_id")
     if not flow_id:
         raise HTTPException(400, "Project chưa gắn với project trên Flow")
