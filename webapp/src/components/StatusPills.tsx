@@ -15,6 +15,22 @@ function Pill({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
+// Tier quyết định trần độ phân giải (ONE → 2K ảnh/1080p video, TWO → 4K) nên phải đọc được
+// từ xa: xanh dương = tier 1, vàng = tier 2.
+const TIER_STYLE: Record<string, { label: string; cls: string }> = {
+  PAYGATE_TIER_ONE: { label: "Tier 1", cls: "bg-blue-500/15 text-blue-300 ring-blue-500/30" },
+  PAYGATE_TIER_TWO: { label: "Tier 2", cls: "bg-amber-500/15 text-amber-300 ring-amber-500/30" },
+};
+
+function tierPill(tier: string) {
+  return (
+    TIER_STYLE[tier] ?? {
+      label: tier.replace("PAYGATE_TIER_", "Tier "),
+      cls: "bg-neutral-800 text-neutral-300 ring-neutral-700",
+    }
+  );
+}
+
 export default function StatusPills() {
   const [health, setHealth] = useState<Health | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
@@ -75,8 +91,11 @@ export default function StatusPills() {
         </span>
       )}
       {tier && (
-        <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-300" title="Paygate tier (từ Flow credits)">
-          {tier.replace("PAYGATE_TIER_", "Tier ")}
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${tierPill(tier).cls}`}
+          title={`Paygate tier (từ Flow credits): ${tier}`}
+        >
+          {tierPill(tier).label}
         </span>
       )}
       {credits != null && (
