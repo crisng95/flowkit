@@ -21,5 +21,51 @@
       "urlFilter": "aisandbox-pa.googleapis.com",
       "resourceTypes": ["xmlhttprequest"]
     }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "Referer",
+          "operation": "set",
+          "value": "https://www.flowmusic.app/"
+        },
+        {
+          "header": "Origin",
+          "operation": "set",
+          "value": "https://www.flowmusic.app"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "www.flowmusic.app",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "Referer",
+          "operation": "set",
+          "value": "https://www.flowmusic.app/"
+        },
+        {
+          "header": "Origin",
+          "operation": "set",
+          "value": "https://www.flowmusic.app"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "sb.flowmusic.app",
+      "resourceTypes": ["xmlhttprequest"]
+    }
   }
 ]

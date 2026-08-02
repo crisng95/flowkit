@@ -1,0 +1,274 @@
+"""Music Client — communicates with Google Flow Music (flowmusic.app) via the same Chrome
+extension WebSocket bridge used for Flow video.
+
+Kiến trúc khác hẳn Flow video (xem agent/config.py cho chi tiết): không có REST tạo nhạc
+với tham số cấu trúc — server chạy 1 AI agent, client chỉ gửi tin nhắn chat tự nhiên vào
+`/__api/conversation`, agent phía Google tự gọi tool (`audio__create_song`, ...) và trả kết
+quả qua SSE. Extension lo phần submit + đọc SSE tới khi xong rồi trả về 1 lần (khớp mô hình
+request/response hiện có — xem `handleMusicStreamRequest` trong extension/background.js).
+"""
+import asyncio
+import json
+import logging
+import time
+import uuid
+from typing import Optional
+
+from agent.config import (
+    FLOWMUSIC_WEB_API, MUSIC_ENDPOINTS,
+    MUSIC_GENERATION_TIMEOUT, MUSIC_STATUS_POLL_INTERVAL, MUSIC_STATUS_POLL_TIMEOUT,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class MusicClient:
+    """Sends commands to the Chrome extension (Flow Music side) via the shared WebSocket."""
+
+    def __init__(self):
+        self._extension_ws = None
+        self._pending: dict[str, asyncio.Future] = {}
+        self._music_key: Optional[str] = None
+        self._identity: Optional[dict] = None
+        # Serialize tạo nhạc (submit+SSE) qua extension — 1 tab trình duyệt dùng chung, tránh
+        # 2 lượt chat chồng lên nhau làm rối job_id/SSE. Đọc trạng thái (poll/list) không cần.
+        self._lock = asyncio.Lock()
+
+    def set_extension(self, ws):
+        self._extension_ws = ws
+
+    def clear_extension(self):
+        self._extension_ws = None
+        pending_copy = list(self._pending.items())
+        for _, future in pending_copy:
+            if not future.done():
+                future.set_exception(ConnectionError("Extension disconnected"))
+        self._pending.clear()
+
+    @property
+    def connected(self) -> bool:
+        return self._extension_ws is not None
+
+    @property
+    def identity(self) -> Optional[dict]:
+        return self._identity
+
+    async def handle_message(self, data: dict):
+        """Handle a message from the extension. Called for every WS frame — messages not
+        meant for the music client (ping/pong/token_captured của Flow video...) đều bị bỏ
+        qua lặng lẽ (không phải lỗi, đơn giản là "không phải phần của tôi")."""
+        if data.get("type") == "music_token_captured":
+            self._music_key = data.get("musicKey")
+            logger.info("Flow Music key captured from extension")
+            return
+
+        if data.get("type") == "music_identity":
+            ident = data.get("identity") or {}
+            if ident.get("email") or ident.get("sub"):
+                prev = (self._identity or {}).get("email")
+                self._identity = ident
+                if ident.get("email") != prev:
+                    logger.info("Tài khoản Flow Music: %s", ident.get("email") or ident.get("sub"))
+            return
+
+        req_id = data.get("id")
+        if req_id and req_id in self._pending:
+            if not self._pending[req_id].done():
+                self._pending[req_id].set_result(data)
+            return
+
+    async def _send(self, method: str, params: dict, timeout: float = 60,
+                     *, serialize: bool = False) -> dict:
+        if not self._extension_ws:
+            return {"error": "Extension not connected"}
+        if serialize:
+            async with self._lock:
+                return await self._send_raw(method, params, timeout)
+        return await self._send_raw(method, params, timeout)
+
+    async def _send_raw(self, method: str, params: dict, timeout: float) -> dict:
+        if not self._extension_ws:
+            return {"error": "Extension not connected"}
+
+        req_id = str(uuid.uuid4())
+        future = asyncio.get_running_loop().create_future()
+        self._pending[req_id] = future
+
+        try:
+            await self._extension_ws.send(json.dumps({
+                "id": req_id, "method": method, "params": params,
+            }))
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            return {"error": f"Timeout ({timeout}s) waiting for {method}"}
+        except Exception as e:
+            return {"error": str(e)}
+        finally:
+            self._pending.pop(req_id, None)
+
+    def _url(self, endpoint_key: str, **kwargs) -> str:
+        return f"{FLOWMUSIC_WEB_API}{MUSIC_ENDPOINTS[endpoint_key].format(**kwargs)}"
+
+    async def _api(self, method: str, endpoint_key: str, *, path_kwargs: dict = None,
+                    query: dict = None, body: dict = None, timeout: float = 30) -> dict:
+        url = self._url(endpoint_key, **(path_kwargs or {}))
+        if query:
+            from urllib.parse import urlencode
+            url = f"{url}?{urlencode(query)}"
+        return await self._send("music_api_request", {
+            "url": url, "method": method, "body": body,
+        }, timeout=timeout, serialize=False)
+
+    # ─── High-level API ──────────────────────────────────────
+
+    async def send_message(self, content: str, conversation_id: str = None,
+                            client_context: dict = None,
+                            model_name: str = "producer:standard", mode: str = "standard",
+                            timeout: float = None) -> dict:
+        """Gửi 1 tin nhắn chat (tạo bài hát mới, hoặc tiếp tục 1 conversation có sẵn).
+
+        Trả về dict {job_id, conversation_id, parts, tool_returns, text, done, timed_out}
+        (hoặc {"error": ...}) — extension đã đọc hết SSE tới event "final" trước khi trả.
+        """
+        return await self._send("music_stream_request", {
+            "content": content,
+            "conversation_id": conversation_id,
+            "client_context": client_context or {},
+            "model_name": model_name,
+            "mode": mode,
+            "timeout_s": timeout or MUSIC_GENERATION_TIMEOUT,
+        }, timeout=(timeout or MUSIC_GENERATION_TIMEOUT) + 15, serialize=True)
+
+    async def get_song_status(self, operation_id: str) -> dict:
+        return await self._api("GET", "song_status", path_kwargs={"operation_id": operation_id})
+
+    async def get_clips(self, clip_ids: list[str]) -> dict:
+        """POST /__api/clips — trả {"clips": {clip_id: {...audio_url, wav_url, title, ...}}}."""
+        return await self._api("POST", "clips_batch", body={"clip_ids": clip_ids})
+
+    async def get_conversation(self, conversation_id: str) -> dict:
+        return await self._api("GET", "conversation_get", path_kwargs={"conversation_id": conversation_id})
+
+    async def list_conversations(self, limit: int = 30, offset: int = 0) -> dict:
+        return await self._api("GET", "conversations_list", query={"limit": limit, "offset": offset})
+
+    async def rename_conversation(self, conversation_id: str, title: str) -> dict:
+        return await self._api("PATCH", "conversation_rename",
+                                path_kwargs={"conversation_id": conversation_id}, body={"title": title})
+
+    async def get_credits(self) -> dict:
+        return await self._api("GET", "billing_credits", timeout=15)
+
+    async def _wait_clip_ready(self, clip_id: str, poll_timeout: float) -> dict:
+        """Poll /__api/clips tới khi audio đã render xong (duration.status == 'completed').
+
+        `/__api/audio-create-song-status/{operation_id}` — endpoint poll "chính thức" thấy
+        trong HAR — trả 401 Unauthorized qua relay dù cùng cơ chế Bearer+cookie như mọi
+        endpoint `/__api/*` khác đã xác nhận hoạt động (vd `/clips`, `/conversations`);
+        nguyên nhân chưa rõ (có thể route này cần thêm điều kiện phía server không thấy
+        trong header). Poll thẳng `/__api/clips` vừa né được lỗi đó, vừa đỡ phải gọi 2 API
+        (status rồi clips) — clip sẵn sàng là có ngay audio_url/wav_url/title/lyrics.
+        """
+        deadline = time.monotonic() + poll_timeout
+        last_clip: Optional[dict] = None
+        while time.monotonic() < deadline:
+            res = await self.get_clips([clip_id])
+            if not _is_error(res):
+                data = res.get("data", res)
+                clip = ((data or {}).get("clips") or {}).get(clip_id)
+                if clip:
+                    last_clip = clip
+                    if (clip.get("duration") or {}).get("status") == "completed" and clip.get("audio_url"):
+                        return clip
+            await asyncio.sleep(MUSIC_STATUS_POLL_INTERVAL)
+        return {"clip_id": clip_id, "error": f"Timeout polling clip ({poll_timeout}s)",
+                **({"partial": last_clip} if last_clip else {})}
+
+    async def create_song(self, prompt: str, conversation_id: str = None,
+                           timeout: float = None) -> dict:
+        """Tạo bài hát: gửi prompt → chờ SSE xong → poll `/__api/clips` từng clip tới khi có
+        audio_url.
+
+        Trả về: {conversation_id, job_id, text, songs: [{clip_id, operation_id, title,
+        audio_url, wav_url, image_url, duration_s, lyrics}], raw_tool_returns}.
+        Trả {"error": ...} nếu bất kỳ bước nào thất bại.
+        """
+        result = await self.send_message(prompt, conversation_id=conversation_id, timeout=timeout)
+        if _is_error(result):
+            return {"error": result.get("error", "send_message failed")}
+        payload = result.get("data", result)
+        if not isinstance(payload, dict):
+            return {"error": "Unexpected response shape from extension"}
+
+        tool_returns = [
+            p for p in payload.get("tool_returns", [])
+            if p.get("tool_name") == "audio__create_song"
+        ]
+        if not tool_returns:
+            return {
+                "error": "Agent không gọi audio__create_song trong lượt này "
+                         "(có thể prompt bị hiểu thành việc khác — xem 'text')",
+                "text": payload.get("text"),
+                "conversation_id": payload.get("conversation_id"),
+                "job_id": payload.get("job_id"),
+            }
+
+        # Mỗi tool-return có thể mang 1-2 clip (A/B test: clip_id + clip_id_b).
+        clip_ids: list[str] = []
+        for tr in tool_returns:
+            content = tr.get("content") or {}
+            if content.get("status") != "success":
+                continue
+            if content.get("clip_id"):
+                clip_ids.append(content["clip_id"])
+            if content.get("clip_id_b"):
+                clip_ids.append(content["clip_id_b"])
+
+        if not clip_ids:
+            return {
+                "error": "audio__create_song không trả clip_id hợp lệ",
+                "raw_tool_returns": tool_returns,
+                "conversation_id": payload.get("conversation_id"),
+            }
+
+        clips = await asyncio.gather(*[
+            self._wait_clip_ready(clip_id, MUSIC_STATUS_POLL_TIMEOUT) for clip_id in clip_ids
+        ])
+        songs = [
+            {
+                "clip_id": c.get("id"),
+                "operation_id": c.get("op_id"),
+                "title": c.get("title"),
+                "audio_url": c.get("audio_url"),
+                "wav_url": c.get("wav_url"),
+                "image_url": c.get("image_url"),
+                "duration_s": float(c["duration"]["value"]) if c.get("duration", {}).get("value") else None,
+                "lyrics": (c.get("lyrics") or {}).get("value", {}).get("text"),
+            }
+            for c in clips if c.get("audio_url")
+        ]
+        failed = [c for c in clips if not c.get("audio_url")]
+
+        return {
+            "conversation_id": payload.get("conversation_id"),
+            "job_id": payload.get("job_id"),
+            "text": payload.get("text"),
+            "songs": songs,
+            "failed": failed if failed else None,
+            "raw_tool_returns": tool_returns,
+        }
+
+
+def _is_error(result: dict) -> bool:
+    return bool(result.get("error")) or (isinstance(result.get("status"), int) and result["status"] >= 400)
+
+
+# Singleton
+_client: Optional[MusicClient] = None
+
+
+def get_music_client() -> MusicClient:
+    global _client
+    if _client is None:
+        _client = MusicClient()
+    return _client

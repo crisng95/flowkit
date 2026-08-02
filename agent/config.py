@@ -24,6 +24,36 @@ RECAPTCHA_SITE_KEY = os.environ.get("RECAPTCHA_SITE_KEY", "6LdsFiUsAAAAAIjVDZcuL
 # polling timeout for video/upscale status (used by flow_client)
 VIDEO_POLL_TIMEOUT = int(os.environ.get("VIDEO_POLL_TIMEOUT", "420"))
 
+# ─── Google Flow Music (flowmusic.app) ──────────────────────
+# Kiến trúc khác hẳn Flow video: không có REST tạo nhạc với tham số cấu trúc — server chạy
+# 1 AI agent, client chỉ gửi 1 tin nhắn chat tự nhiên vào /__api/conversation, agent tự gọi
+# tool audio__create_song/... rồi trả kết quả qua SSE (/__api/messages/{job_id}/stream).
+# Bearer là Supabase JWT (không phải ya29 của Google) — bắt qua webRequest trong extension,
+# không có reCAPTCHA nào chặn các endpoint đã khảo sát. audio_url/wav_url của clip là URL
+# tĩnh public (bucket producer-app-public), không hết hạn — khỏi cần refresh như Flow video.
+FLOWMUSIC_WEB_API = "https://www.flowmusic.app"
+FLOWMUSIC_SUPABASE_API = "https://sb.flowmusic.app"
+# Thời gian chờ tối đa 1 lượt tạo nhạc (submit + đọc hết SSE tới event "final"). Bài mẫu
+# khảo sát mất ~30-70s cho 1-2 bản nháp; để dư cho mạng chậm/nhiều bản.
+MUSIC_GENERATION_TIMEOUT = float(os.environ.get("MUSIC_GENERATION_TIMEOUT", "180"))
+# Poll trạng thái operation qua /__api/audio-create-song-status/{operation_id} (dự phòng khi
+# SSE không kịp trả clip_id trong lúc còn generate — theo estimated_time thường ~35s).
+MUSIC_STATUS_POLL_INTERVAL = float(os.environ.get("MUSIC_STATUS_POLL_INTERVAL", "3"))
+MUSIC_STATUS_POLL_TIMEOUT = float(os.environ.get("MUSIC_STATUS_POLL_TIMEOUT", "120"))
+
+MUSIC_ENDPOINTS = {
+    "conversation_send": "/__api/conversation",              # POST — gửi tin nhắn chat
+    "conversations_list": "/__api/conversations",             # GET  — danh sách conversation
+    "conversation_get": "/__api/conversations/{conversation_id}",   # GET
+    "conversation_rename": "/__api/conversations/{conversation_id}",  # PATCH {"title"}
+    "message_stream": "/__api/messages/{job_id}/stream",      # GET (SSE) ?last_id=0
+    "song_status": "/__api/audio-create-song-status/{operation_id}",  # GET — poll
+    "clips_batch": "/__api/clips",                            # POST {"clip_ids": [...]}
+    "billing_credits": "/__api/billing/credits",               # GET
+    "billing_subscription": "/__api/billing/subscription",     # GET
+    "projects_list": "/__api/projects",                        # GET
+}
+
 # ─── OmniVoice TTS (hosted on Google Colab) ─────────────────
 # Base URL của server OmniVoice trên Colab (ngrok/localtunnel). URL này đổi mỗi
 # phiên Colab → có thể đặt qua env hoặc runtime (PUT /api/tts/config).

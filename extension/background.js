@@ -15,6 +15,14 @@ let identity = null;   // { email, name, picture, sub } — Google account signe
 let callbackSecret = null;  // Auth secret for HTTP callback, received from server on WS connect
 let state = 'off'; // off | idle | running
 let manualDisconnect = false;
+
+// ─── Flow Music (flowmusic.app) state ───────────────────────
+// Kiến trúc auth khác hẳn Flow video: bearer là JWT của Supabase (không phải ya29 của
+// Google), route qua chính www.flowmusic.app/__api/* (Next.js API, session cookie +
+// Authorization kèm thêm) — không có reCAPTCHA nào chặn các API đã khảo sát.
+let musicKey = null;        // Supabase JWT access_token bắt được qua webRequest
+let musicKeyCapturedAt = null;
+let musicIdentity = null;   // { email, name, picture, sub } decode thẳng từ payload JWT
 let metrics = {
   tokenCapturedAt: null,
   requestCount: 0,   // captcha-consuming requests only (gen image/video/upscale)
@@ -73,14 +81,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await fetchIdentity();
   }
   if (alarm.name === 'identity-refresh') await fetchIdentity();
+  if (alarm.name === 'music-token-refresh') await ensureFlowMusicTab();
 });
 
 async function init() {
-  const data = await chrome.storage.local.get(['flowKey', 'metrics', 'callbackSecret', 'identity']);
+  const data = await chrome.storage.local.get([
+    'flowKey', 'metrics', 'callbackSecret', 'identity',
+    'musicKey', 'musicKeyCapturedAt', 'musicIdentity',
+  ]);
   if (data.flowKey) flowKey = data.flowKey;
   if (data.identity) identity = data.identity;
   if (data.metrics) Object.assign(metrics, data.metrics);
   if (data.callbackSecret) callbackSecret = data.callbackSecret;
+  if (data.musicKey) musicKey = data.musicKey;
+  if (data.musicKeyCapturedAt) musicKeyCapturedAt = data.musicKeyCapturedAt;
+  if (data.musicIdentity) musicIdentity = data.musicIdentity;
   connectToAgent();
   chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 });
 }
@@ -120,6 +135,70 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   { urls: ['https://aisandbox-pa.googleapis.com/*', 'https://labs.google/*'] },
   ['requestHeaders', 'extraHeaders'],
 );
+
+// Flow Music: bearer là Supabase JWT (tiền tố "eyJ", không phải "ya29." của Google) —
+// gửi kèm cả trên các call same-origin tới www.flowmusic.app lẫn tới sb.flowmusic.app.
+chrome.webRequest.onBeforeSendHeaders.addListener(
+  (details) => {
+    if (!details?.requestHeaders?.length) return;
+    const authHeader = details.requestHeaders.find(
+      (h) => h.name?.toLowerCase() === 'authorization',
+    );
+    const value = authHeader?.value || '';
+    if (!value.startsWith('Bearer eyJ')) return;
+
+    const token = value.replace(/^Bearer\s+/i, '').trim();
+    if (!token || token === musicKey) {
+      if (token) musicKeyCapturedAt = Date.now();
+      return;
+    }
+
+    musicKey = token;
+    musicKeyCapturedAt = Date.now();
+    chrome.storage.local.set({ musicKey, musicKeyCapturedAt });
+    console.log('[FlowAgent] Flow Music bearer token captured');
+
+    const payload = _decodeJwtPayload(token);
+    if (payload?.email || payload?.sub) {
+      musicIdentity = {
+        email: payload.email ? String(payload.email).trim().toLowerCase() : null,
+        name: payload.user_metadata?.full_name || payload.user_metadata?.name || null,
+        picture: payload.user_metadata?.picture || payload.user_metadata?.avatar_url || null,
+        sub: payload.sub || null,
+      };
+      chrome.storage.local.set({ musicIdentity });
+    }
+
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'music_token_captured', musicKey }));
+      if (musicIdentity) ws.send(JSON.stringify({ type: 'music_identity', identity: musicIdentity }));
+    }
+  },
+  { urls: ['https://www.flowmusic.app/*', 'https://sb.flowmusic.app/*'] },
+  ['requestHeaders', 'extraHeaders'],
+);
+
+/** Decode a JWT payload without verifying signature — chỉ để đọc email/sub cho hiển thị,
+ *  không dùng cho mục đích xác thực (server tự verify khi request thật). */
+function _decodeJwtPayload(token) {
+  try {
+    const part = token.split('.')[1];
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(b64).split('').map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+async function ensureFlowMusicTab() {
+  const tabs = await chrome.tabs.query({ url: ['https://www.flowmusic.app/*'] });
+  if (tabs.length) return tabs[0];
+  console.log('[FlowAgent] No Flow Music tab found — opening one in background');
+  return await chrome.tabs.create({ url: 'https://www.flowmusic.app/', active: false });
+}
 
 let _openingFlowTab = false;
 
@@ -293,6 +372,9 @@ function connectToAgent() {
     // Lưới an toàn cho việc đổi tài khoản: bình thường token đổi là bắt được ngay, nhưng nếu
     // người dùng đổi account ở tab khác mà chưa gọi API nào thì 2 phút sau vẫn nhận ra.
     chrome.alarms.create('identity-refresh', { periodInMinutes: 2 });
+    // Flow Music: JWT Supabase cũng sống ~60 phút — giữ 1 tab mở để trang tự refresh token
+    // (webRequest bắt lại passively), không cần tự dựng lại refresh_token flow.
+    chrome.alarms.create('music-token-refresh', { periodInMinutes: 45 });
 
     // Send current state + resend token if we have one
     ws.send(JSON.stringify({
@@ -307,6 +389,12 @@ function connectToAgent() {
     if (flowKey) {
       ws.send(JSON.stringify({ type: 'token_captured', flowKey }));
     }
+    if (musicKey) {
+      ws.send(JSON.stringify({ type: 'music_token_captured', musicKey }));
+    }
+    if (musicIdentity) {
+      ws.send(JSON.stringify({ type: 'music_identity', identity: musicIdentity }));
+    }
   };
 
   ws.onmessage = async ({ data }) => {
@@ -317,6 +405,10 @@ function connectToAgent() {
         await handleApiRequest(msg);
       } else if (msg.method === 'trpc_request') {
         await handleTrpcRequest(msg);
+      } else if (msg.method === 'music_api_request') {
+        await handleMusicApiRequest(msg);
+      } else if (msg.method === 'music_stream_request') {
+        await handleMusicStreamRequest(msg);
       } else if (msg.method === 'solve_captcha') {
         await handleSolveCaptcha(msg);
       } else if (msg.method === 'get_status') {
@@ -623,6 +715,179 @@ async function handleTrpcRequest(msg) {
   }
 }
 
+// ─── Flow Music: API relay + chat/SSE streaming ─────────────
+// Khác Flow video: không có reCAPTCHA trên các endpoint đã khảo sát, auth chỉ cần
+// Authorization Bearer (Supabase JWT, bắt qua webRequest ở trên) + cookie session (Chrome
+// tự đính kèm nhờ credentials:'include' + host permission, không cần tự dựng cookie).
+
+const MUSIC_WEB_ORIGIN = 'https://www.flowmusic.app';
+
+async function handleMusicApiRequest(msg) {
+  const { id, params } = msg;
+  const { url, method = 'GET', headers = {}, body } = params || {};
+
+  if (!url || !(url.startsWith('https://www.flowmusic.app/') || url.startsWith('https://sb.flowmusic.app/'))) {
+    sendToAgent({ id, error: 'INVALID_MUSIC_URL' });
+    return;
+  }
+  if (!musicKey) {
+    sendToAgent({ id, status: 503, error: 'NO_MUSIC_KEY' });
+    return;
+  }
+
+  const fetchHeaders = { 'content-type': 'application/json', ...headers, authorization: `Bearer ${musicKey}` };
+
+  try {
+    const resp = await fetch(url, {
+      method,
+      headers: fetchHeaders,
+      credentials: 'include',
+      body: (method === 'GET' || method === 'HEAD' || body === undefined) ? undefined : JSON.stringify(body),
+    });
+    const text = await resp.text();
+    let data;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    sendToAgent({ id, status: resp.status, data });
+  } catch (e) {
+    sendToAgent({ id, status: 500, error: e.message || 'MUSIC_API_REQUEST_FAILED' });
+  }
+}
+
+/** Gửi 1 tin nhắn vào conversation (mới hoặc có sẵn), rồi đọc trọn vẹn SSE phản hồi tới khi
+ *  agent phía Google xong lượt (event "final"), gộp lại thành 1 kết quả trả về 1 lần — khớp
+ *  với mô hình request/response sẵn có (agent Python chờ 1 future), không cần thêm cơ chế
+ *  push tăng dần qua WS cho ca dùng hiện tại (tạo nhạc, ~30-70s/lượt). */
+async function handleMusicStreamRequest(msg) {
+  const { id, params } = msg;
+  const {
+    content, conversation_id = null,
+    client_context = {}, model_name = 'producer:standard', mode = 'standard',
+    timeout_s = 180,
+  } = params || {};
+
+  if (!content) {
+    sendToAgent({ id, error: 'MISSING_CONTENT' });
+    return;
+  }
+  if (!musicKey) {
+    sendToAgent({ id, status: 503, error: 'NO_MUSIC_KEY' });
+    return;
+  }
+
+  const fetchHeaders = { 'content-type': 'application/json', authorization: `Bearer ${musicKey}` };
+
+  try {
+    const postBody = {
+      conversation_id: conversation_id || null,
+      parts: [{ content, part_kind: 'user-prompt' }],
+      client_context: {
+        current_song_id: null, song_queue: [], selected_model: null,
+        lyrics_id_map: {}, ghostwriter_version: 'standard',
+        ...client_context,
+      },
+      model_name,
+      mode,
+    };
+
+    const submitResp = await fetch(`${MUSIC_WEB_ORIGIN}/__api/conversation`, {
+      method: 'POST',
+      headers: fetchHeaders,
+      credentials: 'include',
+      body: JSON.stringify(postBody),
+    });
+    const submitText = await submitResp.text();
+    let submitData;
+    try { submitData = submitText ? JSON.parse(submitText) : null; } catch { submitData = submitText; }
+
+    if (!submitResp.ok || !submitData?.job_id) {
+      sendToAgent({ id, status: submitResp.status || 502, error: 'MUSIC_SUBMIT_FAILED', data: submitData });
+      return;
+    }
+
+    const jobId = submitData.job_id;
+    const result = await _consumeMusicStream(jobId, fetchHeaders, timeout_s);
+    sendToAgent({ id, status: 200, data: { job_id: jobId, ...result } });
+  } catch (e) {
+    sendToAgent({ id, status: 500, error: e.message || 'MUSIC_STREAM_FAILED' });
+  }
+}
+
+/** Đọc SSE của /__api/messages/{jobId}/stream tới khi kết nối đóng (server tự đóng ngay
+ *  sau event "final") hoặc hết timeout. Dùng resp.text() (đợi trọn response) thay vì
+ *  ReadableStream.getReader() thủ công — đơn giản hơn, tránh incompat khi đọc stream trong
+ *  service worker của extension. */
+async function _consumeMusicStream(jobId, fetchHeaders, timeoutS) {
+  const url = `${MUSIC_WEB_ORIGIN}/__api/messages/${jobId}/stream?last_id=0`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutS * 1000);
+  let text = '';
+  let timedOut = false;
+  try {
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: { ...fetchHeaders, accept: 'text/event-stream' },
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`MUSIC_STREAM_HTTP_${resp.status}`);
+    text = await resp.text();
+  } catch (e) {
+    if (controller.signal.aborted) timedOut = true;
+    else throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // Chuẩn hoá CRLF→LF trước khi tách frame theo dòng trống — server có thể dùng "\r\n\r\n".
+  const frames = text.replace(/\r\n/g, '\n').split('\n\n');
+  let conversationId = null;
+  const partsByIndex = new Map(); // index -> part mới nhất (ưu tiên bản "final")
+  let finished = false;
+
+  for (const frame of frames) {
+    const parsed = _parseSseFrame(frame);
+    if (!parsed) continue; // dòng comment/ping thuần (": ping ...") hoặc frame rỗng
+
+    if (parsed.event === 'conversation_id') {
+      try { conversationId = JSON.parse(parsed.data)?.id || conversationId; } catch { /* ignore */ }
+    } else if (parsed.event === 'part') {
+      try {
+        const evt = JSON.parse(parsed.data);
+        if (evt && typeof evt.index === 'number') partsByIndex.set(evt.index, evt.part);
+      } catch { /* ignore */ }
+    } else if (parsed.event === 'final') {
+      finished = true;
+    }
+    // "begin"/"complete"/"suggestion" — bỏ qua, đủ dữ liệu từ "part" + "final"
+  }
+
+  const parts = [...partsByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+  const toolReturns = parts.filter((p) => p.part_kind === 'tool-return');
+  const texts = parts.filter((p) => p.part_kind === 'text').map((p) => p.content);
+
+  return {
+    conversation_id: conversationId,
+    parts,
+    tool_returns: toolReturns,
+    text: texts.join('\n\n'),
+    done: finished,
+    timed_out: timedOut && !finished,
+  };
+}
+
+function _parseSseFrame(frame) {
+  const lines = frame.split('\n');
+  let event = null;
+  const dataLines = [];
+  for (const line of lines) {
+    if (!line || line.startsWith(':')) continue; // comment/ping
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  }
+  if (!event && !dataLines.length) return null;
+  return { event: event || 'message', data: dataLines.join('\n') };
+}
+
 async function handleApiRequest(msg) {
   const { id, params } = msg;
   const { url, method, headers, body, captchaAction } = params;
@@ -765,6 +1030,9 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
       manualDisconnect,
       account: identity?.email || identity?.sub || null,
       tokenAge: metrics.tokenCapturedAt ? Date.now() - metrics.tokenCapturedAt : null,
+      musicKeyPresent: !!musicKey,
+      musicAccount: musicIdentity?.email || musicIdentity?.sub || null,
+      musicTokenAge: musicKeyCapturedAt ? Date.now() - musicKeyCapturedAt : null,
       metrics: {
         requestCount: metrics.requestCount,
         successCount: metrics.successCount,

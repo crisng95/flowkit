@@ -18,7 +18,9 @@ from agent.api.flow import router as flow_router
 from agent.api.tts import router as tts_router
 from agent.api.ai_agent import router as agent_router
 from agent.api.studio import router as studio_router
+from agent.api.music import router as music_router
 from agent.services.flow_client import get_flow_client
+from agent.services.music_client import get_music_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -29,9 +31,16 @@ _CALLBACK_SECRET = _secrets.token_urlsafe(32)
 # ─── WebSocket Server for Extension ─────────────────────────
 
 async def ws_handler(websocket):
-    """Handle a Chrome extension WebSocket connection."""
+    """Handle a Chrome extension WebSocket connection.
+
+    Một extension, một WS, hai "client" logic dùng chung kênh: Flow video (flow_client) và
+    Flow Music (music_client) — mỗi message được đưa cho cả hai, bên nào không liên quan
+    (id không khớp pending, type không phải của mình) thì tự bỏ qua lặng lẽ.
+    """
     client = get_flow_client()
+    music_client = get_music_client()
     client.set_extension(websocket)
+    music_client.set_extension(websocket)
     logger.info("Extension connected from %s", websocket.remote_address)
 
     # Send callback secret so extension can authenticate HTTP callbacks
@@ -42,6 +51,7 @@ async def ws_handler(websocket):
             try:
                 data = json.loads(raw)
                 await client.handle_message(data)
+                await music_client.handle_message(data)
             except json.JSONDecodeError:
                 logger.warning("Invalid JSON from extension")
             except Exception as e:
@@ -50,6 +60,7 @@ async def ws_handler(websocket):
         pass
     finally:
         client.clear_extension()
+        music_client.clear_extension()
         logger.info("Extension disconnected")
 
 
@@ -103,6 +114,7 @@ app.include_router(flow_router, prefix="/api")
 app.include_router(tts_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
 app.include_router(studio_router, prefix="/api")
+app.include_router(music_router, prefix="/api")
 
 
 @app.post("/api/ext/callback")
@@ -113,25 +125,24 @@ async def ext_callback(request: Request):
     Extension POSTs {id, status, data, error} here instead of sending via WS.
     """
     data = await request.json()
-    client = get_flow_client()
     req_id = data.get("id")
-    logger.info("ext/callback: id=%s pending=%d match=%s",
-                str(req_id)[:8] if req_id else "none",
-                len(client._pending),
-                "yes" if req_id and req_id in client._pending else "no")
-    if req_id and req_id in client._pending:
-        future = client._pending[req_id]
-        try:
-            future.set_result(data)
-        except asyncio.InvalidStateError:
-            pass
-        return {"ok": True}
+    for client in (get_flow_client(), get_music_client()):
+        if req_id and req_id in client._pending:
+            future = client._pending[req_id]
+            try:
+                future.set_result(data)
+            except asyncio.InvalidStateError:
+                pass
+            return {"ok": True}
+    logger.info("ext/callback: id=%s — no matching pending request in flow/music client",
+                str(req_id)[:8] if req_id else "none")
     return {"ok": False, "reason": "no matching pending request"}
 
 
 @app.get("/health")
 async def health():
     client = get_flow_client()
+    music_client = get_music_client()
     return {
         "status": "ok",
         "version": "0.2.0",
@@ -140,6 +151,8 @@ async def health():
         # Tài khoản Google đang đăng nhập Flow trong Chrome (extension báo lên) — mọi project
         # và media đều thuộc về nó. null = chưa xác định được.
         "account": (client.identity or {}).get("email"),
+        # Flow Music (flowmusic.app) — tài khoản riêng, có thể khác account Flow video.
+        "music_account": (music_client.identity or {}).get("email"),
     }
 
 

@@ -11,24 +11,30 @@ video từ một ý tưởng: Kịch bản → Nhân vật/Bối cảnh → Stor
   (`agent/studio.db`), cache media ở `./media/`, render cuối ở `./studio_media/`.
 
 Extension Chrome lo phần lấy bearer token của Google Flow, giải reCAPTCHA và gọi thẳng
-`aisandbox-pa.googleapis.com`. Agent Python chỉ là cầu nối WebSocket mỏng.
+`aisandbox-pa.googleapis.com`. Agent Python chỉ là cầu nối WebSocket mỏng. Cùng extension
+đó còn proxy luôn **Google Flow Music** (`flowmusic.app`) — sinh nhạc AI, xem
+[Endpoint Flow Music](#endpoint-flow-music-apimusic) bên dưới.
 
 ## Thành phần
 
-- **`extension/`** — Extension Chrome MV3. Bắt bearer token, nói chuyện với Google Flow,
-  kết nối agent qua WebSocket (`ws://127.0.0.1:9222`), trả kết quả qua HTTP callback
-  (`POST /api/ext/callback`).
+- **`extension/`** — Extension Chrome MV3. Bắt bearer token (Flow video: `ya29` của
+  Google; Flow Music: JWT của Supabase), giải reCAPTCHA cho Flow video, nói chuyện với
+  Google Flow + Flow Music, kết nối agent qua WebSocket (`ws://127.0.0.1:9222`), trả kết
+  quả qua HTTP callback (`POST /api/ext/callback`).
 - **`agent/`** — Server FastAPI + WebSocket.
-  - `main.py` — entry app, WebSocket cho extension, `/health`, `/api/ext/callback`, mount
-    SPA + thư mục media tĩnh.
-  - `api/flow.py` — toàn bộ endpoint `/api/flow/*` (relay tới Flow).
+  - `main.py` — entry app, WebSocket cho extension (dispatch tới cả `flow_client` lẫn
+    `music_client` trên cùng 1 kết nối), `/health`, `/api/ext/callback`, mount SPA + thư
+    mục media tĩnh.
+  - `api/flow.py` — toàn bộ endpoint `/api/flow/*` (relay tới Flow video).
+  - `api/music.py` — toàn bộ endpoint `/api/music/*` (relay tới Flow Music).
   - `api/tts.py` — `/api/tts/*`, proxy tới server OmniVoice chạy trên Google Colab.
   - `api/ai_agent.py` — `/api/agent/*`, chạy các coding-agent CLI headless.
   - `api/studio.py` — `/api/studio/*`, toàn bộ orchestration của Flow Studio.
   - `studio/` — lớp nghiệp vụ của Studio: `db.py` (SQLite + migration), `brain.py` (prompt
     cho AI), `assembler.py` (ghép video bằng ffmpeg), `davinci_xml.py` (xuất timeline
     Resolve), `vntext.py` (chuẩn hoá tiếng Việt trước TTS), `media_store.py`, `graph.py`.
-  - `services/flow_client.py` — relay request sang extension và chờ phản hồi.
+  - `services/flow_client.py` — relay request sang extension cho Flow video, chờ phản hồi.
+  - `services/music_client.py` — relay request sang extension cho Flow Music, chờ phản hồi.
   - `services/headers.py` — header request ngẫu nhiên hoá.
   - `config.py`, `models.json` — danh sách endpoint + key model.
 - **`webapp/`** — SPA React + Vite + Tailwind (giao diện Flow Studio).
@@ -66,6 +72,7 @@ extension đã nạp. Mọi việc sinh media đều phải đi qua extension đ
 | Cần cho | Yêu cầu |
 |---------|---------|
 | Sinh ảnh/video Flow | Extension Chrome đã kết nối + đăng nhập Google Flow |
+| Sinh nhạc Flow Music | Extension Chrome đã kết nối + đăng nhập [flowmusic.app](https://www.flowmusic.app) (có thể khác account Flow video) |
 | Ghép & xuất video | `ffmpeg` + `ffprobe` trong PATH |
 | Lồng tiếng (TTS) | Đặt URL server OmniVoice (xem mục TTS) |
 | AI agent | `claude` và/hoặc `agy` đã đăng nhập sẵn trên máy chạy server |
@@ -154,6 +161,38 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | GET  | `/projects` | Liệt kê project Flow từ xa |
 
 `media_id` luôn ở dạng UUID (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), không bao giờ `CAMS…`.
+
+## Endpoint Flow Music (`/api/music/*`)
+
+Proxy tới [Google Flow Music](https://www.flowmusic.app) — dùng **chung 1 extension**
+với Flow video (cùng WS, cùng tab trình duyệt), nhưng kiến trúc backend khác hẳn: không
+có API tạo nhạc với tham số cấu trúc. Server chạy một AI agent — client chỉ gửi 1 tin
+nhắn chat tự nhiên, agent tự gọi tool (`audio__create_song`, ...) và trả kết quả qua SSE.
+Extension lo phần submit + đọc hết SSE rồi trả về 1 lần.
+
+| Method | Path | Mục đích |
+|--------|------|----------|
+| GET   | `/status` | Trạng thái kết nối + tài khoản Flow Music đang đăng nhập |
+| GET   | `/credits` | Credit/token còn lại |
+| POST  | `/create-song` | Tạo bài hát từ mô tả tự nhiên → chờ tới khi có `audio_url` |
+| POST  | `/send-message` | Gửi tin nhắn chat bậc thấp (tiếp tục 1 conversation — vd yêu cầu tạo music video) |
+| GET   | `/song-status/{operation_id}` | Poll trạng thái 1 lượt tạo nhạc |
+| POST  | `/clips` | Lấy chi tiết clip (`audio_url`/`wav_url`/`title`/`lyrics`) theo `clip_ids` |
+| GET   | `/conversations` | Liệt kê conversation (mỗi bài hát nằm trong 1 conversation) |
+| GET   | `/conversations/{id}` | Nội dung đầy đủ 1 conversation (toàn bộ message/tool-call) |
+| PATCH | `/conversations/{id}` | Đổi tên conversation |
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/music/create-song \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Instrumental lofi chillhop, 72 BPM, warm boom-bap drums, mellow Rhodes chords, rainy evening in Hanoi, no vocals, smooth loopable intro and outro"}'
+```
+
+`audio_url`/`wav_url` trả về là URL **tĩnh, không hết hạn** (bucket public
+`storage.googleapis.com/producer-app-public`) — khác Flow video, không cần refresh URL.
+Bearer là Supabase JWT bắt qua `webRequest` khi có 1 tab `flowmusic.app` đang mở (tự mở
+tab ẩn nếu chưa có, tự làm mới ~45 phút/lần) — không có reCAPTCHA nào chặn các endpoint
+đã khảo sát.
 
 ## Endpoint TTS (`/api/tts/*`)
 
