@@ -213,29 +213,43 @@ class MusicClient:
                 "job_id": payload.get("job_id"),
             }
 
-        # Mỗi tool-return có thể mang 1-2 clip (A/B test: clip_id + clip_id_b).
-        clip_ids: list[str] = []
+        # Mỗi tool-return có thể mang 1-2 clip (A/B test: clip_id + clip_id_b). Nhớ luôn
+        # operation_id đi kèm mỗi clip_id — dùng để đối chiếu ngược lại bên dưới, đảm bảo
+        # clip lấy về đúng là clip vừa tạo ở lượt NÀY, không phải bài nào khác lỡ trùng
+        # thời điểm poll.
+        clip_to_operation: dict[str, str] = {}
         for tr in tool_returns:
             content = tr.get("content") or {}
             if content.get("status") != "success":
                 continue
-            if content.get("clip_id"):
-                clip_ids.append(content["clip_id"])
-            if content.get("clip_id_b"):
-                clip_ids.append(content["clip_id_b"])
+            if content.get("clip_id") and content.get("operation_id"):
+                clip_to_operation[content["clip_id"]] = content["operation_id"]
+            if content.get("clip_id_b") and content.get("operation_id_b"):
+                clip_to_operation[content["clip_id_b"]] = content["operation_id_b"]
 
-        if not clip_ids:
+        if not clip_to_operation:
             return {
                 "error": "audio__create_song không trả clip_id hợp lệ",
                 "raw_tool_returns": tool_returns,
                 "conversation_id": payload.get("conversation_id"),
             }
 
-        clips = await asyncio.gather(*[
-            self._wait_clip_ready(clip_id, MUSIC_STATUS_POLL_TIMEOUT) for clip_id in clip_ids
+        polled = await asyncio.gather(*[
+            self._wait_clip_ready(clip_id, MUSIC_STATUS_POLL_TIMEOUT) for clip_id in clip_to_operation
         ])
-        songs = [
-            {
+
+        songs, failed = [], []
+        for clip_id, c in zip(clip_to_operation, polled):
+            if not c.get("audio_url"):
+                failed.append(c)
+                continue
+            # /__api/clips trả về theo key = clip_id đã hỏi, nhưng vẫn đối chiếu lại id +
+            # operation_id bên trong response khớp với clip vừa tạo ở tool-return — phòng
+            # trường hợp server trả nhầm/đổi shape mà không báo lỗi rõ ràng.
+            if c.get("id") != clip_id or c.get("op_id") != clip_to_operation[clip_id]:
+                failed.append({**c, "error": "clip/operation id không khớp — bỏ qua để an toàn"})
+                continue
+            songs.append({
                 "clip_id": c.get("id"),
                 "operation_id": c.get("op_id"),
                 "title": c.get("title"),
@@ -244,10 +258,7 @@ class MusicClient:
                 "image_url": c.get("image_url"),
                 "duration_s": float(c["duration"]["value"]) if c.get("duration", {}).get("value") else None,
                 "lyrics": (c.get("lyrics") or {}).get("value", {}).get("text"),
-            }
-            for c in clips if c.get("audio_url")
-        ]
-        failed = [c for c in clips if not c.get("audio_url")]
+            })
 
         return {
             "conversation_id": payload.get("conversation_id"),
