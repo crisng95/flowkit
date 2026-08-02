@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type Health } from "../api/client";
+import { api } from "../api/client";
+import { useFlowAccount } from "../lib/account";
 
 function Pill({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -30,29 +31,27 @@ function tierPill(tier: string) {
 }
 
 export default function StatusPills() {
-  const [health, setHealth] = useState<Health | null>(null);
+  // Dự án và media gắn chặt với tài khoản Flow đang đăng nhập trong Chrome, nên phải luôn
+  // nhìn thấy mình đang là ai — đăng nhập nhầm account là thấy thiếu dự án / gen hỏng.
+  // /health do AccountProvider poll (nó cũng cần để bắt việc đổi account) — dùng chung để
+  // khỏi có hai vòng poll cùng một endpoint.
+  const { health, account, switches } = useFlowAccount();
   const [credits, setCredits] = useState<number | null>(null);
   const [tier, setTier] = useState<string | null>(null);
+  const connected = !!health?.extension_connected;
 
   useEffect(() => {
+    if (!connected) return;
     let alive = true;
     const tick = async () => {
       try {
-        const h = await api.health();
-        if (alive) setHealth(h);
-        if (h.extension_connected) {
-          try {
-            const c = await api.credits();
-            if (alive) {
-              setCredits(c.credits ?? null);
-              setTier(c.userPaygateTier ?? null);
-            }
-          } catch {
-            /* ignore */
-          }
+        const c = await api.credits();
+        if (alive) {
+          setCredits(c.credits ?? null);
+          setTier(c.userPaygateTier ?? null);
         }
       } catch {
-        if (alive) setHealth(null);
+        /* ignore */
       }
     };
     tick();
@@ -61,11 +60,8 @@ export default function StatusPills() {
       alive = false;
       clearInterval(t);
     };
-  }, []);
-
-  // Dự án và media gắn chặt với tài khoản Flow đang đăng nhập trong Chrome, nên phải luôn
-  // nhìn thấy mình đang là ai — đăng nhập nhầm account là thấy thiếu dự án / gen hỏng.
-  const account = health?.account ?? null;
+    // `switches`: đổi tài khoản → credit/tier của người khác, phải đọc lại ngay.
+  }, [connected, switches]);
 
   return (
     <div className="flex items-center gap-2">

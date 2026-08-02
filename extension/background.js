@@ -72,6 +72,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await captureTokenFromFlowTab();
     await fetchIdentity();
   }
+  if (alarm.name === 'identity-refresh') await fetchIdentity();
 });
 
 async function init() {
@@ -98,6 +99,11 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     const token = value.replace(/^Bearer\s+/i, '').trim();
     if (!token) return;
 
+    // Token ĐỔI = phiên mới: hết hạn tự gia hạn, hoặc người dùng vừa đổi tài khoản Google.
+    // Trường hợp sau phải bắt ngay, nếu không agent còn tưởng là account cũ tới tận lần
+    // alarm sau và sẽ cho thao tác lên nhầm tài khoản.
+    const tokenChanged = token !== flowKey;
+
     // Always update — even if same token string, refresh the timestamp
     flowKey = token;
     metrics.tokenCapturedAt = Date.now();
@@ -108,9 +114,8 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'token_captured', flowKey }));
     }
-    // Listener này chạy rất dày → chỉ dò tài khoản khi CHƯA biết (lần đầu / vừa đăng nhập
-    // lại). Đổi account giữa chừng do alarm 45 phút và get_identity bắt.
-    if (!identity) fetchIdentity();
+    // Listener này chạy rất dày → chỉ dò lại khi CHƯA biết tài khoản, hoặc khi token vừa đổi.
+    if (!identity || tokenChanged) fetchIdentity();
   },
   { urls: ['https://aisandbox-pa.googleapis.com/*', 'https://labs.google/*'] },
   ['requestHeaders', 'extraHeaders'],
@@ -285,6 +290,9 @@ function connectToAgent() {
 
     // Token refresh alarm — 45 min gives buffer before ~60 min expiry
     chrome.alarms.create('token-refresh', { periodInMinutes: 45 });
+    // Lưới an toàn cho việc đổi tài khoản: bình thường token đổi là bắt được ngay, nhưng nếu
+    // người dùng đổi account ở tab khác mà chưa gọi API nào thì 2 phút sau vẫn nhận ra.
+    chrome.alarms.create('identity-refresh', { periodInMinutes: 2 });
 
     // Send current state + resend token if we have one
     ws.send(JSON.stringify({
@@ -340,6 +348,7 @@ function connectToAgent() {
   ws.onclose = () => {
     setState('off');
     chrome.alarms.clear('token-refresh');
+    chrome.alarms.clear('identity-refresh');
     if (!manualDisconnect) scheduleReconnect();
   };
 

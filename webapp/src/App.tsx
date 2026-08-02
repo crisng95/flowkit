@@ -1,13 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type Project } from "./api/client";
 import StatusPills from "./components/StatusPills";
 import ProjectGrid from "./components/ProjectGrid";
 import ProjectWorkspace from "./components/ProjectWorkspace";
 import SettingsDrawer from "./components/settings/SettingsDrawer";
+import { useFlowAccount } from "./lib/account";
 
 export default function App() {
   const [open, setOpen] = useState<Project | null>(null);
   const [settings, setSettings] = useState(false);
+  const { account, switches } = useFlowAccount();
+  const [switchedTo, setSwitchedTo] = useState<string | null>(null);
+
+  // Đổi tài khoản Flow trong Chrome → dự án đang mở có thể không còn thuộc về mình nữa (mọi
+  // thao tác sẽ trả 403). Đóng nó lại, quay về danh sách, và ép ProjectGrid mount lại
+  // (key={switches}) để danh sách tải theo tài khoản mới.
+  useEffect(() => {
+    if (!switches) return;
+    setOpen(null);
+    setSettings(false);
+    setSwitchedTo(account?.email ?? account?.id ?? "tài khoản khác");
+    const t = setTimeout(() => setSwitchedTo(null), 8000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [switches]);
 
   return (
     <div className="flex h-full flex-col">
@@ -34,11 +50,26 @@ export default function App() {
         </div>
       </header>
 
+      {switchedTo && (
+        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-sm text-amber-200">
+          <span>
+            Chrome đã chuyển sang tài khoản <b>{switchedTo}</b> — đang hiển thị dự án của tài
+            khoản này.
+          </span>
+          <button
+            onClick={() => setSwitchedTo(null)}
+            className="ml-auto rounded px-2 py-0.5 text-xs text-amber-300/80 hover:bg-amber-500/20"
+          >
+            Đóng
+          </button>
+        </div>
+      )}
+
       <main className={`flex-1 ${open ? "overflow-hidden" : "overflow-auto"}`}>
         {open ? (
           <ProjectWorkspace project={open} onBack={() => setOpen(null)} />
         ) : (
-          <ProjectGrid onOpen={setOpen} />
+          <ProjectGrid key={switches} onOpen={setOpen} />
         )}
       </main>
 
