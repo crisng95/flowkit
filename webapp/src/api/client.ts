@@ -56,6 +56,29 @@ export interface Candidate {
   web: string;
 }
 
+// ─── Flow Music (flowmusic.app) ──────────────────────────────
+export interface MusicSong {
+  clip_id: string;
+  operation_id?: string | null;
+  title: string | null;
+  audio_url: string;
+  wav_url?: string | null;
+  image_url?: string | null;
+  duration_s: number | null;
+  lyrics?: string | null;
+}
+
+export interface MusicConversation {
+  id: string;
+  created_at: string;
+  title: string;
+  last_message_at: string;
+}
+
+export type GenerateBgmResult =
+  | (Project & { generated: MusicSong; conversation_id: string | null })
+  | { pending_selection: true; conversation_id: string | null; songs: MusicSong[] };
+
 export interface MediaVersion {
   id: string;
   slot: string; // image | video
@@ -162,6 +185,20 @@ export const api = {
     req<Project>(`/projects/${id}/bgm/copy`, {
       method: "POST",
       body: JSON.stringify({ source, volume }),
+    }),
+  // Sinh nhạc nền bằng Flow Music. Ra đúng 1 bản → server tự set làm bgm luôn (trả Project
+  // đầy đủ + `generated`); ra 2 bản (A/B) → server KHÔNG tự chọn, trả `pending_selection`
+  // kèm cả 2 để nghe thử rồi gọi `selectBgm` với bản đã ưng.
+  generateBgm: (id: string, prompt: string, conversationId?: string | null, volume?: number) =>
+    req<GenerateBgmResult>(`/projects/${id}/bgm/generate`, {
+      method: "POST",
+      body: JSON.stringify({ prompt, conversation_id: conversationId ?? null, volume }),
+    }),
+  // Áp 1 bài đã biết audio_url (1 trong 2 bản A/B, hoặc bài cũ trong "Bài đã tạo") làm bgm.
+  selectBgm: (id: string, audioUrl: string, volume?: number) =>
+    req<Project>(`/projects/${id}/bgm/select`, {
+      method: "POST",
+      body: JSON.stringify({ audio_url: audioUrl, volume }),
     }),
   // Every image in the project's Flow project (for the Node Editor "Nguồn ảnh" picker).
   projectImages: (id: string) => req<{ media: FlowMedia[] }>(`/projects/${id}/images`),
@@ -677,3 +714,66 @@ export function base64ToAudioUrl(b64: string, mime = "audio/wav"): string {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
+
+// ─── Flow Music (flowmusic.app) — /api/music/* ──────────────
+async function musicReq<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api/music${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return res.json() as Promise<T>;
+}
+
+function _clipToSong(c: any): MusicSong {
+  return {
+    clip_id: c.id,
+    operation_id: c.op_id,
+    title: c.title,
+    audio_url: c.audio_url,
+    wav_url: c.wav_url,
+    image_url: c.image_url,
+    duration_s: c.duration?.value ? parseFloat(c.duration.value) : null,
+    lyrics: c.lyrics?.value?.text,
+  };
+}
+
+export const musicApi = {
+  status: () =>
+    musicReq<{ connected: boolean; music_key_present: boolean; account: any }>("/status"),
+  conversations: (limit = 30, offset = 0) =>
+    musicReq<MusicConversation[]>(`/conversations?limit=${limit}&offset=${offset}`),
+  deleteConversation: (conversationId: string) =>
+    musicReq<{ ok: boolean }>(`/conversations/${conversationId}`, { method: "DELETE" }),
+  /** Bài hát (tool-return audio__create_song) bên trong 1 conversation cũ, kèm audio_url —
+   *  cần 2 lượt gọi: đọc conversation lấy clip_id, rồi /clips lấy chi tiết. */
+  conversationSongs: async (conversationId: string): Promise<MusicSong[]> => {
+    const convo = await musicReq<any>(`/conversations/${conversationId}`);
+    const clipIds: string[] = [];
+    for (const m of convo.messages || []) {
+      for (const part of m.parts || []) {
+        if (part.part_kind === "tool-return" && part.tool_name === "audio__create_song") {
+          const c = part.content || {};
+          if (c.status === "success") {
+            if (c.clip_id) clipIds.push(c.clip_id);
+            if (c.clip_id_b) clipIds.push(c.clip_id_b);
+          }
+        }
+      }
+    }
+    if (!clipIds.length) return [];
+    const res = await musicReq<{ clips: Record<string, any> }>("/clips", {
+      method: "POST",
+      body: JSON.stringify({ clip_ids: clipIds }),
+    });
+    return clipIds.map((id) => res.clips?.[id]).filter(Boolean).map(_clipToSong);
+  },
+};

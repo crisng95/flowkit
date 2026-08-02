@@ -141,3 +141,18 @@ async def rename_conversation(conversation_id: str, body: RenameConversationRequ
     result = await client.rename_conversation(conversation_id, body.title)
     _raise_if_error(result)
     return {"ok": True}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, delete_clips: bool = False,
+                               delete_spaces: bool = False, delete_music_videos: bool = False):
+    """Xoá 1 conversation (và bài hát trong đó) khỏi tài khoản Flow Music. Mặc định chỉ xoá
+    bản ghi conversation — bật `delete_clips`/`delete_music_videos` nếu muốn xoá luôn media
+    liên quan (ý nghĩa chính xác của các cờ này chưa được Flow Music tài liệu hoá, suy ra từ
+    tên field — cẩn thận khi bật)."""
+    client = _require_connected()
+    result = await client.delete_conversation(
+        conversation_id, delete_clips=delete_clips, delete_spaces=delete_spaces,
+        delete_music_videos=delete_music_videos)
+    _raise_if_error(result)
+    return {"ok": True}

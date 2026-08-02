@@ -11,6 +11,7 @@ import {
   type SettingsPreset,
   type Voice,
 } from "../../api/client";
+import MusicManager from "../music/MusicManager";
 
 // Per-project settings: prompt header/footer (always prepended/appended to every
 // image & video prompt), culture hint, style, and the image model.
@@ -45,6 +46,7 @@ export default function ProjectSettings({
       choices: { value: string; label: string }[] } | null>(null);
   const [upscaleRes, setUpscaleRes] = useState<string>(project.upscale_res ?? "");
   const [seed, setSeed] = useState<number>(project.seed ?? 0);
+  const [showMusicManager, setShowMusicManager] = useState(false);
   const [bgmPath, setBgmPath] = useState(project.bgm_path ?? null);
   const [bgmVol, setBgmVol] = useState(project.bgm_volume ?? 0.18);
   const [bgmDuck, setBgmDuck] = useState<boolean>(project.bgm_duck == null ? true : !!project.bgm_duck);
@@ -584,17 +586,29 @@ export default function ProjectSettings({
             {bgmName ? (
               <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
                 <span className="truncate text-neutral-200">🎵 {bgmName}</span>
-                <button onClick={removeBgm} disabled={busy}
-                  className="ml-2 shrink-0 text-rose-400 hover:text-rose-300 disabled:opacity-40">
-                  Gỡ
-                </button>
+                <div className="ml-2 flex shrink-0 gap-3">
+                  <button onClick={() => setShowMusicManager(true)} disabled={busy}
+                    className="text-indigo-400 hover:text-indigo-300 disabled:opacity-40">
+                    Đổi bài
+                  </button>
+                  <button onClick={removeBgm} disabled={busy}
+                    className="text-rose-400 hover:text-rose-300 disabled:opacity-40">
+                    Gỡ
+                  </button>
+                </div>
               </div>
             ) : (
-              <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-neutral-700 px-3 py-3 text-sm text-neutral-400 hover:border-indigo-500 hover:text-neutral-200">
-                {busy ? "Đang tải…" : "＋ Chọn file nhạc (mp3, wav, m4a…)"}
-                <input type="file" accept="audio/*" className="hidden"
-                  onChange={(e) => onPickBgm(e.target.files?.[0])} />
-              </label>
+              <div className="flex gap-2">
+                <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-dashed border-neutral-700 px-3 py-3 text-sm text-neutral-400 hover:border-indigo-500 hover:text-neutral-200">
+                  {busy ? "Đang tải…" : "＋ Chọn file nhạc"}
+                  <input type="file" accept="audio/*" className="hidden"
+                    onChange={(e) => onPickBgm(e.target.files?.[0])} />
+                </label>
+                <button type="button" onClick={() => setShowMusicManager(true)} disabled={busy}
+                  className="flex-1 rounded-lg border border-dashed border-neutral-700 px-3 py-3 text-sm text-neutral-400 hover:border-indigo-500 hover:text-neutral-200 disabled:opacity-40">
+                  🎧 Sinh bằng Flow Music
+                </button>
+              </div>
             )}
             <div className="mt-2 flex items-center gap-3">
               <span className="text-xs text-neutral-500">Âm lượng nhạc</span>
@@ -677,6 +691,19 @@ export default function ProjectSettings({
           </button>
         </div>
       </div>
+
+      {showMusicManager && (
+        <MusicManager
+          project={project}
+          volume={bgmVol}
+          onApplied={(updated) => {
+            setBgmPath(updated.bgm_path ?? null);
+            if (updated.bgm_volume != null) setBgmVol(updated.bgm_volume);
+            onSaved(updated);
+          }}
+          onClose={() => setShowMusicManager(false)}
+        />
+      )}
     </div>
   );
 }

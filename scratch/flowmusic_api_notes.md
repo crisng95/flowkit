@@ -278,6 +278,13 @@ log message của một **agent framework kiểu PydanticAI** (`part_kind`:
   có tab riêng cho EventStream — trong Network, click vào request đó rồi xem tab
   "EventStream"/"Messages"), copy vài dòng event đầu + dòng cuối cùng lúc job hoàn tất.
 
+### `DELETE https://www.flowmusic.app/__api/conversations/{id}` — xoá conversation
+- Body: `{"delete_clips": false, "delete_spaces": false, "delete_music_videos": false}`
+  (3 cờ đều `false` trong ví dụ user gửi — chưa rõ ý nghĩa chính xác khi `true`, có thể
+  điều khiển xoá cascade luôn clip/space/music-video liên quan hay chỉ xoá bản ghi
+  conversation. Mặc định `false` hết là an toàn — chỉ xoá conversation).
+- Response: `null`.
+
 ### `PATCH https://www.flowmusic.app/__api/conversations/{id}` — đổi tên conversation
 - Body: `{"title": "tên mới"}`
 - Response: `null` (204-kiểu, không trả gì).

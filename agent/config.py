@@ -46,6 +46,7 @@ MUSIC_ENDPOINTS = {
     "conversations_list": "/__api/conversations",             # GET  — danh sách conversation
     "conversation_get": "/__api/conversations/{conversation_id}",   # GET
     "conversation_rename": "/__api/conversations/{conversation_id}",  # PATCH {"title"}
+    "conversation_delete": "/__api/conversations/{conversation_id}",  # DELETE
     "message_stream": "/__api/messages/{job_id}/stream",      # GET (SSE) ?last_id=0
     "song_status": "/__api/audio-create-song-status/{operation_id}",  # GET — poll
     "clips_batch": "/__api/clips",                            # POST {"clip_ids": [...]}

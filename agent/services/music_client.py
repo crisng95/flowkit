@@ -156,6 +156,16 @@ class MusicClient:
         return await self._api("PATCH", "conversation_rename",
                                 path_kwargs={"conversation_id": conversation_id}, body={"title": title})
 
+    async def delete_conversation(self, conversation_id: str, *, delete_clips: bool = False,
+                                   delete_spaces: bool = False,
+                                   delete_music_videos: bool = False) -> dict:
+        return await self._api("DELETE", "conversation_delete",
+                                path_kwargs={"conversation_id": conversation_id}, body={
+                                    "delete_clips": delete_clips,
+                                    "delete_spaces": delete_spaces,
+                                    "delete_music_videos": delete_music_videos,
+                                })
+
     async def get_credits(self) -> dict:
         return await self._api("GET", "billing_credits", timeout=15)
 
