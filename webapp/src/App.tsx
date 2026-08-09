@@ -34,28 +34,20 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
+        {/* Nút home DUY NHẤT. Trước có cả logo chữ "Flow Studio" lẫn nút ← ngay cạnh, hai
+            thứ cùng một việc; giờ chỉ còn ô ▶ (rê chuột thấy nó về danh sách dự án). */}
         <button
           onClick={() => setOpen(null)}
-          title={open ? "Về danh sách dự án" : undefined}
-          className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight"
+          title={open ? "Về danh sách dự án" : "Flow Studio"}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm text-white"
         >
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm text-white">
-            ▶
-          </span>
-          Flow Studio
+          ▶
         </button>
 
         {/* Danh tính dự án nằm ở thanh TRÊN CÙNG — workspace bên dưới nhờ vậy bỏ hẳn được
             header riêng của nó (và nút ⚙: Thiết lập đã là một tab). */}
         {open && (
           <>
-            <button
-              onClick={() => setOpen(null)}
-              title="Về danh sách dự án"
-              className="shrink-0 rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-            >
-              ←
-            </button>
             <div className="h-6 w-px shrink-0 bg-neutral-800" />
             <div className="min-w-0 flex-1">
               <ProjectIdentity project={open} />
