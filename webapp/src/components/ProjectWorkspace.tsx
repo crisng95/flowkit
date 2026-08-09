@@ -8,11 +8,12 @@ import AssembleTab from "./assemble/AssembleTab";
 import MusicTab from "./music/MusicTab";
 import AllImages from "./AllImages";
 import NodeEditor, { type EditorTarget } from "./nodeeditor/NodeEditor";
-import ProjectSettings from "./settings/ProjectSettings";
+import SettingsTab from "./settings/SettingsTab";
 import { JobsProvider } from "../jobs/JobsContext";
 import JobProgress from "./common/JobProgress";
 
-const TABS = ["Script", "Assets", "Storyboard", "Shots", "Nhạc", "Assemble", "Ảnh"] as const;
+const TABS = ["Script", "Assets", "Storyboard", "Shots", "Nhạc", "Assemble", "Ảnh",
+  "Thiết lập"] as const;
 type Tab = (typeof TABS)[number];
 
 // Biểu tượng cho chế độ thu gọn (chỉ còn dải icon) — số thứ tự một mình quá khó đoán.
@@ -24,6 +25,7 @@ const TAB_ICON: Record<Tab, string> = {
   Nhạc: "🎵",
   Assemble: "🎞",
   Ảnh: "🗂",
+  "Thiết lập": "⚙",
 };
 
 const RAIL_KEY = "fk.sidebar.collapsed";
@@ -60,11 +62,9 @@ export default function ProjectWorkspace({
     setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab)));
   }, [tab]);
   const [project, setProject] = useState(initial);
-  const [style, setStyle] = useState(initial.style);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [reload, setReload] = useState(0);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   // Sidebar thu gọn thành dải icon — nhớ lựa chọn qua các phiên làm việc.
   const [railed, setRailed] = useState(() => localStorage.getItem(RAIL_KEY) === "1");
   useEffect(() => {
@@ -85,16 +85,6 @@ export default function ProjectWorkspace({
   }, [initial.id, reload, editor]);
 
   const openEditor = (t: EditorTarget) => setEditor(t);
-
-  const saveStyle = async () => {
-    if (style !== project.style) {
-      try {
-        await api.updateProject(project.id, { style });
-      } catch {
-        /* ignore */
-      }
-    }
-  };
 
   // Plain function (not a component) so the child element keeps its identity across
   // renders — only its visibility toggles. Unvisited tabs aren't rendered yet.
@@ -138,23 +128,19 @@ export default function ProjectWorkspace({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden text-xs text-neutral-500 lg:inline">Style</span>
-          <input
-            value={style}
-            onChange={(e) => setStyle(e.target.value)}
-            onBlur={saveStyle}
-            placeholder="Style"
-            className="w-32 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 lg:w-44"
-          />
-          <button
-            onClick={() => setSettingsOpen(true)}
-            title="Cấu hình dự án (prompt header/footer, culture, model)"
-            className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
-          >
-            ⚙
-          </button>
-        </div>
+        {/* Ô Style từng nằm ở đây đã dời vào Thiết lập → Phong cách: hai ô cùng sửa một
+            giá trị thì chỉ tổ lệch nhau, vì tab Thiết lập giữ state riêng khi đã mở. */}
+        <button
+          onClick={() => setTab("Thiết lập")}
+          title="Thiết lập dự án & ứng dụng"
+          className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm ${
+            tab === "Thiết lập"
+              ? "border-indigo-500 text-indigo-300"
+              : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+          }`}
+        >
+          ⚙
+        </button>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -219,6 +205,10 @@ export default function ProjectWorkspace({
           {pane("Nhạc", <MusicTab key={project.id} project={project} />)}
           {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
           {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
+          {pane(
+            "Thiết lập",
+            <SettingsTab key={project.id} project={project} onSaved={setProject} />
+          )}
         </div>
       </div>
 
@@ -230,17 +220,6 @@ export default function ProjectWorkspace({
           videoModel={project.video_model}
           onClose={() => setEditor(null)}
           onApplied={() => setReload((r) => r + 1)}
-        />
-      )}
-
-      {settingsOpen && (
-        <ProjectSettings
-          project={project}
-          onClose={() => setSettingsOpen(false)}
-          onSaved={(p) => {
-            setProject(p);
-            setStyle(p.style);
-          }}
         />
       )}
 

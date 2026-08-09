@@ -3,12 +3,10 @@ import { type Project } from "./api/client";
 import StatusPills from "./components/StatusPills";
 import ProjectGrid from "./components/ProjectGrid";
 import ProjectWorkspace from "./components/ProjectWorkspace";
-import SettingsDrawer from "./components/settings/SettingsDrawer";
 import { useFlowAccount } from "./lib/account";
 
 export default function App() {
   const [open, setOpen] = useState<Project | null>(null);
-  const [settings, setSettings] = useState(false);
   const { account, switches } = useFlowAccount();
   const [switchedTo, setSwitchedTo] = useState<string | null>(null);
 
@@ -18,7 +16,6 @@ export default function App() {
   useEffect(() => {
     if (!switches) return;
     setOpen(null);
-    setSettings(false);
     setSwitchedTo(account?.email ?? account?.id ?? "tài khoản khác");
     const t = setTimeout(() => setSwitchedTo(null), 8000);
     return () => clearTimeout(t);
@@ -38,16 +35,9 @@ export default function App() {
           Flow Studio
         </button>
 
-        <div className="flex items-center gap-3">
-          <StatusPills />
-          <button
-            onClick={() => setSettings(true)}
-            title="Settings"
-            className="grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-          >
-            ⚙
-          </button>
-        </div>
+        {/* Không còn nút ⚙ riêng ở đây: thiết lập cấp app đã gộp vào tab "Thiết lập" của
+            workspace (nhóm "Ứng dụng"), để chỉ có MỘT chỗ chỉnh cấu hình. */}
+        <StatusPills />
       </header>
 
       {switchedTo && (
@@ -72,8 +62,6 @@ export default function App() {
           <ProjectGrid key={switches} onOpen={setOpen} />
         )}
       </main>
-
-      {settings && <SettingsDrawer onClose={() => setSettings(false)} />}
     </div>
   );
 }
