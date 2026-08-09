@@ -1,0 +1,503 @@
+{
+  "prompt": {
+    "positive": "Create a professional 'Character Production Bible / Character Identity Fixed Reference Sheet' from the character description written immediately before this JSON. The character description is the ONLY editable character-specific input. Do not require an uploaded reference image. If an image reference is provided, use it as an additional visual identity source. If no image reference is provided, the character description is the sole source of character identity and must be used to establish the canonical appearance. The most important goal is INTERNAL CHARACTER CONSISTENCY. First establish one definitive canonical character identity, then derive every panel in this sheet from that same canonical identity. Do not independently redesign the character in different panels. When no reference image is available, use the character description to determine the character's age impression, cultural context when explicitly stated, facial appearance, hairstyle, body proportions, clothing, accessories and visual identity. Any physical characteristics not explicitly specified should be designed once in the canonical identity and then kept unchanged throughout the entire sheet. The character description must NOT be repeated or expanded into additional editable character-specific instructions inside this template. This JSON is a fixed production template.",
+
+    "generation_mode": {
+      "reference_image_available": "If an image reference is provided, use it as the primary visual identity source together with the character description.",
+      "reference_image_unavailable": "Generate the complete canonical character identity from the character description only.",
+      "critical_rule": "Never assume that a reference image exists when none is provided."
+    },
+
+    "canonical_identity_pipeline": [
+      "Parse the character description.",
+      "Establish one definitive facial identity.",
+      "Establish one definitive hairstyle and hair structure.",
+      "Establish one definitive body proportion and silhouette.",
+      "Establish the primary costume and its construction.",
+      "Establish the character's distinctive visual features.",
+      "Generate the Neutral Baseline as the canonical identity seed.",
+      "Derive all other facial angles from the same canonical identity.",
+      "Derive all expressions from the same neutral face.",
+      "Derive all body poses from the same body proportions.",
+      "Derive wardrobe details from the same primary costume.",
+      "Derive material samples only from materials actually present in the character.",
+      "Repeat the same identity in the final Consistency Anchor."
+    ],
+
+    "canonical_identity_rule": "The Neutral Baseline is not merely another panel. It is the canonical identity seed. Once the face, hairstyle, body proportions, primary costume and distinctive features are established, every other panel must be derived from that same identity. Do not return to the original text description and independently redesign the character for each section.",
+
+    "identity_lock": {
+      "canonical_identity_source": "The character description when no reference image is provided; otherwise the provided reference image combined with the character description.",
+      "primary_identity_seed": "05 — CƠ BẢN",
+      "secondary_identity_seed": "01 — NHẬN DẠNG CHÍNH + TỶ LỆ",
+      "final_consistency_source": "13 — ĐIỂM NHẤT QUÁN",
+      "rules": [
+        "All panels depict exactly one character.",
+        "Do not independently redesign the face for different panels.",
+        "Do not change facial proportions between views.",
+        "Do not change eye spacing, eye shape or eye color between views.",
+        "Do not change eyebrow structure between views.",
+        "Do not change nose structure between views.",
+        "Do not change lip structure between views.",
+        "Do not change jawline or chin structure between views.",
+        "Do not change hairstyle, hairline, parting, hair length, hair volume or hair direction between views.",
+        "Do not change body proportions between poses.",
+        "Do not change the primary costume unless explicitly specified by the character description.",
+        "Expressions may change facial muscle configuration but must not change the underlying facial anatomy.",
+        "Camera angle changes perspective, not character anatomy.",
+        "Side profile must be geometrically consistent with the front view.",
+        "Back view must preserve the same hairstyle and body proportions.",
+        "Every later panel must be derived from the canonical identity established in 05 — CƠ BẢN."
+      ]
+    },
+
+    "format": {
+      "aspect_ratio": "horizontal 16:10",
+      "background": "clean white or very light neutral gray",
+      "style": "professional film, VFX and animation character production bible",
+      "lighting": "soft, even, neutral studio lighting",
+      "camera": "clean reference photography / production reference camera",
+      "visual_priority": "character consistency first, layout accuracy second, decorative design last",
+      "depth_of_field": "deep and clear enough to preserve reference details",
+      "composition": "organized technical reference board with clearly separated panels"
+    },
+
+    "content_mapping_rules": [
+      "Every visual panel is a fixed collection of independent slots.",
+      "Every slot contains exactly ONE image and exactly ONE caption.",
+      "Every caption must describe the image immediately associated with that caption.",
+      "Never reuse a caption for a different image.",
+      "Never duplicate a slot unless explicitly requested.",
+      "Never create additional images merely to fill empty space.",
+      "Never create additional labels merely to make a section look fuller.",
+      "The number of visual samples must exactly match the number of defined slots.",
+      "Do not invent alternative interpretations of a slot.",
+      "Visual content and its label must have a strict one-to-one correspondence.",
+      "Do not place captions from one image under another image.",
+      "Keep each caption visually adjacent to its corresponding image.",
+      "Do not use decorative text that could be mistaken for a visual-reference caption."
+    ],
+
+    "sections": {
+
+      "01_main_identity_scale": {
+        "title": "01 — NHẬN DẠNG CHÍNH + TỶ LỆ",
+        "exact_count": 4,
+        "content": [
+          "Nhìn thẳng",
+          "Góc 3/4",
+          "Nhìn nghiêng",
+          "Phía sau"
+        ],
+        "rules": [
+          "Exactly four full-body character images.",
+          "Use the same neutral facial expression in all four views.",
+          "Use the same primary costume in all four views.",
+          "Use the same body proportions in all four views.",
+          "Use the same scale and approximately the same camera distance.",
+          "Show a subtle height ruler beside the character.",
+          "Each image has exactly one Vietnamese caption.",
+          "Do not add additional poses or expressions to this section."
+        ]
+      },
+
+      "02_expression_progression": {
+        "title": "02 — TIẾN TRÌNH BIỂU CẢM",
+        "grid": "4 columns × 2 rows",
+        "exact_count": 8,
+        "expressions": [
+          "Bình thường",
+          "Vui vẻ",
+          "Tò mò",
+          "Ngạc nhiên",
+          "Bối rối",
+          "Quyết tâm",
+          "Buồn",
+          "Cười lớn"
+        ],
+        "rules": [
+          "Exactly eight facial portraits.",
+          "Same character identity in every portrait.",
+          "Same hairstyle in every portrait.",
+          "Same camera framing and approximate head scale.",
+          "Only facial expression changes.",
+          "Do not alter facial anatomy to exaggerate expressions.",
+          "Exactly one caption under each image."
+        ]
+      },
+
+      "03_micro_expressions": {
+        "title": "03 — VI BIỂU CẢM",
+        "grid": "4 columns × 2 rows",
+        "exact_count": 8,
+        "expressions": [
+          "Cười nhẹ",
+          "Mắt căng thẳng",
+          "Mím môi",
+          "Sợ hãi nhẹ",
+          "Điều khiển hơi thở",
+          "Nhíu mày",
+          "Nghi ngờ",
+          "Cười tự hào"
+        ],
+        "rules": [
+          "Exactly eight close-up facial studies.",
+          "Each image must visibly demonstrate the expression described by its caption.",
+          "Each caption must correspond only to the image immediately above it.",
+          "Do not repeat any expression.",
+          "Do not alter the underlying face shape or identity.",
+          "Keep hairstyle and facial proportions consistent."
+        ]
+      },
+
+      "04_head_detail": {
+        "title": "04 — CHI TIẾT ĐẦU",
+        "exact_count": 6,
+        "views": [
+          "Chân dung 3/4",
+          "Chân dung nghiêng",
+          "Góc nhìn từ trên",
+          "Góc nhìn từ dưới",
+          "Góc nhìn anh hùng",
+          "Cận cảnh"
+        ],
+        "rules": [
+          "Exactly six head references.",
+          "One image per view.",
+          "One caption per image.",
+          "Do not duplicate any view.",
+          "All views must depict the same canonical face."
+        ]
+      },
+
+      "05_neutral_baseline": {
+        "title": "05 — CƠ BẢN",
+        "exact_count": 1,
+        "content": "One large canonical front-facing portrait with a neutral expression.",
+        "caption": "Chân dung cơ bản",
+        "rules": [
+          "This is the primary identity seed for the entire sheet.",
+          "Establish the definitive face, hairstyle, skin appearance and upper-body proportions here.",
+          "This character identity must be reused for every subsequent section.",
+          "Do not generate another independent version of the character later.",
+          "Do not duplicate this section."
+        ]
+      },
+
+      "06_posture_variations": {
+        "title": "06 — BIẾN THỂ TƯ THẾ",
+        "exact_count": 6,
+        "poses": [
+          "Thư giãn",
+          "Tự tin",
+          "Suy nghĩ",
+          "Đang đi",
+          "Khoanh tay",
+          "Tạo dáng hành động"
+        ],
+        "rules": [
+          "Exactly six full-body poses.",
+          "Use the same canonical character established in section 05.",
+          "Use the same primary costume unless multiple costumes are explicitly specified in the character description.",
+          "Do not change body proportions between poses.",
+          "Each pose must visibly correspond to its caption.",
+          "Do not invent additional poses."
+        ]
+      },
+
+      "07_closeup_portrait": {
+        "title": "07 — CHÂN DUNG CẬN CẢNH",
+        "exact_count": 1,
+        "content": "One highly detailed facial close-up based on the canonical identity.",
+        "caption": "Cận cảnh khuôn mặt",
+        "rules": [
+          "One image only.",
+          "Preserve the exact canonical facial identity.",
+          "Show natural skin texture and fine facial details.",
+          "Do not beautify or redesign the face."
+        ]
+      },
+
+      "08_wardrobe_details": {
+        "title": "08 — CHI TIẾT TRANG PHỤC",
+        "rules": [
+          "Do not automatically invent Casual, Professional, Winter, Formal or other alternative outfits.",
+          "If the character description specifies one primary costume, keep that costume fixed.",
+          "Every wardrobe detail must belong to the actual primary costume.",
+          "Do not introduce unrelated clothing items."
+        ],
+        "exact_count": 6,
+        "slots": [
+          {
+            "id": 1,
+            "label": "Trang phục chính",
+            "content": "Full-body reference of the canonical primary costume."
+          },
+          {
+            "id": 2,
+            "label": "Chi tiết thân áo",
+            "content": "Close-up of the main upper garment construction."
+          },
+          {
+            "id": 3,
+            "label": "Chi tiết cổ áo",
+            "content": "Close-up of the actual collar or neckline."
+          },
+          {
+            "id": 4,
+            "label": "Chi tiết họa tiết",
+            "content": "Close-up of the actual embroidery, print or distinctive pattern."
+          },
+          {
+            "id": 5,
+            "label": "Chi tiết tay áo",
+            "content": "Close-up of the actual sleeve construction and fabric."
+          },
+          {
+            "id": 6,
+            "label": "Chi tiết chất liệu",
+            "content": "Close-up showing the actual fabric or material of the primary costume."
+          }
+        ]
+      },
+
+      "09_hand_gestures": {
+        "title": "09 — CỬ CHỈ TAY",
+        "exact_count": 8,
+        "gestures": [
+          "Tay thư giãn",
+          "Chỉ tay",
+          "Cầm vật",
+          "Ngón cái lên",
+          "Tay mở",
+          "Cử chỉ suy nghĩ",
+          "Tay hành động",
+          "Cử chỉ giải thích"
+        ],
+        "rules": [
+          "Exactly eight hand references.",
+          "Each image must show exactly the gesture described by its caption.",
+          "Do not duplicate a gesture.",
+          "When an object is required by a gesture, use only an object already established by the character concept."
+        ]
+      },
+
+      "10_prop_sheet": {
+        "title": "10 — BẢNG ĐẠO CỤ",
+        "rules": [
+          "Only include recurring objects explicitly present in or logically required by the character description.",
+          "Do not invent unrelated props.",
+          "Show isolated clean product-style references.",
+          "Each object must have exactly one Vietnamese caption directly underneath.",
+          "If the character has no meaningful props, use only a small number of relevant existing accessories instead of inventing objects.",
+          "Do not fill empty space with random objects."
+        ]
+      },
+
+      "11_color_palette": {
+        "title": "11 — BẢNG MÀU",
+        "groups": [
+          {
+            "name": "Màu chính",
+            "count": 3
+          },
+          {
+            "name": "Màu phụ",
+            "count": 3
+          },
+          {
+            "name": "Màu điểm nhấn",
+            "count": 3
+          },
+          {
+            "name": "Màu chất liệu",
+            "count": 3
+          }
+        ],
+        "rules": [
+          "Use actual colors established by the canonical character design.",
+          "Sample colors from skin, hair, clothing, embroidery, accessories and other actual visual elements.",
+          "Every color swatch must correspond to a real visible element.",
+          "Do not introduce arbitrary colors simply to make the palette more diverse.",
+          "Keep the palette visually consistent with the canonical character."
+        ]
+      },
+
+      "12_material_breakdown": {
+        "title": "12 — PHÂN TÍCH CHẤT LIỆU",
+        "layout": "2 rows × 5 columns",
+        "exact_count": 10,
+        "slots": [
+          {
+            "id": 1,
+            "label": "Da mặt",
+            "content": "Macro close-up showing the actual facial skin texture of the canonical character."
+          },
+          {
+            "id": 2,
+            "label": "Tóc",
+            "content": "Macro close-up showing the actual hair strands, density and surface texture."
+          },
+          {
+            "id": 3,
+            "label": "Vải trang phục",
+            "content": "Macro close-up of the actual primary costume fabric."
+          },
+          {
+            "id": 4,
+            "label": "Họa tiết / thêu",
+            "content": "Macro close-up of the actual distinctive embroidery, print or decorative pattern."
+          },
+          {
+            "id": 5,
+            "label": "Đường may",
+            "content": "Macro close-up showing an actual seam, stitching or garment construction detail."
+          },
+          {
+            "id": 6,
+            "label": "Bề mặt vải",
+            "content": "Macro view showing the actual surface texture of the main costume material."
+          },
+          {
+            "id": 7,
+            "label": "Độ rũ vải",
+            "content": "Close-up demonstrating how the actual costume fabric folds and drapes."
+          },
+          {
+            "id": 8,
+            "label": "Độ bóng",
+            "content": "Close-up showing the actual light-reflection characteristics of the main costume material."
+          },
+          {
+            "id": 9,
+            "label": "Chi tiết phụ kiện",
+            "content": "Macro close-up of an actual accessory material if an accessory exists; otherwise use the most important existing costume detail."
+          },
+          {
+            "id": 10,
+            "label": "Đặc tính vật liệu",
+            "content": "A clean technical material-reference sample representing the primary costume material established in the canonical design."
+          }
+        ],
+        "strict_rules": [
+          "Exactly ten material samples. No more and no fewer.",
+          "Exactly one image per slot.",
+          "Exactly one caption per slot.",
+          "Never repeat the same material image under different labels.",
+          "Never repeat the same caption.",
+          "Never create a second 'Tóc' sample.",
+          "Never create a second 'Vải trang phục' sample.",
+          "Never invent a different material merely to create visual variety.",
+          "Never introduce denim, leather, wool, metal, plastic or other unrelated materials unless they actually exist in the canonical character design.",
+          "The image must visibly demonstrate the material property stated by its caption.",
+          "Do not place descriptive paragraphs underneath the material samples.",
+          "Captions must be short Vietnamese labels only.",
+          "All material samples must be derived from the canonical character design and primary costume already established elsewhere in the sheet."
+        ]
+      },
+
+      "13_consistency_anchor": {
+        "title": "13 — ĐIỂM NHẤT QUÁN",
+        "exact_count": 4,
+        "views": [
+          "Nhìn thẳng",
+          "Góc 3/4",
+          "Nhìn nghiêng",
+          "Phía sau"
+        ],
+        "rules": [
+          "Exactly four final consistency-reference images.",
+          "Use the same canonical character established in section 05.",
+          "Use the same primary costume.",
+          "Use neutral expression.",
+          "Show the same facial structure, hairstyle, body proportions and clothing construction.",
+          "These four images are the official identity anchor for future renders.",
+          "Add exactly one small Vietnamese note: 'Sử dụng làm tài liệu tham chiếu nhất quán chính'."
+        ]
+      }
+    },
+
+    "global_layout_rules": [
+      "Use exactly the section numbers 01 through 13.",
+      "Never duplicate a section number.",
+      "Never duplicate a section title.",
+      "Every section must appear only once.",
+      "Do not add extra sections.",
+      "Do not omit required sections.",
+      "Do not move labels away from their corresponding images.",
+      "Every image must have its caption immediately adjacent to it.",
+      "Do not place captions from one row under images belonging to another row.",
+      "Maintain clear visual separation between sections.",
+      "Use a clean professional grid.",
+      "Preserve enough whitespace around each panel for captions to remain readable.",
+      "Do not allow images to overlap.",
+      "Do not allow text to overlap character images.",
+      "Do not use decorative elements that interfere with the reference information."
+    ],
+
+    "text_rules": {
+      "language": "Vietnamese only",
+      "font": "clean modern sans-serif",
+      "size": "small to moderate but clearly legible",
+      "hierarchy": "section titles larger than captions; captions smaller than section titles",
+      "rule": "Text is secondary to the visual references.",
+      "caption_rule": "Every caption must describe exactly the visual directly associated with it.",
+      "no_extra_text": "Do not add explanatory paragraphs, fictional biographies, quotes, slogans or unrelated descriptions."
+    },
+
+    "character_identity_details": {
+      "mode": "description_first",
+      "instructions": "When no reference image is available, construct one coherent character identity from the character description. Do not leave unspecified facial characteristics randomly changing between panels. Establish those characteristics once in the canonical Neutral Baseline and preserve them everywhere else. When a reference image is available, use the image to refine and lock the visual identity. Do not redesign or beautify the character between panels.",
+      "features": {
+        "face_shape": "Establish once from the character description and preserve across all panels.",
+        "eyes": "Establish one consistent eye structure, size, spacing, color and gaze temperament.",
+        "eyebrows": "Establish one consistent eyebrow structure, thickness, curvature and color.",
+        "nose": "Establish one consistent nose structure, bridge, tip and side profile.",
+        "lips": "Establish one consistent lip structure, thickness, shape and natural color.",
+        "ears": "Establish one consistent ear structure.",
+        "skin": "Establish one consistent skin tone and natural texture.",
+        "hair": "Establish one consistent hairstyle, hairline, parting, volume, length and strand direction.",
+        "body": "Establish one consistent body proportion, height impression and silhouette.",
+        "wardrobe": "Establish one canonical primary costume from the character description.",
+        "distinctive_features": "Establish any distinctive visual features mentioned in the character description and preserve them throughout the entire sheet."
+      }
+    },
+
+    "material_consistency_rule": "The material breakdown must describe the materials established in the canonical character design and primary costume. Material samples must be visually consistent with the corresponding clothing, hair, skin and accessories already established in the sheet. Do not invent a different fabric, texture or material merely to create a visually interesting texture sample.",
+
+    "final_quality_control": [
+      "Before finalizing the sheet, verify that every section exists exactly once.",
+      "Verify that section numbers 01 through 13 are unique.",
+      "Verify that every defined slot contains exactly one image.",
+      "Verify that every image has exactly one corresponding caption.",
+      "Verify that no caption is duplicated.",
+      "Verify that no material sample is duplicated.",
+      "Verify that every caption matches the image immediately associated with it.",
+      "Verify that all expressions depict the same face.",
+      "Verify that all angles depict the same face and hairstyle.",
+      "Verify that all poses preserve the same body proportions.",
+      "Verify that all wardrobe details belong to the primary costume.",
+      "Verify that the material breakdown contains exactly ten unique slots.",
+      "Verify that no unrelated costume or prop has been invented.",
+      "Verify that the final consistency anchor matches the canonical identity.",
+      "If any conflict occurs, prioritize canonical character identity over visual variety."
+    ]
+  },
+
+  "negative": "different individuals, similar but different faces, identity drift, independent character redesign, random face generation per panel, face swap, facial proportion drift, face shape drift, eye spacing changes, eye size changes, eye shape changes, pupil changes, eyebrow shape changes, eyebrow thickness changes, nose bridge changes, nose tip changes, nostril changes, lip shape changes, lip thickness changes, jawline changes, chin changes, ear changes, hairstyle changes, hairline changes, hair parting changes, hair length changes, hair volume changes, hair direction changes, hair color changes, body proportion changes, body type changes, height changes, age changes, age drift, wardrobe changes, invented outfits, unrelated costumes, alternative costumes without instruction, inconsistent embroidery, inconsistent clothing pattern, inconsistent accessories, duplicated material samples, duplicated labels, repeated captions, repeated textures, caption-image mismatch, wrong caption, image-text mismatch, detached captions, duplicate section, duplicate section number, duplicate section title, missing section, extra section, extra images, missing images, extra labels, missing labels, random material textures, invented materials, unrelated materials, generic material samples, inconsistent material properties, invented props, unrelated props, random accessories, excessive beautification, plastic skin, airbrushed skin, excessive skin smoothing, baby-faced appearance, sexualization, exaggerated anatomy, exaggerated body proportions, magazine photoshoot, cinematic lighting, dramatic lighting, colored lighting, complex background, decorative clutter, chaotic layout, overlapping panels, overlapping text, unreadable text, illegible typography, English text, Chinese text, Japanese text, Korean text, garbled text, random text, watermark, logo, signature, extra fingers, missing fingers, fused fingers, malformed hands, deformed hands, bad anatomy, collapsed side profile, inconsistent perspective, warped clothing, body distortion, face distortion, style shift, inconsistent rendering style",
+
+  "facial_extraction_details": {
+    "instructions": "If an image reference is provided, extract the actual visual identity strictly from that image. If no image reference is provided, construct the visual identity from the character description. In both cases, establish the identity once and preserve it across the entire sheet. Do not redesign, beautify or randomly reinterpret the character between panels.",
+    "features": {
+      "face_shape": "Establish one canonical face shape and preserve it.",
+      "eyes": "Establish one canonical eye structure, spacing, size and color and preserve it.",
+      "eyebrows": "Establish one canonical eyebrow structure and preserve it.",
+      "nose": "Establish one canonical nose structure and preserve it in front and profile views.",
+      "lips": "Establish one canonical lip structure and preserve it.",
+      "skin": "Establish one canonical skin tone and natural texture and preserve it.",
+      "hair": "Establish one canonical hairstyle, hairline, parting, length and volume and preserve it.",
+      "body": "Establish one canonical body proportion and preserve it across all poses.",
+      "wardrobe": "Establish one canonical primary costume and preserve its construction, color, pattern and material."
+    }
+  }
+}
