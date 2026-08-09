@@ -404,14 +404,16 @@ export default function SettingsTab({
                   title="Prompt bao ngoài"
                   hint="Chèn vào mọi prompt ảnh/video. Dùng cho quy ước cố định của kênh (tỉ lệ, chất lượng, ngôn ngữ chữ…)."
                 >
+                  {/* Cao ~9 dòng và cho kéo dãn thêm (resize-y): header/footer thường là cả
+                      một đoạn quy ước dài, ô 4 dòng cũ phải cuộn mới đọc hết. */}
                   <Field label="Header — chèn vào ĐẦU">
                     <textarea value={s.prompt_header} onChange={(e) => set("prompt_header", e.target.value)}
-                      placeholder="vd: always output in Vietnamese" className={`${inp} h-20 resize-none`} />
+                      placeholder="vd: always output in Vietnamese" className={`${inp} h-48 resize-y`} />
                   </Field>
                   <Field label="Footer — chèn vào CUỐI">
                     <textarea value={s.prompt_footer} onChange={(e) => set("prompt_footer", e.target.value)}
                       placeholder="vd: super detailed, cinematic lighting, 8k, sharp focus"
-                      className={`${inp} h-20 resize-none`} />
+                      className={`${inp} h-48 resize-y`} />
                   </Field>
                 </Group>
 
