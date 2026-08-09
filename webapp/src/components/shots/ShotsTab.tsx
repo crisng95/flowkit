@@ -114,6 +114,21 @@ export default function ShotsTab({
     }
   };
 
+  // Kéo về clip của một lượt render đã submit nhưng hết giờ chờ (operation_json). Chỉ poll
+  // lại operation cũ nên không tốn thêm credit — dùng khi "Tạo video"/quick-gen báo Flow vẫn
+  // đang render.
+  const resumeVideo = async (shot: Shot) => {
+    mark(shot.id, true);
+    setErr(null);
+    try {
+      setShot(await shotsApi.resumeVideo(shot.id));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      mark(shot.id, false);
+    }
+  };
+
   // Render all shots (have image, no video) as a server-side background job (§9):
   // survives tab close, throttled + verified server-side, streams to the banner.
   const genAll = async () => {
@@ -217,16 +232,30 @@ export default function ShotsTab({
                         : undefined
                     }
                     actions={
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          genVideo(sh);
-                        }}
-                        title="Render video"
-                        className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
-                      >
-                        ⚡
-                      </button>
+                      <>
+                        {sh.operation_json && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              resumeVideo(sh);
+                            }}
+                            title="Lấy lại video đang render trên Flow (không tốn credit)"
+                            className="grid h-7 w-7 place-items-center rounded-md bg-amber-600/80 text-sm hover:bg-amber-500"
+                          >
+                            ⟳
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            genVideo(sh);
+                          }}
+                          title="Render video"
+                          className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
+                        >
+                          ⚡
+                        </button>
+                      </>
                     }
                   />
                   );

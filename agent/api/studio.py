@@ -3260,6 +3260,8 @@ async def _generate_shot_video(shot: dict) -> dict:
             "video_model": (OMNI_FLASH_MODELS.get(str(clip_max)) if engine == "omni"
                             else VIDEO_MODELS.get(tier, {}).get("frame_2_video", {})
                                              .get(project["aspect_ratio"])),
+            # Lượt treo (nếu có) đã bị thay bằng clip mới này → tắt nút "Lấy lại video".
+            "operation_json": None,
             "status": "done", "updated_at": db.now()})
         # Video vừa render chỉ là bản HD. Nếu dự án bật "tự upscale video", kéo bản
         # 1080p/4K ngay (best-effort — hỏng chỉ ghi log, video HD đã có). Chỉ áp dụng cho
@@ -3659,7 +3661,9 @@ async def apply_shot_media(sid: str, body: ApplyMediaRequest):
     col = "video" if body.ext == "mp4" else "image"
     await db.update("shot", sid, {
         f"{col}_media_id": body.media_id, f"{col}_primary_id": body.media_id,
-        f"{col}_path": web, "updated_at": db.now()})
+        f"{col}_path": web, "updated_at": db.now(),
+        # Gán video mới ⇒ lượt render treo (nếu có) không còn ý nghĩa.
+        **({"operation_json": None} if col == "video" else {})})
     await _record_media_history(project["id"], "shot", sid, col, body.media_id, body.media_id, web)
     # Đổi tên trên Flow giống auto-gen (s01_03_img / _vid) để dễ tìm khi tham chiếu.
     slot = "vid" if col == "video" else "img"

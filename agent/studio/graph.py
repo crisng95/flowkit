@@ -7,11 +7,12 @@ upstream nodes. The Output node applies the final media to the target shot/entit
 Self-contained (calls flow_client/media_store directly) to avoid importing the router.
 """
 import asyncio
+import json
 import logging
 import random
 import time as _t
 
-from agent.config import IMAGE_MODELS
+from agent.config import IMAGE_MODELS, VIDEO_POLL_TIMEOUT
 from agent.services.flow_client import get_flow_client
 from agent.studio import db, media_store, brain, assembler, imgproc
 
@@ -315,9 +316,13 @@ async def _run_local_node(t: str, data: dict, inp: dict, pid: str):
     raise GraphError(f"Loại node cục bộ không hỗ trợ: {t}")
 
 
-async def _vid_gen_retry(submit, scene_key, pid):
+async def _vid_gen_retry(submit, scene_key, pid, kind: str = "shot"):
     """Submit a video, poll, download — verify the clip exists and retry on failure.
-    Returns (media_id, web_path)."""
+    Returns (media_id, web_path).
+
+    Hết giờ chờ thì KHÔNG submit lại: Flow vẫn đang render bản đã tính tiền, gửi lại chỉ tốn
+    thêm credit cho bản thứ hai rồi bỏ rơi cả hai. Operation được ghi vào `shot.operation_json`
+    để nút 'Lấy lại video' kéo bản đang render về (giống đường _render_clip bên api/studio)."""
     client = get_flow_client()
     last = ""
     for attempt in range(_GRAPH_VID_RETRIES):
@@ -331,21 +336,49 @@ async def _vid_gen_retry(submit, scene_key, pid):
                 last = _block_reason(p) or "Flow không trả media"
             else:
                 url = await _poll_video(client, mid, scene_key)
-                if not url:
-                    last = "video chưa xong trong thời gian chờ"
-                else:
+                if url:
                     web = await media_store.save_from_url(mid, pid, "mp4", url)
                     if web:
                         return mid, web
-                    last = "tải video lỗi"
+                    # Clip đã xong trên Flow nhưng tải hỏng — vẫn là bản đã trả tiền, ghi lại
+                    # operation rồi dừng thay vì render thêm một bản nữa.
+                    await _remember_pending(kind, scene_key, p, mid)
+                    raise GraphError(
+                        "Video đã render xong trên Flow nhưng tải về lỗi — bấm 'Lấy lại video'.")
+                await _remember_pending(kind, scene_key, p, mid)
+                raise GraphError(
+                    f"Video vẫn đang render trên Flow (quá {VIDEO_POLL_TIMEOUT:.0f}s chờ). "
+                    f"KHÔNG tạo lại (tránh tốn credit lần nữa) — bấm 'Lấy lại video' để lấy "
+                    f"bản đang render về.")
         if attempt < _GRAPH_VID_RETRIES - 1:
             await asyncio.sleep(random.uniform(5, 10))
     raise GraphError(f"Tạo video thất bại sau {_GRAPH_VID_RETRIES} lần: {last}")
 
 
-async def _poll_video(client, media_id, scene_key, timeout=240, interval=8):
+async def _remember_pending(kind: str, shot_id: str, payload: dict, media_id: str) -> None:
+    """Ghi lượt render đang treo vào shot.operation_json — đúng shape mà
+    POST /shots/{id}/video/resume đọc, nên nút 'Lấy lại video' dùng được cho cả node editor."""
+    if kind != "shot":
+        return
+    wf = (payload.get("workflows") or [{}])[0]
+    try:
+        await db.update("shot", shot_id, {
+            "operation_json": json.dumps({
+                "media_id": media_id,
+                "workflow_id": wf.get("name"),
+                "primary_media_id": (wf.get("metadata") or {}).get("primaryMediaId"),
+                "submitted_at": db.now()}),
+            "updated_at": db.now()})
+    except Exception as ex:  # noqa: BLE001
+        logger.warning("không ghi được operation_json cho shot %s: %s", shot_id, ex)
+
+
+async def _poll_video(client, media_id, scene_key, timeout=None, interval=8):
+    """Chờ tới khi Flow trả fifeUrl. Mặc định VIDEO_POLL_TIMEOUT (420s) — cùng ngưỡng với
+    đường render thường; 240s cũ ngắn hơn thời gian render thực tế của một clip Omni Flash
+    10s nên node editor báo hỏng trong khi Flow vẫn đang (và sẽ) hoàn thành clip."""
     op = {"operation": {"name": media_id}, "sceneId": scene_key}
-    deadline = _t.monotonic() + timeout
+    deadline = _t.monotonic() + (timeout or VIDEO_POLL_TIMEOUT)
     while _t.monotonic() < deadline:
         await asyncio.sleep(interval)
         st = await client.check_video_status([op])
@@ -652,7 +685,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     start_image_media_id=start, prompt=prompt,
                     project_id=flow_pid, scene_id=target["id"],
                     aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
-            mid, web = await _vid_gen_retry(submit, target["id"], pid)
+            mid, web = await _vid_gen_retry(submit, target["id"], pid, kind)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4",
                             "handle": _handle_of(data, "video")}
 
@@ -718,6 +751,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
         col = "video" if final.get("ext") == "mp4" else "image"
         await db.update("shot", target["id"], {
             f"{col}_media_id": final["media_id"], f"{col}_primary_id": final["media_id"],
-            f"{col}_path": web, "updated_at": db.now()})
+            f"{col}_path": web, "updated_at": db.now(),
+            # Video mới đã về ⇒ lượt render treo (nếu có) không còn ý nghĩa.
+            **({"operation_json": None} if col == "video" else {})})
     return {"media_id": final["media_id"], "path": web, "ext": final.get("ext", "png"),
             "display_path": display_path, "node_outputs": node_outputs}

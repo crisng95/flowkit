@@ -467,6 +467,9 @@ export interface Shot {
   image_hires_res?: string | null;
   video_media_id?: string | null;
   video_path: string | null;
+  // Lượt render đã submit lên Flow nhưng chưa lấy được clip về (hết giờ chờ). Còn giá trị
+  // ⇒ hiện nút "Lấy lại video" thay vì bắt render lại (đã tính tiền rồi).
+  operation_json?: string | null;
   // Bản upscale 1080p/4K của video. upscale_media_id ≠ video_media_id ⇒ bản cũ.
   upscale_path?: string | null;
   upscale_media_id?: string | null;
@@ -569,6 +572,9 @@ export const storyboard = {
 export const shots = {
   genPrompts: (sid: string) => req<Shot>(`/shots/${sid}/prompts`, { method: "POST" }),
   genVideo: (sid: string) => req<Shot>(`/shots/${sid}/video`, { method: "POST" }),
+  // Kéo về lượt render ĐÃ submit nhưng hết giờ chờ (shot.operation_json). Không submit gì
+  // mới ⇒ không tốn thêm credit.
+  resumeVideo: (sid: string) => req<Shot>(`/shots/${sid}/video/resume`, { method: "POST" }),
   // Bỏ trống resolution → server lấy theo tier (ONE → 1080p, TWO → 4K).
   upscale: (sid: string, force = false) =>
     req<Shot>(`/shots/${sid}/upscale?force=${force}`, { method: "POST" }),

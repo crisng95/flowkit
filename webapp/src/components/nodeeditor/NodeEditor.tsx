@@ -1185,15 +1185,15 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
         label: seed.title,
       })
     );
-    // Extra storyboard frames from the same scene — useful as additional Omni Flash references
-    // (e.g. "make the character do X, matching the pose of frame 3"). Laid out below the
-    // start-image source and wired to the video node so they're immediately available.
+    // Extra storyboard frames from the same scene, laid out as a left-hand "kệ" of ready-made
+    // sources — NOT wired to the video node. Nối hết cả scene vào một lượt render là sai: Omni
+    // trộn mọi ảnh tham chiếu vào clip nên nhân vật/bối cảnh của shot khác lọt vào, và ảnh
+    // frame của chính shot mất vai trò mỏ neo. Ai cần một frame cụ thể thì tự kéo dây.
     shotRefs.forEach((s, k) => {
       const sid = `sref${k}`;
-      nodes.push(mk(sid, "source", 0, 420 + k * 160, {
+      nodes.push(mk(sid, "source", -300, 250 + k * 160, {
         media_id: s.media_id, web: s.web, label: s.label,
       }));
-      edges.push({ id: `esr${k}`, source: sid, target: "v" });
     });
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
@@ -1774,11 +1774,16 @@ function Editor({
         position: n.position || { x: 0, y: 0 },
         data: { ...n.data, _type: n.type || n.data?._type },
       }));
-      const edges: Edge[] = (g.edges || []).map((e: any, i: number) => ({
-        id: e.id || `e${i}`,
-        source: e.source,
-        target: e.target,
-      }));
+      const edges: Edge[] = (g.edges || [])
+        .map((e: any, i: number) => ({
+          id: e.id || `e${i}`,
+          source: e.source,
+          target: e.target,
+        }))
+        // Dọn các dây `sref* → v` do bản defaultGraph cũ tự nối: nó đổ MỌI frame của scene vào
+        // node tạo video. Chỉ xoá đúng dây auto-seed (id `esr*` + nguồn `sref*`) — dây người
+        // dùng tự kéo mang id `e<timestamp>` nên không bao giờ khớp.
+        .filter((e) => !(/^esr\d+$/.test(e.id) && /^sref\d+$/.test(e.source)));
       // Refresh entity-bound source nodes to the entity's CURRENT image, so regenerating a
       // location/character updates its reference node instead of keeping the stale snapshot.
       for (const n of nodes) {
@@ -2168,16 +2173,24 @@ function Editor({
         const up = outNode && edges.find((e) => e.target === outNode.id)?.source;
         const m = up ? outs[up] : undefined;
         if (m?.media_id) {
-          const applied = await graphApi.applyMedia(target.kind, target.id, m.media_id, m.ext || "png");
+          const ext = m.ext || "png";
+          const applied = await graphApi.applyMedia(target.kind, target.id, m.media_id, ext);
           onApplied(r);
-          // Show the committed image (e.g. labeled location grid) in the previews.
+          // Show the committed media (e.g. labeled location grid) in the previews. Với mp4 phải
+          // đọc `video_path` — trước đây luôn lấy `image_path`, nên quick-gen video ghi đè
+          // preview bằng ảnh frame và trông như "không lấy được video về" dù clip đã tải xong.
           reflectDisplay(
-            applied?.entity?.image_path || applied?.shot?.image_path || applied?.path,
-            m.ext || "png"
+            ext === "mp4"
+              ? applied?.shot?.video_path || applied?.path || m.web
+              : applied?.entity?.image_path || applied?.shot?.image_path || applied?.path,
+            ext
           );
         }
       } catch (e: any) {
         setErr(e.message);
+        // Một lượt render video hỏng vì hết giờ chờ vẫn ghi operation_json lên shot — refresh
+        // để thẻ shot hiện nút "Lấy lại video" ngay, khỏi phải tải lại trang.
+        onApplied({ failed: true });
       } finally {
         setGenningId(null);
       }
