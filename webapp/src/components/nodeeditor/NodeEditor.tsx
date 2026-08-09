@@ -64,6 +64,8 @@ export interface EditorTarget {
 const META: Record<string, { label: string; icon: string; color: string }> = {
   source: { label: "Nguồn ảnh", icon: "🖼", color: "#f59e0b" },
   prompt: { label: "Prompt đầu vào", icon: "≣", color: "#3b82f6" },
+  promptHeader: { label: "Prompt header", icon: "⤒", color: "#6366f1" },
+  promptFooter: { label: "Prompt footer", icon: "⤓", color: "#6366f1" },
   refs: { label: "References", icon: "🔗", color: "#0ea5e9" },
   image: { label: "Tạo ảnh AI", icon: "🎨", color: "#a855f7" },
   editImage: { label: "Sửa ảnh AI", icon: "🖌", color: "#f59e0b" },
@@ -85,7 +87,7 @@ const META: Record<string, { label: string; icon: string; color: string }> = {
 };
 
 // "refs" intentionally dropped — use one "Nguồn ảnh" (source) node per reference image.
-const PALETTE = ["source", "prompt", "image", "editImage", "removebg", "replacebg", "filter", "colorgrade", "text", "upscale", "crop", "vignette", "border", "blend", "collage", "watermark", "video", "note", "output"];
+const PALETTE = ["source", "prompt", "promptHeader", "promptFooter", "image", "editImage", "removebg", "replacebg", "filter", "colorgrade", "text", "upscale", "crop", "vignette", "border", "blend", "collage", "watermark", "video", "note", "output"];
 
 // ─── Handles ("định danh") ──────────────────────────────────
 // Every node that PRODUCES a picture/clip carries a handle: writing "{handle}" in a
@@ -152,6 +154,10 @@ const NodeOps = createContext<{
   // Omni Flash clip length from ⚙ Cấu hình dự án (null = project uses Veo). A video node
   // without its own `duration` renders at this length.
   projDur: number | null;
+  // prompt_header / prompt_footer của ⚙ Thiết lập dự án — node Prompt header/footer bỏ
+  // trống thì chạy theo hai giá trị này (và hiện chúng làm placeholder).
+  projectHeader: string;
+  projectFooter: string;
   // Every image-producing node in the graph, by its effective handle — feeds the prompt
   // autocomplete and the "Ảnh gốc" picker.
   handles: { id: string; type: string; handle: string; web?: string }[];
@@ -176,6 +182,8 @@ const NodeOps = createContext<{
   imageModels: [],
   projectId: "",
   projDur: null,
+  projectHeader: "",
+  projectFooter: "",
   handles: [],
   handleDupes: new Set(),
   upstreamHandles: () => [],
@@ -1119,6 +1127,34 @@ function ReplaceBgNode({ id, data }: NodeProps) {
   );
 }
 
+// Bọc ngoài prompt của node tạo ảnh/video mà nó nối tới. Trước đây header/footer của ⚙ Cấu
+// hình dự án được chèn ngầm vào MỌI prompt; giờ trong node editor nó chỉ vào khi có node này
+// trên canvas, nên nhìn đồ thị là biết prompt thật sự gồm những gì.
+function PromptWrapNode({ id, data, type }: NodeProps) {
+  const { update, projectHeader, projectFooter } = useContext(NodeOps);
+  const d = data as any;
+  const isHeader = type === "promptHeader";
+  // Bỏ trống = dùng giá trị của dự án (sửa ở Thiết lập là mọi graph ăn theo).
+  const fallback = (isHeader ? projectHeader : projectFooter) || "";
+  return (
+    <Shell type={type} id={id} outputs>
+      <textarea
+        className={`${fieldCls} nowheel h-20 resize-y leading-snug`}
+        value={d.text ?? ""}
+        placeholder={fallback ? `(theo dự án) ${fallback}` : "Bỏ trống = theo ⚙ Thiết lập dự án"}
+        onChange={(e) => update(id, { text: e.target.value })}
+      />
+      <div className="text-[10px] text-neutral-500">
+        {d.text?.trim()
+          ? isHeader ? "ⓘ chèn vào ĐẦU prompt" : "ⓘ chèn vào CUỐI prompt"
+          : fallback
+            ? "ⓘ đang dùng giá trị của dự án"
+            : "⚠ dự án chưa đặt — node này không chèn gì"}
+      </div>
+    </Shell>
+  );
+}
+
 function NoteNode({ id, data }: NodeProps) {
   const { update } = useContext(NodeOps);
   const d = data as any;
@@ -1137,6 +1173,8 @@ function NoteNode({ id, data }: NodeProps) {
 const NODE_TYPES = {
   source: SourceNode,
   prompt: PromptNode,
+  promptHeader: PromptWrapNode,
+  promptFooter: PromptWrapNode,
   refs: RefsNode,
   image: ImageNode,
   editImage: ImageNode,
@@ -1176,6 +1214,17 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
   const nodes: Node[] = [mk("p", "prompt", 0, 20, { text: prompt, seed_prompt: prompt })];
   const edges: Edge[] = [];
 
+  // Header/footer của ⚙ Thiết lập dự án nay đi qua HAI NODE thay vì được chèn ngầm, nên
+  // đồ thị mặc định phải có sẵn chúng — không thì graph mới lại ra prompt trần.
+  const wrapNodes = (genId: string) => {
+    nodes.push(mk("ph", "promptHeader", -300, 20, { text: "" }));
+    nodes.push(mk("pf", "promptFooter", -300, 170, { text: "" }));
+    edges.push(
+      { id: "eph", source: "ph", target: genId },
+      { id: "epf", source: "pf", target: genId }
+    );
+  };
+
   if (goal === "video") {
     // the shot's own frame is the start/reference image
     nodes.push(
@@ -1207,6 +1256,7 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
       { id: "es", source: "src", target: "v" },
       { id: "eo", source: "v", target: "o" }
     );
+    wrapNodes("v");
     return { nodes, edges };
   }
 
@@ -1236,8 +1286,15 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
   );
   nodes.push(mk("o", "output", 660, 110, { _result: seed.imageSrc || "" }));
   edges.push({ id: "ep", source: "p", target: "i" }, { id: "eo", source: "i", target: "o" });
+  wrapNodes("i");
   return { nodes, edges };
 }
+
+// Node "bọc prompt", và các node sinh mà chúng gắn vào. CHỈ image + video: editImage /
+// replacebg chạy prompt NGUYÊN VĂN (không qua compose_prompt) nên gắn vào đó chỉ tạo ra một
+// node nằm im không tác dụng gì — xem agent/studio/graph.py.
+const WRAP_TYPES = ["promptHeader", "promptFooter"] as const;
+const WRAP_TARGETS = ["image", "video"];
 
 // ─── Editor ─────────────────────────────────────────────────
 // "10" / "abra_r2v_10s" → 10; anything else (Veo, empty) → null. Mirrors _omni_duration()
@@ -1253,6 +1310,8 @@ function Editor({
   entities,
   projectId,
   videoModel,
+  projectHeader: headerProp,
+  projectFooter: footerProp,
   onClose,
   onApplied,
 }: {
@@ -1260,10 +1319,15 @@ function Editor({
   entities: Entity[];
   projectId: string;
   videoModel?: string | null;
+  projectHeader?: string | null;
+  projectFooter?: string | null;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {
   const projDur = useMemo(() => omniDuration(videoModel), [videoModel]);
+  // Cột DB cho phép NULL → chuẩn hoá về "" một lần, node không phải tự lo.
+  const projectHeader = headerProp ?? "";
+  const projectFooter = footerProp ?? "";
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [imageModels, setImageModels] = useState<string[]>([]);
@@ -1767,6 +1831,31 @@ function Editor({
         edges.push({ id: `es-${sid}`, source: sid, target: gen.id });
       });
     };
+
+    // Bổ sung node Prompt header/footer cho ĐỒ THỊ CŨ. Trước đây header/footer của dự án
+    // được chèn ngầm vào mọi prompt; giờ chỉ chèn khi có node, nên graph đã lưu mà thiếu
+    // node sẽ mất phần bọc. Gắn vào MỌI node tạo ảnh/tạo video chưa có, giữ nguyên hành vi.
+    // Node để text rỗng ⇒ chạy theo ⚙ Thiết lập dự án, y như cơ chế cũ.
+    const ensurePromptWrap = (nodes: Node[], edges: Edge[]) => {
+      const gens = nodes.filter((n) => WRAP_TARGETS.includes(n.type!));
+      for (const gen of gens) {
+        const feeding = new Set(
+          edges.filter((e) => e.target === gen.id).map((e) => nodes.find((n) => n.id === e.source)?.type)
+        );
+        WRAP_TYPES.forEach((wt, k) => {
+          if (feeding.has(wt)) return;
+          const wid = `${wt === "promptHeader" ? "ph" : "pf"}-${gen.id}`;
+          if (nodes.some((n) => n.id === wid)) return;
+          nodes.push({
+            id: wid,
+            type: wt,
+            position: { x: (gen.position?.x ?? 340) - 300, y: (gen.position?.y ?? 80) + k * 150 },
+            data: { _type: wt, text: "" },
+          });
+          edges.push({ id: `e-${wid}`, source: wid, target: gen.id });
+        });
+      }
+    };
     const apply = (g: { nodes: any[]; edges: any[] }) => {
       const nodes: Node[] = g.nodes.map((n: any) => ({
         id: n.id,
@@ -1837,6 +1926,7 @@ function Editor({
         }
       }
       ensureRefSources(nodes, edges);
+      ensurePromptWrap(nodes, edges);
       if (cancelled) return;       // a newer load supersedes this one — don't clobber it
       setNodes(nodes);
       setEdges(edges);
@@ -1881,6 +1971,9 @@ function Editor({
     // seed_prompt "" marks this as a hand-authored prompt: once the user types anything
     // text !== seed_prompt, so the load-time sync to target.prompt leaves it alone.
     prompt: { text: "", seed_prompt: "" },
+    // text rỗng = chạy theo prompt_header/footer của ⚙ Thiết lập dự án
+    promptHeader: { text: "" },
+    promptFooter: { text: "" },
     refs: { entity_ids: [] },
     image: { aspect: "16:9", model: "", count: 1 },
     editImage: { aspect: "16:9", model: "", count: 1 },
@@ -2259,8 +2352,8 @@ function Editor({
   };
 
   const ops = useMemo(
-    () => ({ update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, handles, handleDupes, upstreamHandles }),
-    [update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, handles, handleDupes, upstreamHandles]
+    () => ({ update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, projectHeader, projectFooter, handles, handleDupes, upstreamHandles }),
+    [update, remove, duplicate, bindEntitySource, bindNodeSource, preview, genNode, genningId, results, inputResults, entities, images, imageModels, projectId, projDur, projectHeader, projectFooter, handles, handleDupes, upstreamHandles]
   );
 
   return (
@@ -2624,6 +2717,8 @@ export default function NodeEditor(props: {
   entities: Entity[];
   projectId: string;
   videoModel?: string | null;
+  projectHeader?: string | null;
+  projectFooter?: string | null;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {

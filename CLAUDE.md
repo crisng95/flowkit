@@ -45,6 +45,12 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   (`project.music_mode`): nhạc là tiếng duy nhất, các bài cách nhau `music_gap` giây, và tổng
   thời lượng playlist quyết định độ dài video — hình được lặp cho phủ kín, thừa thì cắt.
   Xem [agent/studio/music.py](agent/studio/music.py) + tab "Nhạc" trong workspace.
+- **Prompt header/footer: hai đường khác nhau.** Đường thường (storyboard, render video ở tab
+  Shots) vẫn tự chèn `project.prompt_header/footer` qua `brain.compose_prompt`. Trong NODE
+  EDITOR thì KHÔNG: chỉ chèn khi trên canvas có node `promptHeader` / `promptFooter` nối vào
+  node tạo ảnh/tạo video, và node để text rỗng nghĩa là "lấy giá trị của dự án".
+  `compose_prompt(..., header=, footer=)` là chỗ phân nhánh. Chỉ `image`/`video` nhận bọc —
+  `editImage`/`replacebg` chạy prompt nguyên văn. Xem [agent/studio/graph.py](agent/studio/graph.py).
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

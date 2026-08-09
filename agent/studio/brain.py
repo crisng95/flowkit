@@ -185,7 +185,8 @@ _SINGLE_FRAME = (
 
 
 def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
-                   single_frame: bool = False) -> str:
+                   single_frame: bool = False,
+                   header: str | None = None, footer: str | None = None) -> str:
     """Assemble the final image/video prompt for a project.
 
     Order: [prompt_header] → style (always first of the visual terms) + culture_hint →
@@ -195,10 +196,14 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
 
     `single_frame=True` (shot frames only) appends a guard so the model renders one coherent
     photograph instead of copying the entity reference SHEETS (incl. the 2x2 location grid).
+
+    `header` / `footer` ĐÈ giá trị của dự án khi được truyền (chuỗi rỗng = KHÔNG chèn gì).
+    Node editor dùng đường này: ở đó header/footer do node "Prompt header"/"Prompt footer"
+    quyết định, không có node thì không chèn — xem agent/studio/graph.py.
     """
     style = (project.get("style") or "").strip()
-    header = (project.get("prompt_header") or "").strip()
-    footer = (project.get("prompt_footer") or "").strip()
+    header = ((project.get("prompt_header") or "") if header is None else header).strip()
+    footer = ((project.get("prompt_footer") or "") if footer is None else footer).strip()
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
     lead = ", ".join(p for p in (style, culture) if p)
     guard = _SINGLE_FRAME if single_frame else ""

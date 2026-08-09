@@ -442,17 +442,26 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
     def merged_inputs(nid):
         """Collect from upstream nodes: text, reference images (refs + any source/generated
         media), the best start image for i2v, and the latest produced media of ANY kind
-        (so an Output node can pick up an image OR a video result)."""
+        (so an Output node can pick up an image OR a video result).
+
+        `header` / `footer` là None khi KHÔNG có node Prompt header/footer nào nối vào —
+        người gọi phân biệt được "không có node" với "có node nhưng để rỗng"."""
         text = None
         refs: list[dict] = []
         start = None
         start_ext = "png"
         result = result_web = None
         result_ext = "png"
+        heads: list[str] = []
+        foots: list[str] = []
         for up in _upstream_ids(nid, edges):
             o = outputs.get(up, {})
             if o.get("text"):
                 text = o["text"]
+            if o.get("header") is not None:
+                heads.append(o["header"])
+            if o.get("footer") is not None:
+                foots.append(o["footer"])
             for r in o.get("references", []):
                 refs.append(r)
             if o.get("media_id"):
@@ -469,7 +478,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 uniq.append(r)
                 seen.add(r["media_id"])
         return {"text": text, "references": uniq[:10], "media_id": start, "ext": start_ext,
-                "result": result, "result_ext": result_ext, "result_web": result_web}
+                "result": result, "result_ext": result_ext, "result_web": result_web,
+                "header": ". ".join(h for h in heads if h) if heads else None,
+                "footer": ". ".join(f for f in foots if f) if foots else None}
 
     for node in _topo_sort(nodes, edges):
         t = node.get("type")
@@ -504,6 +515,16 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
         if t == "prompt":
             outputs[nid] = {"text": data.get("text", "")}
 
+        elif t in ("promptHeader", "promptFooter"):
+            # Bọc ngoài prompt của node tạo ảnh/video mà nó nối tới. Để TRỐNG `text` nghĩa là
+            # "dùng của ⚙ Cấu hình dự án" — sửa ở Thiết lập là mọi graph ăn theo, khỏi đi sửa
+            # từng node. Không có node nào thì prompt KHÔNG được bọc gì cả (xem nhánh image/
+            # video bên dưới): header/footer giờ là thứ nhìn thấy trên canvas, không còn âm
+            # thầm chèn vào sau lưng.
+            key = "prompt_header" if t == "promptHeader" else "prompt_footer"
+            txt = str(data.get("text") or "").strip() or str(project.get(key) or "").strip()
+            outputs[nid] = {"header" if t == "promptHeader" else "footer": txt}
+
         elif t == "source":
             # A source node bound to an entity (entity_id) must use the entity's CURRENT image,
             # so regenerating that entity propagates into the graph instead of using the stale
@@ -536,16 +557,20 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
 
         elif t == "image":
             body = inp["text"] or data.get("text") or ""
+            # Header/footer CHỈ đến từ node Prompt header/footer nối vào; không có node →
+            # "" → không chèn gì.
+            wrap = {"header": inp["header"] or "", "footer": inp["footer"] or ""}
             if kind == "entity" and target.get("type"):
                 # Entity reference: apply the SAME per-type sheet rule as quick-gen so a
                 # node-built reference matches (e.g. a location comes out as the 2x2 grid,
                 # not a single plain view).
                 img_prompt = brain.compose_prompt(project, brain.ref_image_prompt(
-                    target["type"], target.get("name") or "", body))
+                    target["type"], target.get("name") or "", body), **wrap)
             else:
                 # Shot frame: single-frame guard (don't copy the location grid layout) so a
                 # node-built frame matches the storyboard table.
-                img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"))
+                img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"),
+                                                  **wrap)
             mid, web = await _img_gen_retry(lambda: client.generate_images(
                 prompt=img_prompt,
                 project_id=flow_pid,
@@ -647,8 +672,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             # so prompt_header / prompt_footer set in ⚙ Cấu hình dự án actually reach the
             # video model. editImage / replacebg deliberately bypass compose_prompt because
             # they operate verbatim, but a plain "Tạo video" generation should honour the
-            # project's visual identity just like "Tạo ảnh".
-            prompt = brain.compose_prompt(project, body)
+            # project's visual identity just like "Tạo ảnh". Header/footer: chỉ khi có node.
+            prompt = brain.compose_prompt(project, body, header=inp["header"] or "",
+                                          footer=inp["footer"] or "")
             aspect_v = _vid_aspect(project, data)
             kind_v = (data.get("model") or "omni").lower()
             # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor

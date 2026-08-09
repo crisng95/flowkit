@@ -164,6 +164,8 @@ export default function ProjectWorkspace({
           entities={entities}
           projectId={project.id}
           videoModel={project.video_model}
+          projectHeader={project.prompt_header}
+          projectFooter={project.prompt_footer}
           onClose={() => setEditor(null)}
           onApplied={() => setReload((r) => r + 1)}
         />
