@@ -57,6 +57,16 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   `project.prompt_header/footer`. `compose_prompt(..., header=, footer=)` là chỗ phân nhánh.
   Chỉ `image`/`video` nhận bọc — `editImage`/`replacebg` chạy prompt nguyên văn.
   Xem [agent/studio/graph.py](agent/studio/graph.py).
+- **Prompt NGẦM nằm ở một chỗ duy nhất: `brain.PROMPT_DEFAULTS`.** Guard khung đơn, câu ngôn
+  ngữ chữ trong ảnh, ba mẫu sheet nhân vật/đạo cụ/bối cảnh, khối CINEMATOGRAPHY và MOTION —
+  tất cả đọc qua `brain.prompt_part(project, key)`. Mỗi khoá `k` có cột `project.tpl_<k>`:
+  trống = mặc định trong code, `"-"` = tắt hẳn, khác = nguyên văn người dùng. Thêm khối ngầm
+  mới thì thêm vào `PROMPT_DEFAULTS` + migration `tpl_<k>` + `PROMPT_KEYS` ở webapp, đừng nội
+  suy thẳng hằng số vào prompt. Xem tab Thiết lập → 🧩 Prompt ngầm.
+- **Ảnh bối cảnh: lưới 4 khung hay một ảnh.** `project.location_frames` (4 mặc định | 1) đổi
+  ba thứ CÙNG LÚC — mẫu prompt (`sheet_location` vs `sheet_location_one`), việc dán nhãn bốn
+  ô lên bản hiển thị (`label_quadrants`, 3 chỗ gọi), và đoạn phụ `single_frame_grid` của guard
+  khung đơn. Đọc qua `brain.location_frames(project)`, đừng kiểm tra cột trực tiếp.
 - **CHỈ VIDEO tốn credit** (≈20/clip). Tạo ảnh, sửa ảnh, tách/thay nền, upscale ảnh, và
   upscale video lên 1080p đều KHÔNG trừ credit — đừng cảnh báo hay hỏi xác nhận trước các
   batch ảnh. `CREDIT_COST` trong [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts) chỉ

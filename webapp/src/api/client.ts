@@ -34,9 +34,31 @@ export interface Project {
   auto_upscale_video?: number | null;
   // Mức upscale mong muốn; rỗng = kịch trần tier. Tier TWO chọn 1080p cho nhẹ/rẻ hơn 4K.
   upscale_res?: string | null;
+  // Ảnh tham chiếu của một BỐI CẢNH: 4 = lưới 2x2 bốn góc máy (mặc định), 1 = một ảnh.
+  location_frames?: number | null;
+  // Ghi đè các PROMPT NGẦM (xem PROMPT_KEYS): trống = mặc định của agent, "-" = tắt khối đó.
+  tpl_single_frame?: string | null;
+  tpl_single_frame_grid?: string | null;
+  tpl_image_text?: string | null;
+  tpl_sheet_character?: string | null;
+  tpl_sheet_prop?: string | null;
+  tpl_sheet_location?: string | null;
+  tpl_sheet_location_one?: string | null;
+  tpl_cine?: string | null;
+  tpl_motion?: string | null;
+  tpl_omni_timeline?: string | null;
   status: string;
   updated_at: number;
 }
+
+// Các khối prompt agent CHÈN NGẦM vào mỗi lần chạy. Bản mặc định nằm trong code của agent
+// (GET /api/studio/options → prompt_defaults); dự án ghi đè qua cột `tpl_<key>`.
+export const PROMPT_KEYS = [
+  "single_frame", "single_frame_grid", "image_text",
+  "sheet_character", "sheet_prop", "sheet_location", "sheet_location_one",
+  "cine", "motion", "omni_timeline",
+] as const;
+export type PromptKey = (typeof PROMPT_KEYS)[number];
 
 // Hệ quả của một lần lưu/sửa kịch bản. Scene được ĐỐI CHIẾU (giữ id → shot sống sót), nên
 // cần nói rõ cái gì đã đổi: body_changed = scene còn đó nhưng nội dung khác ⇒ storyboard và

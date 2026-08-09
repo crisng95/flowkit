@@ -7,12 +7,15 @@ import {
   projectExportUrl,
   storyboard,
   shots as shotsApi,
+  PROMPT_KEYS,
   type Project,
+  type PromptKey,
   type SettingsPreset,
   type Voice,
 } from "../../api/client";
 import MusicManager from "../music/MusicManager";
 import AppSettingsSection from "./AppSettingsSection";
+import ImplicitPrompts from "./ImplicitPrompts";
 import { Field, Group, Slider, inp } from "./ui";
 
 // Toàn bộ cấu hình của app nằm ở ĐÂY — trước kia tách làm hai chỗ (drawer ⚙ "Settings" cấp
@@ -22,6 +25,7 @@ import { Field, Group, Slider, inp } from "./ui";
 const SECTIONS = [
   { id: "content", icon: "📖", label: "Nội dung & ngôn ngữ" },
   { id: "look", icon: "🎨", label: "Phong cách & prompt" },
+  { id: "implicit", icon: "🧩", label: "Prompt ngầm" },
   { id: "image", icon: "🖼", label: "Ảnh" },
   { id: "video", icon: "🎬", label: "Video" },
   { id: "voice", icon: "🎙", label: "Giọng đọc" },
@@ -53,6 +57,10 @@ export default function SettingsTab({
     aspect_ratio: project.aspect_ratio ?? "VIDEO_ASPECT_RATIO_LANDSCAPE",
     video_model: project.video_model ?? "",
   });
+  // Ghi đè prompt ngầm — một ô cho mỗi khoá của PROMPT_KEYS, trống = mặc định của agent.
+  const [tpl, setTpl] = useState<Record<string, string>>(() =>
+    Object.fromEntries(PROMPT_KEYS.map((k) => [k, (project as any)[`tpl_${k}`] ?? ""])));
+  const [locFrames, setLocFrames] = useState(project.location_frames === 1 ? 1 : 4);
   const [shotDuration, setShotDuration] = useState(project.shot_duration ?? 8);
   const [storytelling, setStorytelling] = useState(!!project.storytelling);
   const [autoHires, setAutoHires] = useState(!!project.auto_hires);
@@ -113,7 +121,8 @@ export default function SettingsTab({
         shot_duration: shotDuration, storytelling,
         auto_hires: autoHires, auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
         tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
-        tts_edge_pad: ttsEdgePad, seed,
+        tts_edge_pad: ttsEdgePad, seed, location_frames: locFrames,
+        ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
       });
       onSaved(updated);
       if (appDirty && appSave.current) {
@@ -189,13 +198,17 @@ export default function SettingsTab({
   // ── Xuất/nhập THIẾT LẬP tái dùng được (không phải nội dung dự án) ─────────
   // Nhạc nền đi kèm: preset mang path của dự án nguồn, applySettings CHÉP sang dự án này.
   const STR_KEYS = ["style", "script_lang", "image_text_lang", "culture_hint",
-    "prompt_header", "prompt_footer", "image_model", "aspect_ratio", "video_model", "upscale_res"] as const;
+    "prompt_header", "prompt_footer", "image_model", "aspect_ratio", "video_model", "upscale_res",
+    // Prompt ngầm đi theo preset: đó chính là thứ làm nên "chất" của một kênh.
+    ...PROMPT_KEYS.map((k) => `tpl_${k}`)] as const;
   const NUM_KEYS = ["shot_duration", "seed", "bgm_volume", "voice_id",
-    "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad"] as const;
+    "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad", "location_frames"] as const;
   const BOOL_KEYS = ["storytelling", "auto_hires", "auto_upscale_video", "bgm_duck"] as const;
 
   const collectSettings = () => ({
-    ...s, shot_duration: shotDuration, storytelling, auto_hires: autoHires,
+    ...s, ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
+    location_frames: locFrames,
+    shot_duration: shotDuration, storytelling, auto_hires: autoHires,
     auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
     seed, bgm_volume: bgmVol, bgm_duck: bgmDuck, bgm_path: bgmPath,
     voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap,
@@ -221,6 +234,8 @@ export default function SettingsTab({
         image_model: u.image_model ?? p.image_model, aspect_ratio: u.aspect_ratio ?? p.aspect_ratio,
         video_model: u.video_model ?? p.video_model,
       }));
+      setTpl(Object.fromEntries(PROMPT_KEYS.map((k) => [k, (u as any)[`tpl_${k}`] ?? ""])));
+      if (u.location_frames != null) setLocFrames(u.location_frames === 1 ? 1 : 4);
       if (u.shot_duration != null) setShotDuration(u.shot_duration);
       if (u.storytelling != null) setStorytelling(!!u.storytelling);
       if (u.auto_hires != null) setAutoHires(!!u.auto_hires);
@@ -430,6 +445,14 @@ export default function SettingsTab({
               </>
             )}
 
+            {sec === "implicit" && (
+              <ImplicitPrompts
+                values={tpl}
+                defaults={opts?.prompt_defaults || {}}
+                onChange={(k: PromptKey, v: string) => setTpl((p) => ({ ...p, [k]: v }))}
+              />
+            )}
+
             {sec === "image" && (
               <>
                 <Group title="Model">
@@ -439,6 +462,37 @@ export default function SettingsTab({
                       {(opts?.image_models || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </Field>
+                </Group>
+
+                <Group
+                  title="Ảnh tham chiếu bối cảnh"
+                  hint="Áp dụng cho các lần sinh ảnh bối cảnh SAU. Ảnh cũ giữ nguyên — muốn đổi thì tạo lại ảnh của entity đó."
+                >
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      { n: 4, t: "Lưới 2x2 — 4 góc máy", d: "Một ảnh chia bốn ô: toàn cảnh, góc ngược, trên cao, cận cảnh — có dán nhãn từng ô. Shot chọn một góc phù hợp." },
+                      { n: 1, t: "Một ảnh — 1 góc máy", d: "Một khung establishing duy nhất, không lưới, không nhãn. Ảnh nét hơn vì không phải chia tư, nhưng shot chỉ có một góc để bám." },
+                    ].map((o) => (
+                      <button key={o.n} type="button" onClick={() => setLocFrames(o.n)}
+                        className={`rounded-lg border p-3 text-left transition ${
+                          locFrames === o.n
+                            ? "border-indigo-500 bg-indigo-500/10"
+                            : "border-neutral-700 hover:border-neutral-600 hover:bg-neutral-900"
+                        }`}>
+                        <div className="flex items-center gap-2 text-sm text-neutral-200">
+                          <span className={`h-3 w-3 shrink-0 rounded-full border ${
+                            locFrames === o.n ? "border-indigo-400 bg-indigo-500" : "border-neutral-600"
+                          }`} />
+                          {o.t}
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-neutral-500">{o.d}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs leading-relaxed text-neutral-600">
+                    Chọn cái nào thì prompt tương ứng ở nhóm <b>🧩 Prompt ngầm</b> được dùng
+                    (“Bối cảnh — lưới 4 khung” hoặc “Bối cảnh — một ảnh”).
+                  </p>
                 </Group>
 
                 <Group

@@ -148,6 +148,18 @@ class UpdateProjectRequest(BaseModel):
     prompt_header: Optional[str] = None
     prompt_footer: Optional[str] = None
     culture_hint: Optional[str] = None
+    location_frames: Optional[int] = None    # ảnh bối cảnh: 4 = lưới 2x2, 1 = một ảnh
+    # Ghi đè prompt ngầm — trống = dùng mặc định của code, "-" = tắt khối đó.
+    tpl_single_frame: Optional[str] = None
+    tpl_single_frame_grid: Optional[str] = None
+    tpl_image_text: Optional[str] = None
+    tpl_sheet_character: Optional[str] = None
+    tpl_sheet_prop: Optional[str] = None
+    tpl_sheet_location: Optional[str] = None
+    tpl_sheet_location_one: Optional[str] = None
+    tpl_cine: Optional[str] = None
+    tpl_motion: Optional[str] = None
+    tpl_omni_timeline: Optional[str] = None
 
 
 class GenerateScriptRequest(BaseModel):
@@ -353,6 +365,10 @@ async def options():
         "style_presets": ["Realistic", "Cinematic", "Anime", "3D Pixar", "Watercolor", "Noir"],
         "voices": voices,
         "agents": agents,
+        # Prompt ngầm: bản mặc định trong code, để UI hiện làm placeholder của ô `tpl_<key>`
+        # (trống = dùng đúng bản này) và cho nút "chép mặc định vào ô để sửa".
+        "prompt_defaults": brain.PROMPT_DEFAULTS,
+        "prompt_placeholders": brain.PROMPT_PLACEHOLDERS,
     }
 
 
@@ -616,6 +632,8 @@ async def update_project(pid: str, body: UpdateProjectRequest):
         data["bgm_duck"] = 1 if data["bgm_duck"] else 0
     if "seed" in data and (data["seed"] is None or data["seed"] <= 0):
         data["seed"] = None   # ≤0 / trống = bỏ khoá seed (ngẫu nhiên)
+    if "location_frames" in data:
+        data["location_frames"] = 1 if data["location_frames"] == 1 else 4
     data["updated_at"] = db.now()
     await db.update("project", pid, data)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))
@@ -1074,7 +1092,7 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
     client = _require_extension()
     body = brain.ref_image_prompt(
         entity["type"], entity["name"],
-        entity.get("description") or entity.get("ref_prompt") or "")
+        entity.get("description") or entity.get("ref_prompt") or "", project)
     prompt = brain.compose_prompt(project, body,
                                   **graph_mod.prompt_wrap(entity.get("graph_json"), project))
     aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
@@ -1090,7 +1108,9 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
         label_for_err=f"asset {entity['name']}")
     # A location's reference image is ONE 2x2 grid of four angles. Overlay the position
     # labels on the quadrants for management (display only; the underlying media stays clean).
-    if entity["type"] == "location" and row.get("media_id"):
+    # Ở chế độ một ảnh (location_frames == 1) không có ô nào để dán nhãn.
+    if (entity["type"] == "location" and row.get("media_id")
+            and brain.location_frames(project) == 4):
         try:
             await _label_location_grid(row, project)
             row = await _entity_or_404(entity["id"])
@@ -3150,7 +3170,9 @@ def _engine_kw(project: dict) -> dict:
     """kwargs {engine, clip_s} cho các hàm sinh prompt của brain — quyết định motion prompt
     được viết dạng MỘT câu (Veo) hay dạng nhiều mốc thời gian `[mm:ss]` (Omni Flash)."""
     engine, clip_s = _video_engine(project)
-    return {"engine": engine, "clip_s": clip_s}
+    # `project` đi kèm để brain lấy được bản ghi đè của các prompt ngầm (CINEMATOGRAPHY,
+    # MOTION, mốc thời gian Omni) — xem brain.PROMPT_DEFAULTS.
+    return {"engine": engine, "clip_s": clip_s, "project": project}
 
 
 def _clip_submit(client, project: dict, shot_id: str, prompt: str,
@@ -3247,7 +3269,7 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
     motions = [motion]
     try:
         pp = await brain.run_json(brain.beat_parts_prompt(
-            shot.get("beat_action") or motion, motion, n, clip_max, engine))
+            shot.get("beat_action") or motion, motion, n, clip_max, engine, project))
         parts = pp.get("parts") if isinstance(pp, dict) else None
         if parts:
             motions = [p.get("motion_prompt") or motion
@@ -3775,8 +3797,10 @@ async def _commit_entity_media(entity: dict, project: dict, media_id: str,
         "media_id": media_id, "primary_media_id": media_id,
         "image_path": web, "updated_at": db.now()})
     # A location's media is a 2x2 grid → overlay the position labels for display (same as
-    # quick-gen), so node "tạo nhanh" and candidate-pick get labels too.
-    if entity.get("type") == "location" and web:
+    # quick-gen), so node "tạo nhanh" and candidate-pick get labels too. Chế độ một ảnh
+    # (location_frames == 1) không có ô nào để dán nhãn.
+    if (entity.get("type") == "location" and web
+            and brain.location_frames(project) == 4):
         try:
             await _label_location_grid(await _entity_or_404(entity["id"]), project)
         except Exception as ex:  # noqa: BLE001
@@ -3863,7 +3887,7 @@ async def entity_candidates(eid: str, body: CandidatesRequest):
     client = _require_extension()
     body_text = brain.ref_image_prompt(
         entity["type"], entity["name"],
-        entity.get("description") or entity.get("ref_prompt") or "")
+        entity.get("description") or entity.get("ref_prompt") or "", project)
     prompt = brain.compose_prompt(project, body_text)
     aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
               else _to_image_aspect(project["aspect_ratio"]))

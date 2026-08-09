@@ -634,7 +634,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 # node-built reference matches (e.g. a location comes out as the 2x2 grid,
                 # not a single plain view).
                 img_prompt = brain.compose_prompt(project, brain.ref_image_prompt(
-                    target["type"], target.get("name") or "", body), **wrap)
+                    target["type"], target.get("name") or "", body, project), **wrap)
             else:
                 # Shot frame: single-frame guard (don't copy the location grid layout) so a
                 # node-built frame matches the storyboard table.
@@ -827,8 +827,10 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             "media_id": final["media_id"], "primary_media_id": final["media_id"],
             "image_path": web, "updated_at": db.now()})
         # A location's reference is a 2x2 grid → overlay the position labels for display,
-        # same as the quick-gen path (media_id stays the clean grid).
-        if target.get("type") == "location" and web:
+        # same as the quick-gen path (media_id stays the clean grid). Chế độ một ảnh
+        # (location_frames == 1) không có ô nào để dán nhãn.
+        if (target.get("type") == "location" and web
+                and brain.location_frames(project) == 4):
             src = media_store.MEDIA_DIR / web.replace("/media/", "", 1)
             if src.exists():
                 out_rel = f"{pid}/loc_{target['id']}_labeled.png"

@@ -193,6 +193,16 @@ _MIGRATIONS = [
     # shot has several angles of the place to reference — JSON list of {media_id,
     # primary_media_id, path}. Stops shots from copying one fixed location framing.
     ("entity", "extra_media", "TEXT"),
+    # Ảnh tham chiếu của một BỐI CẢNH: 4 = lưới 2x2 bốn góc máy (mặc định, có dán nhãn
+    # Toàn cảnh/Góc ngược/Trên cao/Cận cảnh lên bản hiển thị), 1 = một ảnh một góc máy
+    # (không lưới, không dán nhãn). Xem brain.location_frames().
+    ("project", "location_frames", "INTEGER DEFAULT 4"),
+    # Ghi đè các PROMPT NGẦM (brain.PROMPT_DEFAULTS): trống = dùng mặc định trong code,
+    # "-" = tắt hẳn khối đó. Mỗi cột ứng với một khoá của PROMPT_DEFAULTS.
+    *[("project", f"tpl_{k}", "TEXT") for k in (
+        "single_frame", "single_frame_grid", "image_text",
+        "sheet_character", "sheet_prop", "sheet_location", "sheet_location_one",
+        "cine", "motion", "omni_timeline")],
 ]
 
 

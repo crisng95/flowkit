@@ -174,13 +174,27 @@ _SINGLE_FRAME = (
     "— the way those people are arranged relative to each other. Pose, angle and spacing must be "
     "invented FRESH for THIS shot's action and camera setup, and must differ from other shots; "
     "characters interact with the scene and each other as the action demands. Never paste a "
-    "character in as a rigid cut-out standing the way the reference sheet shows. The location "
-    "reference is a "
-    "2x2 grid of FOUR angles of the place for identity only — PICK the ONE angle that suits "
-    "this shot and render it as a single full-frame scene; do NOT reproduce the grid, the four "
-    "panels, the split layout or any position labels from it, and compose THIS shot at its own "
-    "specified shot size and camera angle. Render NO text, labels, captions, annotations, "
-    "callouts or watermarks, and do not reproduce any text/labels that appear in the references"
+    "character in as a rigid cut-out standing the way the reference sheet shows. Compose THIS "
+    "shot at its own specified shot size and camera angle. Render NO text, labels, captions, "
+    "annotations, callouts or watermarks, and do not reproduce any text/labels that appear in "
+    "the references"
+)
+
+# Phần PHỤ của guard trên, CHỈ chèn khi bối cảnh của dự án dùng lưới 4 khung
+# (`project.location_frames == 4`). Ở chế độ 1 ảnh thì ảnh bối cảnh vốn đã là một góc máy
+# duy nhất nên đoạn này thừa và còn gợi ý sai cho model là có lưới.
+_SINGLE_FRAME_GRID = (
+    "The location reference is a 2x2 grid of FOUR angles of the place for identity only — PICK "
+    "the ONE angle that suits this shot and render it as a single full-frame scene; do NOT "
+    "reproduce the grid, the four panels, the split layout or any position labels from it"
+)
+
+# Câu về ngôn ngữ của CHỮ nằm TRONG ảnh (biển hiệu, chú thích, nhãn), chèn vào mọi prompt
+# ảnh. `{lang}` lấy từ `project.image_text_lang`.
+_IMAGE_TEXT = (
+    "Any visible text, signs, captions or labels in the image must be written in {lang} "
+    "(keep domain-specific foreign terms, e.g. English brand or technical words, in their "
+    "original language)"
 )
 
 
@@ -200,14 +214,25 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
     `header` / `footer` ĐÈ giá trị của dự án khi được truyền (chuỗi rỗng = KHÔNG chèn gì).
     Node editor dùng đường này: ở đó header/footer do node "Prompt header"/"Prompt footer"
     quyết định, không có node thì không chèn — xem agent/studio/graph.py.
+
+    Guard khung đơn và câu về ngôn ngữ chữ trong ảnh là PROMPT NGẦM: xem/chỉnh được trong
+    ⚙ Thiết lập dự án → "Prompt ngầm" (PROMPT_DEFAULTS bên dưới).
     """
     style = (project.get("style") or "").strip()
     header = ((project.get("prompt_header") or "") if header is None else header).strip()
     footer = ((project.get("prompt_footer") or "") if footer is None else footer).strip()
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
     lead = ", ".join(p for p in (style, culture) if p)
-    guard = _SINGLE_FRAME if single_frame else ""
+    guard = single_frame_guard(project) if single_frame else ""
     parts = [header, lead, (body or "").strip(), guard, footer, _image_text_clause(project)]
+    return ". ".join(p for p in parts if p)
+
+
+def single_frame_guard(project: dict | None) -> str:
+    """Guard khung đơn cho ảnh frame + phần phụ về lưới bối cảnh (chỉ khi dùng lưới 4 khung)."""
+    parts = [prompt_part(project, "single_frame")]
+    if location_frames(project) == 4:
+        parts.append(prompt_part(project, "single_frame_grid"))
     return ". ".join(p for p in parts if p)
 
 
@@ -218,9 +243,7 @@ def _image_text_clause(project: dict) -> str:
     lang = (project.get("image_text_lang") or "Vietnamese").strip()
     if not lang:
         return ""
-    return (f"Any visible text, signs, captions or labels in the image must be written "
-            f"in {lang} (keep domain-specific foreign terms, e.g. English brand or "
-            f"technical words, in their original language)")
+    return prompt_part(project, "image_text", lang=lang)
 
 
 # ─── Prompt templates ───────────────────────────────────────
@@ -321,14 +344,36 @@ _SHEET = {
                  "no animals (ignore any people mentioned above). Photoreal, cinematic, deep "
                  "detail. Do NOT draw any text, captions, labels or watermarks yourself — clean "
                  "panels only"),
+    # Biến thể MỘT ẢNH của bối cảnh (`project.location_frames == 1`): một góc máy duy nhất,
+    # không lưới → không có nhãn góc để dán, và shot không phải "chọn một ô" nữa.
+    "location_one": ("ONE single establishing photograph of the place from ONE camera angle — "
+                     "a wide, full-frame view that reads the whole space. NOT a grid, NOT a "
+                     "2x2 layout, no panels, no split screen, no collage, no multiple angles. "
+                     "Photoreal, cinematic, deep detail, consistent architecture, materials, "
+                     "colour and lighting. The place is COMPLETELY EMPTY — no people, no "
+                     "animals (ignore any people mentioned above). Do NOT draw any text, "
+                     "captions, labels or watermarks — clean image only"),
 }
 
 # Position labels overlaid on the location grid quadrants (TL, TR, BL, BR), matching the
-# order fixed in the _SHEET["location"] prompt above.
+# order fixed in the _SHEET["location"] prompt above. Chỉ dùng ở chế độ lưới 4 khung.
 LOCATION_GRID_LABELS = ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận cảnh"]
 
 
-def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
+def location_frames(project: dict | None) -> int:
+    """Ảnh tham chiếu của một bối cảnh là LƯỚI 4 GÓC MÁY (4, mặc định) hay MỘT ẢNH (1).
+
+    Quyết định ba thứ đi liền nhau: mẫu prompt sinh ảnh bối cảnh, việc dán nhãn 4 ô lên bản
+    hiển thị, và đoạn phụ của guard khung đơn khi vẽ frame."""
+    try:
+        n = int((project or {}).get("location_frames") or 4)
+    except (TypeError, ValueError):
+        return 4
+    return 1 if n == 1 else 4
+
+
+def ref_image_prompt(entity_type: str, name: str, description: str,
+                     project: dict | None = None) -> str:
     """Build the (style-less) body of an entity's reference-art prompt.
 
     The entity NAME is a LIBRARY LABEL, not art direction, so it is no longer prefixed onto
@@ -337,9 +382,18 @@ def ref_image_prompt(entity_type: str, name: str, description: str) -> str:
     with a clothesline hung across the street even when the description said nothing of the
     sort. The name is only used as the body when there is no description at all.
     Trailing dots are trimmed so the rule doesn't get glued on after ".." either.
+
+    Luật theo từng loại (sheet nhân vật / đạo cụ / bối cảnh) là PROMPT NGẦM — chỉnh được
+    trong ⚙ Thiết lập dự án. Bối cảnh có hai mẫu: lưới 4 khung hoặc một ảnh.
     """
     base = ((description or "").strip() or (name or "").strip()).rstrip(" .")
-    rule = _SHEET.get(entity_type) or "clean reference image"
+    key = entity_type
+    if entity_type == "location" and location_frames(project) == 1:
+        key = "location_one"
+    rule = (prompt_part(project, f"sheet_{key}") if f"sheet_{key}" in PROMPT_DEFAULTS
+            else "clean reference image")
+    if not rule:
+        return base
     return f"{base}. {rule}" if base else rule
 
 
@@ -421,22 +475,79 @@ _OMNI_TIMELINE_HEAD = (
 )
 
 
-def motion_spec(engine: str = "veo", clip_s: int = 8) -> str:
+# ─── Prompt ngầm: bảng mặc định + ghi đè theo dự án ─────────
+#
+# Mọi khối ở đây được CHÈN NGẦM vào prompt mỗi lần chạy — trước đây chỉ nằm trong code nên
+# không nhìn thấy và không sửa được. Giờ mỗi khoá `k` có một cột `project.tpl_<k>`:
+#   trống  → dùng bản mặc định dưới đây
+#   "-"    → TẮT hẳn khối đó (không chèn gì)
+#   khác   → dùng nguyên văn của người dùng
+# Xem/chỉnh trong ⚙ Thiết lập dự án → nhóm "Prompt ngầm"; mặc định trả về qua
+# GET /api/studio/options → `prompt_defaults`.
+PROMPT_DEFAULTS: dict[str, str] = {
+    "single_frame": _SINGLE_FRAME,
+    "single_frame_grid": _SINGLE_FRAME_GRID,
+    "image_text": _IMAGE_TEXT,
+    "sheet_character": _SHEET["character"],
+    "sheet_prop": _SHEET["prop"],
+    "sheet_location": _SHEET["location"],
+    "sheet_location_one": _SHEET["location_one"],
+    "cine": _CINE,
+    "motion": _MOTION,
+    "omni_timeline": _OMNI_TIMELINE_HEAD,
+}
+
+# Khối nào có chỗ trống {…} phải điền — dùng để cảnh báo trên UI nếu người dùng xoá mất.
+PROMPT_PLACEHOLDERS: dict[str, list[str]] = {
+    "image_text": ["lang"],
+    "omni_timeline": ["clip_s", "n_beats"],
+}
+
+
+def prompt_part(project: dict | None, key: str, **fmt) -> str:
+    """Khối prompt ngầm `key` — bản ghi đè của dự án nếu có, không thì bản mặc định.
+
+    `fmt` điền các chỗ trống {…} của mẫu. Người dùng sửa mẫu mà làm hỏng/xoá mất chỗ trống
+    thì trả nguyên văn thay vì nổ KeyError giữa lúc render."""
+    raw = ""
+    if isinstance(project, dict):
+        raw = (project.get(f"tpl_{key}") or "").strip()
+    if raw == "-":
+        return ""
+    text = raw or PROMPT_DEFAULTS.get(key, "")
+    if not fmt or not text:
+        return text
+    try:
+        return text.format(**fmt)
+    except (KeyError, IndexError, ValueError):
+        return text
+
+
+def cine_spec(project: dict | None = None) -> str:
+    """Khối CINEMATOGRAPHY chèn vào mọi prompt SINH SHOT (không phải prompt sinh ảnh)."""
+    return prompt_part(project, "cine")
+
+
+def motion_spec(engine: str = "veo", clip_s: int = 8,
+                project: dict | None = None) -> str:
     """Khối hướng dẫn viết `motion_prompt`, có thêm phần mốc thời gian khi engine là Omni.
 
     `n_beats` chỉ là SÀN gợi ý (≈1 mốc / 2s), không phải trần — Omni nhận bao nhiêu mốc cũng
     được miễn là hợp logic, nên prompt khuyến khích dày hơn nếu hành động xứng đáng."""
+    motion = prompt_part(project, "motion")
     if engine != "omni":
-        return _MOTION
-    return _MOTION + "\n\n" + _OMNI_TIMELINE_HEAD.format(
-        clip_s=clip_s, n_beats=max(3, round(clip_s / 2)))
+        return motion
+    timeline = prompt_part(project, "omni_timeline",
+                           clip_s=clip_s, n_beats=max(3, round(clip_s / 2)))
+    return "\n\n".join(p for p in (motion, timeline) if p)
 
 
 def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
                                entities: list[dict], style: str,
                                n_frames: int | None = None,
                                location: str | None = None,
-                               engine: str = "veo", clip_s: int = 8) -> str:
+                               engine: str = "veo", clip_s: int = 8,
+                               project: dict | None = None) -> str:
     roster = "\n".join(
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
@@ -478,7 +589,7 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "clip, referencing the SAME entities.\n"
         "- `ref_entity_names`: every entity used in the frame (names WITHOUT braces), and it "
         "MUST include the scene's location.\n"
-        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
+        f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
         "IMPORTANT: whenever a known entity (character/location/prop) appears in ANY prompt, "
         "wrap its name in curly braces exactly as listed (e.g. {Mai}) so it binds to its "
         "reference image.\n"
@@ -705,7 +816,8 @@ def scene_plan_prompt(voiceover: str, entities: list[dict], style: str,
 def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
                          location: str | None = None, target_beats: int | None = None,
                          plan: dict | None = None,
-                         engine: str = "veo", clip_s: int = 8) -> str:
+                         engine: str = "veo", clip_s: int = 8,
+                         project: dict | None = None) -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -776,7 +888,7 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"
         "- `key_phrases`: 1–3 SHORT punchy phrases taken VERBATIM from this beat's `text` "
         "(the words worth flashing on screen as captions); [] if none.\n\n"
-        f"{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
+        f"{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
         f"Wrap known entity names in curly braces. Visual style: {style}.\n\n"
         f"AVAILABLE ENTITIES:\n{roster}\n\nVOICEOVER:\n{voiceover}\n\n"
         "Return ONLY JSON array: [{\"text\":\"...\",\"beat_action\":\"...\","
@@ -786,7 +898,8 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
 
 
 def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
-                      clip_s: int = 8, engine: str = "veo") -> str:
+                      clip_s: int = 8, engine: str = "veo",
+                      project: dict | None = None) -> str:
     """A beat's video is longer than one clip (~clip_s s) → split into `n_parts` continuous
     sub-clips. Each sub-clip starts from the previous one's last frame (chained), so the
     motion must flow on. Returns a continuation motion prompt for each part."""
@@ -798,14 +911,15 @@ def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
         f"FULL ACTION: {beat_action}\nFULL MOTION: {motion_prompt}\n\n"
         f"Write {n_parts} motion prompts, one per sub-clip in order, each describing only the "
         f"portion of the action in that ~{clip_s}s window (continuous, no repetition).\n\n"
-        f"{motion_spec(engine, clip_s)}\n\n"
+        f"{motion_spec(engine, clip_s, project)}\n\n"
         "Return ONLY JSON: {\"parts\":[{\"part_idx\":0,\"motion_prompt\":\"...\"}, ...]}"
     )
 
 
 def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
                         location: str | None = None,
-                        engine: str = "veo", clip_s: int = 8) -> str:
+                        engine: str = "veo", clip_s: int = 8,
+                        project: dict | None = None) -> str:
     """Rewrite the CAMERA work of EXISTING shots without changing the story, order, count or
     per-shot action — only pick fresh, distinct angles so consecutive shots differ. Fast path
     to fix monotonous framing (and the location) without re-segmenting or re-running TTS."""
@@ -830,7 +944,7 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
         "previous shot, then the SAME action), plus a matching `visual_prompt` and `motion_prompt`. "
         "Wrap EVERY character/location/prop name in curly braces exactly as listed so it binds to "
         "its reference image (a character that acts in the shot MUST be wrapped and present).\n"
-        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
+        f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
         f"Visual style: {style}.\n\nAVAILABLE ENTITIES:\n{roster}\n\nSHOTS (in order):\n{listing}\n\n"
         "Return ONLY a JSON array with EXACTLY one object per shot, in order: "
         "[{\"idx\":0,\"description\":\"At {Loc}, <distinct shot size+angle>, <same action> {Entity}...\","
@@ -839,13 +953,14 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
 
 
 def shot_prompts_prompt(description: str, style: str,
-                        engine: str = "veo", clip_s: int = 8) -> str:
+                        engine: str = "veo", clip_s: int = 8,
+                        project: dict | None = None) -> str:
     return (
         "For this storyboard frame, write two prompts for an image-to-video model:\n"
         "- `visual_prompt`: the full camera setup + what is on screen.\n"
         "- `motion_prompt`: the camera move + the action that happens during the clip "
         "(concrete, e.g. 'the fox steps onto the ice, camera slowly pushes in').\n"
-        f"\n{_CINE}\n\n{motion_spec(engine, clip_s)}\n\n"
+        f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
         f"Visual style: {style}.\n\n"
         f"FRAME: {description}\n\n"
         "Return ONLY JSON: {\"visual_prompt\":\"...\",\"motion_prompt\":\"...\"}"
