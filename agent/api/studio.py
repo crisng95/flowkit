@@ -153,6 +153,7 @@ class UpdateProjectRequest(BaseModel):
     tpl_single_frame: Optional[str] = None
     tpl_single_frame_grid: Optional[str] = None
     tpl_image_text: Optional[str] = None
+    tpl_video_text: Optional[str] = None
     tpl_sheet_character: Optional[str] = None
     tpl_sheet_prop: Optional[str] = None
     tpl_sheet_location: Optional[str] = None
@@ -3175,6 +3176,18 @@ def _engine_kw(project: dict) -> dict:
     return {"engine": engine, "clip_s": clip_s, "project": project}
 
 
+def _video_prompt(project: dict, shot: dict, motion: str) -> str:
+    """Prompt cuối cùng gửi cho model video trên đường KHÔNG qua đồ thị.
+
+    Trước đây `motion_prompt` được gửi THÔ, nên video không nhận được style/culture, không
+    nhận prompt header/footer, và nhất là không nhận câu về ngôn ngữ chữ — model tự bịa biển
+    hiệu tiếng Trung vào mọi cảnh phố. Đi qua compose_prompt(media="video") cho giống hệt
+    node "Tạo video" trong Node Editor (xem graph.run_graph)."""
+    return brain.compose_prompt(
+        project, motion, media="video",
+        **graph_mod.prompt_wrap(shot.get("video_graph_json"), project))
+
+
 def _clip_submit(client, project: dict, shot_id: str, prompt: str,
                  start_media_id: str, engine: str, duration_s: int, tier: str,
                  refs: list[dict] | None = None):
@@ -3286,7 +3299,8 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
     clips, first = [], None
     for k in range(n):
         name = f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_p{k+1}_vid"
-        submit = _clip_submit(client, project, shot["id"], motions[k], start_media,
+        submit = _clip_submit(client, project, shot["id"],
+                              _video_prompt(project, shot, motions[k]), start_media,
                               engine, clip_max, tier, refs)
         info = await _render_clip(client, project, shot["id"], submit, name)
         first = first or info
@@ -3346,7 +3360,8 @@ async def _generate_shot_video(shot: dict) -> dict:
             return row
         motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
         refs = await _build_frame_references(shot, scene) if engine == "omni" else None
-        submit = _clip_submit(client, project, shot["id"], motion, shot["image_media_id"],
+        submit = _clip_submit(client, project, shot["id"],
+                              _video_prompt(project, shot, motion), shot["image_media_id"],
                               engine, clip_max, tier, refs)
         info = await _render_clip(
             client, project, shot["id"], submit,

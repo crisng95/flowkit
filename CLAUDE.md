@@ -63,6 +63,11 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   trống = mặc định trong code, `"-"` = tắt hẳn, khác = nguyên văn người dùng. Thêm khối ngầm
   mới thì thêm vào `PROMPT_DEFAULTS` + migration `tpl_<k>` + `PROMPT_KEYS` ở webapp, đừng nội
   suy thẳng hằng số vào prompt. Xem tab Thiết lập → 🧩 Prompt ngầm.
+- **Prompt VIDEO cũng phải đi qua `compose_prompt`, với `media="video"`.** Ảnh và video dùng
+  hai khối ngôn ngữ khác nhau (`image_text` / `video_text`) vì model video hiểu "in the image"
+  là ảnh tham chiếu rồi vẫn bịa biển hiệu tiếng Trung vào các frame sau. Đường không qua đồ
+  thị (`_generate_shot_video` fallback, `_chained_video`) bọc bằng `_video_prompt(...)`, tương
+  đương node "Tạo video" — đừng gửi thẳng `motion_prompt` cho `_clip_submit`.
 - **Ảnh bối cảnh: lưới 4 khung hay một ảnh.** `project.location_frames` (4 mặc định | 1) đổi
   ba thứ CÙNG LÚC — mẫu prompt (`sheet_location` vs `sheet_location_one`), việc dán nhãn bốn
   ô lên bản hiển thị (`label_quadrants`, 3 chỗ gọi), và đoạn phụ `single_frame_grid` của guard

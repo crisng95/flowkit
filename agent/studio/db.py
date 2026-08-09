@@ -200,7 +200,7 @@ _MIGRATIONS = [
     # Ghi đè các PROMPT NGẦM (brain.PROMPT_DEFAULTS): trống = dùng mặc định trong code,
     # "-" = tắt hẳn khối đó. Mỗi cột ứng với một khoá của PROMPT_DEFAULTS.
     *[("project", f"tpl_{k}", "TEXT") for k in (
-        "single_frame", "single_frame_grid", "image_text",
+        "single_frame", "single_frame_grid", "image_text", "video_text",
         "sheet_character", "sheet_prop", "sheet_location", "sheet_location_one",
         "cine", "motion", "omni_timeline")],
 ]

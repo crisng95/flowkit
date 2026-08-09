@@ -197,10 +197,25 @@ _IMAGE_TEXT = (
     "original language)"
 )
 
+# Bản cho VIDEO. Không dùng chung câu của ảnh được: nói "in the image" với model video thì
+# nó hiểu là ảnh tham chiếu, còn chữ MỚI mà nó tự vẽ thêm vào các frame sau (biển hiệu, băng
+# rôn, bảng chỉ đường) thì mặc định rơi về tiếng Trung. Nên phải nói rõ "trong video, ở MỌI
+# frame" và chặn thẳng các hệ chữ khác.
+_VIDEO_TEXT = (
+    "Any text visible anywhere in the video — shop signs, banners, posters, street signs, "
+    "screens, packaging or handwriting — must be written in {lang}, in EVERY frame and for "
+    "the whole clip, including any signage that comes into view as the camera moves. Do NOT "
+    "invent signage or lettering in another language or writing system (no Chinese, Japanese "
+    "or Korean characters, no Cyrillic, no Arabic script) unless the scene explicitly calls "
+    "for it; keep domain-specific foreign terms (English brand or technical words) in their "
+    "original language. Add no subtitles, captions, titles or watermarks of your own"
+)
+
 
 def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
                    single_frame: bool = False,
-                   header: str | None = None, footer: str | None = None) -> str:
+                   header: str | None = None, footer: str | None = None,
+                   media: str = "image") -> str:
     """Assemble the final image/video prompt for a project.
 
     Order: [prompt_header] → style (always first of the visual terms) + culture_hint →
@@ -215,7 +230,11 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
     Node editor dùng đường này: ở đó header/footer do node "Prompt header"/"Prompt footer"
     quyết định, không có node thì không chèn — xem agent/studio/graph.py.
 
-    Guard khung đơn và câu về ngôn ngữ chữ trong ảnh là PROMPT NGẦM: xem/chỉnh được trong
+    `media="video"` đổi câu cuối sang bản dành cho video ("chữ ở MỌI frame") thay vì bản cho
+    ảnh — model video hiểu "in the image" là ảnh tham chiếu nên chữ nó tự vẽ thêm vào clip
+    vẫn rơi về tiếng Trung.
+
+    Guard khung đơn và câu về ngôn ngữ chữ là PROMPT NGẦM: xem/chỉnh được trong
     ⚙ Thiết lập dự án → "Prompt ngầm" (PROMPT_DEFAULTS bên dưới).
     """
     style = (project.get("style") or "").strip()
@@ -224,7 +243,8 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
     lead = ", ".join(p for p in (style, culture) if p)
     guard = single_frame_guard(project) if single_frame else ""
-    parts = [header, lead, (body or "").strip(), guard, footer, _image_text_clause(project)]
+    parts = [header, lead, (body or "").strip(), guard, footer,
+             _text_lang_clause(project, media)]
     return ". ".join(p for p in parts if p)
 
 
@@ -236,14 +256,17 @@ def single_frame_guard(project: dict | None) -> str:
     return ". ".join(p for p in parts if p)
 
 
-def _image_text_clause(project: dict) -> str:
-    """Instruction for the language of any text rendered INSIDE the image (signs,
-    captions, labels). Domain-specific foreign terms (brand/product/English jargon)
-    stay untranslated so they read naturally."""
+def _text_lang_clause(project: dict, media: str = "image") -> str:
+    """Instruction for the language of any text rendered INSIDE the generated media (signs,
+    captions, labels). Domain-specific foreign terms (brand/product/English jargon) stay
+    untranslated so they read naturally.
+
+    Ảnh và video dùng HAI khối khác nhau (`image_text` / `video_text`) nhưng chung một ngôn
+    ngữ (`project.image_text_lang`)."""
     lang = (project.get("image_text_lang") or "Vietnamese").strip()
     if not lang:
         return ""
-    return prompt_part(project, "image_text", lang=lang)
+    return prompt_part(project, "video_text" if media == "video" else "image_text", lang=lang)
 
 
 # ─── Prompt templates ───────────────────────────────────────
@@ -488,6 +511,7 @@ PROMPT_DEFAULTS: dict[str, str] = {
     "single_frame": _SINGLE_FRAME,
     "single_frame_grid": _SINGLE_FRAME_GRID,
     "image_text": _IMAGE_TEXT,
+    "video_text": _VIDEO_TEXT,
     "sheet_character": _SHEET["character"],
     "sheet_prop": _SHEET["prop"],
     "sheet_location": _SHEET["location"],
@@ -500,6 +524,7 @@ PROMPT_DEFAULTS: dict[str, str] = {
 # Khối nào có chỗ trống {…} phải điền — dùng để cảnh báo trên UI nếu người dùng xoá mất.
 PROMPT_PLACEHOLDERS: dict[str, list[str]] = {
     "image_text": ["lang"],
+    "video_text": ["lang"],
     "omni_timeline": ["clip_s", "n_beats"],
 }
 

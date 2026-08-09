@@ -746,8 +746,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             # video model. editImage / replacebg deliberately bypass compose_prompt because
             # they operate verbatim, but a plain "Tạo video" generation should honour the
             # project's visual identity just like "Tạo ảnh". Header/footer: chỉ khi có node.
+            # media="video": câu về ngôn ngữ chữ phải là bản cho VIDEO ("chữ ở MỌI frame"),
+            # bản cho ảnh nói "in the image" nên model hiểu là ảnh tham chiếu và vẫn tự vẽ
+            # thêm biển hiệu tiếng Trung vào các frame sau.
             prompt = brain.compose_prompt(project, body, header=inp["header"] or "",
-                                          footer=inp["footer"] or "")
+                                          footer=inp["footer"] or "", media="video")
             aspect_v = _vid_aspect(project, data)
             kind_v = (data.get("model") or "omni").lower()
             # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor

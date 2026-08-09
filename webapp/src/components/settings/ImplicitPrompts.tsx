@@ -26,6 +26,13 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
     title: "Ngôn ngữ chữ trong ảnh",
     when: "Câu cuối của MỌI prompt ảnh. {lang} lấy từ “Chữ viết/vẽ trong ảnh” ở nhóm Nội dung.",
   },
+  video_text: {
+    group: "Video (clip)",
+    title: "Ngôn ngữ chữ trong video",
+    when: "Câu cuối của MỌI prompt video — cả node “Tạo video” lẫn nút render ở tab Shots. " +
+      "Dùng chung ngôn ngữ với ảnh nhưng phải tách khối riêng: nói “in the image” thì model " +
+      "video hiểu là ảnh tham chiếu, rồi vẫn tự vẽ biển hiệu tiếng Trung vào các frame sau.",
+  },
   sheet_character: {
     group: "Ảnh tham chiếu (asset)",
     title: "Sheet nhân vật",
@@ -73,6 +80,7 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
 const GROUPS = [
   "Ảnh frame (storyboard / shot)",
   "Ảnh tham chiếu (asset)",
+  "Video (clip)",
   "Prompt gửi cho AI viết shot",
 ];
 
