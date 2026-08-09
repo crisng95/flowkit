@@ -1031,11 +1031,40 @@ async def _gen_via_graph(kind: str, row: dict, project: dict, goal: str = "image
     if not node_id:
         return None
     try:
-        return await graph_mod.run_graph(
+        out = await graph_mod.run_graph(
             g, row, {**project, "paygate_tier": await _current_tier()}, kind,
             only_node=node_id, batch_id=batch_id)
     except graph_mod.GraphError as e:
         raise HTTPException(400, f"Chạy đồ thị lỗi: {e}")
+    await _save_node_outputs(kind, row["id"], col, g, out.get("node_outputs") or {})
+    return out
+
+
+async def _save_node_outputs(kind: str, row_id: str, col: str,
+                             graph: dict, node_outputs: dict) -> None:
+    """Ghi `result_*` của lượt vừa chạy vào data từng node rồi lưu lại đồ thị — đúng việc mà
+    Node Editor làm sau mỗi lần chạy (applyOutputs).
+
+    Thiếu bước này, ⚡ chạy từ thẻ shot để lại `result_media_id` CŨ trong graph_json: mở lại
+    Node Editor thì node bị khoá — hoặc bất kỳ node phía dưới nào — sẽ tái dùng đúng tấm ảnh
+    cũ đó thay vì bản ⚡ vừa tạo."""
+    if not node_outputs:
+        return
+    touched = False
+    for n in (graph.get("nodes") or []):
+        v = node_outputs.get(n.get("id")) if isinstance(n, dict) else None
+        if not v or not v.get("web"):
+            continue
+        n.setdefault("data", {}).update({
+            "result_media_id": v.get("media_id"),
+            "result_web": v.get("web"),
+            "result_ext": v.get("ext", "png"),
+        })
+        touched = True
+    if not touched:
+        return
+    table = "shot" if kind == "shot" else "entity"
+    await db.update(table, row_id, {col: json.dumps(graph)})
 
 
 async def _generate_entity_image(entity: dict, project: dict) -> dict:
