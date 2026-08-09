@@ -481,7 +481,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
     - full run (no only_node): a gen node reuses its stored result iff LOCKED.
     - per-node run: nodes being refreshed (only_node + its descendants when propagating)
       regenerate unless locked; every other node needed only as INPUT reuses its stored
-      result. The explicitly-requested only_node always regenerates (lock ignored)."""
+      result.
+
+    KHOÁ 🔒 luôn được tôn trọng, kể cả với node được yêu cầu (`only_node`): khoá là để giữ
+    tấm ảnh mình đã ưng, mà ⚡ giờ còn chạy từ THẺ shot chứ không riêng canvas — bỏ qua khoá
+    ở đó thì node bị re-roll mà người dùng không hề thấy. Muốn tạo lại thì mở khoá."""
     nodes = graph.get("nodes") or []
     edges = graph.get("edges") or []
     if not nodes:
@@ -558,10 +562,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
 
         # Decide whether this gen-like node reuses its stored result or regenerates.
         #  - full run: reuse iff locked.
-        #  - per-node run: a node being REFRESHED regenerates (unless locked); the
-        #    requested only_node always regenerates; any other node (needed only as input)
-        #    reuses. See run_graph docstring.
-        if t in _GEN_TYPES and nid != only_node:
+        #  - per-node run: a node being REFRESHED regenerates unless LOCKED (kể cả node được
+        #    yêu cầu); any other node (needed only as input) reuses. See run_graph docstring.
+        if t in _GEN_TYPES:
             ext = "mp4" if t == "video" else "png"
             handle = _handle_of(data, "video" if t == "video" else "image")
             if allowed is None:                       # full run

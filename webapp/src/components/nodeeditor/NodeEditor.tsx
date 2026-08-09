@@ -743,10 +743,14 @@ function GenControls({ id, data }: { id: string; data: any }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
+        {/* Khoá chặn cả ⚡: bấm mà node vẫn giữ ảnh cũ thì trông như nút hỏng, nên tắt hẳn
+            và nói rõ lý do. ⏬ vẫn bật — nó giữ node này và làm mới các node phía sau. */}
         <button
           onClick={() => genNode(id)}
-          disabled={!!genningId}
-          title="Tạo riêng node này (không chạy node phía sau)"
+          disabled={!!genningId || locked}
+          title={locked
+            ? "Đang khóa — mở khóa 🔒 mới tạo lại được node này"
+            : "Tạo riêng node này (không chạy node phía sau)"}
           className="nodrag flex-1 rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
           {busy ? "Đang tạo…" : "⚡ Tạo nhanh"}
@@ -761,7 +765,9 @@ function GenControls({ id, data }: { id: string; data: any }) {
         </button>
         <button
           onClick={() => update(id, { locked: !locked })}
-          title={locked ? "Đang khóa — bỏ khóa để cho phép tạo lại" : "Khóa: không tạo lại khi chạy toàn tuyến / cập nhật xuôi dòng"}
+          title={locked
+            ? "Đang khóa — bỏ khóa để cho phép tạo lại"
+            : "Khóa: không tạo lại node này, dù chạy toàn tuyến, ⚡ tạo nhanh, hay ⚡ từ thẻ shot"}
           className={`nodrag grid h-[26px] w-7 place-items-center rounded-md border text-xs ${
             locked
               ? "border-amber-500 bg-amber-500/20 text-amber-300"
@@ -771,7 +777,11 @@ function GenControls({ id, data }: { id: string; data: any }) {
           {locked ? "🔒" : "🔓"}
         </button>
       </div>
-      {locked && <div className="text-[10px] text-amber-400/90">Đã khóa — giữ nguyên khi chạy toàn tuyến / xuôi dòng</div>}
+      {locked && (
+        <div className="text-[10px] text-amber-400/90">
+          Đã khóa — giữ nguyên ảnh này cho mọi lượt chạy (toàn tuyến, ⚡, và ⚡ từ thẻ shot)
+        </div>
+      )}
     </div>
   );
 }
