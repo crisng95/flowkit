@@ -108,6 +108,22 @@ export default function SettingsTab({
     shotsApi.upscaleStatus(project.id).then(setUpInfo).catch(() => {});
   }, [project.id]);
 
+  // Dự án chưa được agent bù mặc định (server bản cũ, hoặc khối ngầm vừa thêm) sẽ có ô rỗng.
+  // Đổ bản mặc định vào ĐÚNG những ô đang rỗng ngay khi /options về, để lúc nào cũng có text
+  // thật mà sửa. Không đụng ô đã có chữ nên không bao giờ đè lên cái người dùng đang gõ.
+  useEffect(() => {
+    const def = opts?.prompt_defaults;
+    if (!def) return;
+    setTpl((p) => {
+      const next = { ...p };
+      let changed = false;
+      for (const k of PROMPT_KEYS) {
+        if (!(next[k] ?? "").trim() && def[k]) { next[k] = def[k]; changed = true; }
+      }
+      return changed ? next : p;
+    });
+  }, [opts]);
+
   const set = (k: keyof typeof s, v: string) => setS((p) => ({ ...p, [k]: v }));
 
   const save = async () => {

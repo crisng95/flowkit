@@ -4,10 +4,12 @@ import { Group } from "./ui";
 
 // Các khối prompt mà agent CHÈN NGẦM vào mỗi lần chạy. Trước đây chúng chỉ nằm trong code
 // (brain.py) nên không nhìn thấy, không sửa được, và khi kết quả ra sai kiểu thì không biết
-// câu nào đã đẩy nó đi. Ở đây mỗi khối là một ô:
-//   để TRỐNG → dùng bản mặc định của agent (hiện mờ sẵn trong ô)
-//   gõ nội dung → dùng nguyên văn của bạn
-//   gõ đúng một dấu "-" → TẮT hẳn khối đó
+// câu nào đã đẩy nó đi. Ở đây mỗi khối là một ô chứa TEXT THẬT (agent đã đổ bản mặc định vào
+// dự án lúc tạo / lúc khởi động), sửa trực tiếp được:
+//   sửa nội dung → dùng nguyên văn của bạn
+//   "Đặt lại"    → chép lại bản mặc định của agent
+//   đúng một dấu "-" → TẮT hẳn khối đó
+//   để trống     → agent vẫn rơi về bản mặc định (lưới an toàn, không phải cách dùng chính)
 const META: Record<PromptKey, { title: string; when: string; group: string }> = {
   single_frame: {
     group: "Ảnh frame (storyboard / shot)",
@@ -100,10 +102,12 @@ export default function ImplicitPrompts({
     <>
       <p className="rounded-lg border border-neutral-800 bg-neutral-900/30 px-3 py-2 text-xs leading-relaxed text-neutral-500">
         Những đoạn dưới đây được agent tự nối vào prompt mỗi lần chạy — kể cả khi bạn tạo từ
-        Node Editor. Ô <b className="text-neutral-300">trống</b> = dùng bản mặc định (chữ mờ
-        trong ô). Gõ nội dung để thay hẳn. Gõ đúng một dấu{" "}
+        Node Editor. Mỗi ô là <b className="text-neutral-300">văn bản thật của dự án này</b>,
+        sửa trực tiếp rồi bấm Lưu. <b className="text-neutral-300">Đặt lại</b> để lấy lại bản
+        mặc định, hoặc gõ đúng một dấu{" "}
         <code className="rounded bg-neutral-800 px-1 text-neutral-300">-</code> để{" "}
-        <b className="text-neutral-300">tắt</b> khối đó.
+        <b className="text-neutral-300">tắt</b> khối đó. Dự án mới được đổ sẵn bản mặc định;
+        sửa mặc định trong code về sau không tự lan sang dự án cũ.
       </p>
 
       {GROUPS.map((g) => (
@@ -112,6 +116,7 @@ export default function ImplicitPrompts({
             const v = values[k] ?? "";
             const def = defaults[k] ?? "";
             const off = v.trim() === "-";
+            const same = v.trim() === def.trim();
             const expanded = open === k;
             return (
               <div key={k} className="min-w-0">
@@ -121,15 +126,18 @@ export default function ImplicitPrompts({
                     <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] text-rose-300">
                       đã tắt
                     </span>
-                  ) : v.trim() ? (
-                    <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">
-                      đã sửa
-                    </span>
-                  ) : (
+                  ) : same || !v.trim() ? (
                     <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-500">
                       mặc định
                     </span>
+                  ) : (
+                    <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] text-indigo-300">
+                      đã sửa
+                    </span>
                   )}
+                  <span className="text-[10px] tabular-nums text-neutral-700">
+                    {v.length.toLocaleString("vi-VN")} ký tự
+                  </span>
                   <div className="ml-auto flex shrink-0 gap-2 text-[11px]">
                     <button
                       onClick={() => setOpen(expanded ? null : k)}
@@ -138,22 +146,16 @@ export default function ImplicitPrompts({
                       {expanded ? "Thu gọn" : "Mở rộng"}
                     </button>
                     <button
-                      onClick={() => onChange(k, def)}
-                      title="Chép nguyên văn bản mặc định vào ô để sửa lại từ đó"
-                      className="text-neutral-500 hover:text-neutral-300"
-                    >
-                      Chép mặc định
-                    </button>
-                    <button
-                      onClick={() => onChange(k, off ? "" : "-")}
+                      onClick={() => onChange(k, off ? def : "-")}
+                      title={off ? "Chèn lại khối này" : "Không chèn khối này vào prompt"}
                       className="text-neutral-500 hover:text-neutral-300"
                     >
                       {off ? "Bật lại" : "Tắt"}
                     </button>
-                    {v.trim() !== "" && (
+                    {!same && (
                       <button
-                        onClick={() => onChange(k, "")}
-                        title="Về lại bản mặc định của agent"
+                        onClick={() => onChange(k, def)}
+                        title="Chép lại nguyên văn bản mặc định của agent"
                         className="text-neutral-500 hover:text-neutral-300"
                       >
                         Đặt lại

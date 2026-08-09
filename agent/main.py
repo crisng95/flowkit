@@ -92,6 +92,14 @@ async def lifespan(app: FastAPI):
                     "on" if align.available() else "off (canh giờ theo số từ)")
     except Exception as e:  # noqa: BLE001 — a banner must never block startup
         logger.warning("storytelling config banner unavailable: %s", e)
+    # Bù bản mặc định vào các ô prompt ngầm còn trống (dự án cũ, hoặc khối ngầm mới thêm).
+    try:
+        from agent.studio import brain
+        n = await brain.seed_prompt_defaults()
+        if n:
+            logger.info("Prompt ngầm: đã bù mặc định cho %d dự án", n)
+    except Exception as e:  # noqa: BLE001 — không được chặn khởi động
+        logger.warning("không bù được prompt ngầm mặc định: %s", e)
     ws_task = asyncio.create_task(run_ws_server())
     logger.info("WS server started")
 

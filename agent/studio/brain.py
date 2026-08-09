@@ -548,6 +548,31 @@ def prompt_part(project: dict | None, key: str, **fmt) -> str:
         return text
 
 
+def default_tpl_row() -> dict[str, str]:
+    """Giá trị `tpl_*` cho một dự án MỚI — chép nguyên văn bản mặc định vào DB.
+
+    Cố tình chép chứ không để trống: người dùng phải SỬA được các khối này ngay trong ô thiết
+    lập, mà ô trống thì chẳng có gì để sửa. Đánh đổi: dự án cũ giữ bản đã chép, sửa mặc định
+    trong code về sau KHÔNG tự lan sang chúng — muốn lấy bản mới thì bấm "Đặt lại" ở từng ô."""
+    return {f"tpl_{k}": v for k, v in PROMPT_DEFAULTS.items()}
+
+
+async def seed_prompt_defaults() -> int:
+    """Đổ bản mặc định vào các ô `tpl_*` còn TRỐNG của mọi dự án (chạy lúc khởi động).
+
+    Dự án tạo trước khi có tính năng này — và mỗi khối ngầm thêm mới về sau — đều có ô NULL;
+    không bù thì tab Thiết lập hiện ô rỗng, người dùng tưởng là không có gì. Chỉ đụng vào ô
+    NULL/rỗng nên không bao giờ ghi đè bản người dùng đã sửa hay đã tắt bằng "-"."""
+    cols = [f"tpl_{k}" for k in PROMPT_DEFAULTS]
+    where = " OR ".join(f"({c} IS NULL OR {c}='')" for c in cols)
+    rows = await db.query_all(f"SELECT id, {', '.join(cols)} FROM project WHERE {where}")
+    for r in rows:
+        fill = {c: PROMPT_DEFAULTS[c[4:]] for c in cols if not (r.get(c) or "").strip()}
+        if fill:
+            await db.update("project", r["id"], fill)
+    return len(rows)
+
+
 def cine_spec(project: dict | None = None) -> str:
     """Khối CINEMATOGRAPHY chèn vào mọi prompt SINH SHOT (không phải prompt sinh ảnh)."""
     return prompt_part(project, "cine")

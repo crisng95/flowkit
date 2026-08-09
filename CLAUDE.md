@@ -63,6 +63,11 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   trống = mặc định trong code, `"-"` = tắt hẳn, khác = nguyên văn người dùng. Thêm khối ngầm
   mới thì thêm vào `PROMPT_DEFAULTS` + migration `tpl_<k>` + `PROMPT_KEYS` ở webapp, đừng nội
   suy thẳng hằng số vào prompt. Xem tab Thiết lập → 🧩 Prompt ngầm.
+  **Bản mặc định được CHÉP vào DB**, không để trống: dự án mới lấy `brain.default_tpl_row()`,
+  dự án cũ được `brain.seed_prompt_defaults()` bù lúc khởi động (chỉ đụng ô rỗng, chạy lại
+  không đè). Hệ quả: sửa mặc định trong code KHÔNG lan sang dự án đã có — muốn lan thì phải
+  bấm "Đặt lại" từng ô. `prompt_part` vẫn rơi về mặc định khi ô rỗng, nhưng đó là lưới an
+  toàn chứ không còn là đường chính.
 - **Prompt VIDEO cũng phải đi qua `compose_prompt`, với `media="video"`.** Ảnh và video dùng
   hai khối ngôn ngữ khác nhau (`image_text` / `video_text`) vì model video hiểu "in the image"
   là ảnh tham chiếu rồi vẫn bịa biển hiệu tiếng Trung vào các frame sau. Đường không qua đồ

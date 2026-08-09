@@ -599,6 +599,9 @@ async def create_project(body: CreateProjectRequest):
         "image_text_lang": (body.image_text_lang or "Vietnamese").strip() or "Vietnamese",
         "thumb_media_key": thumb,
         "status": "draft", "created_at": ts, "updated_at": ts,
+        # Prompt ngầm: chép nguyên văn bản mặc định vào dự án mới để ô thiết lập có sẵn text
+        # mà sửa, thay vì ô trống chỉ hiện chữ mờ.
+        **brain.default_tpl_row(),
     }
     if kv.get("image_model"):
         row["image_model"] = kv["image_model"]
