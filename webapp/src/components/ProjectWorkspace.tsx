@@ -1,4 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect, useState,
+  type Dispatch, type ReactNode, type SetStateAction,
+} from "react";
 import { api, type Entity, type Project } from "../api/client";
 import ScriptTab from "./script/ScriptTab";
 import AssetsTab from "./assets/AssetsTab";
@@ -30,29 +33,14 @@ const TAB_ICON: Record<Tab, string> = {
 
 const RAIL_KEY = "fk.sidebar.collapsed";
 
-// Chữ cái đầu của tối đa 2 từ → nhãn cho ô badge cạnh tên dự án.
-const initialsOf = (title: string) =>
-  (title.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("") || "?")
-    .toUpperCase();
-
-// Dòng phụ dưới tên dự án: hai thứ thực sự cần thấy khi đang làm việc.
-const aspectLabel = (a?: string | null) =>
-  a === "VIDEO_ASPECT_RATIO_PORTRAIT" ? "9:16" : "16:9";
-
-// "10" | "abra_r2v_10s" → "Omni 10s"; rỗng/rác → "Veo". Cùng luật với _video_engine bên
-// agent/api/studio.py.
-const engineLabel = (videoModel?: string | null) => {
-  const m = String(videoModel || "").trim().match(/^(?:abra_r2v_)?(\d+)s?$/);
-  const n = m ? Number(m[1]) : NaN;
-  return [4, 6, 8, 10].includes(n) ? `Omni ${n}s` : "Veo";
-};
-
 export default function ProjectWorkspace({
-  project: initial,
-  onBack,
+  project,
+  setProject,
 }: {
+  // Dự án do App sở hữu — tên/khung hình/model hiển thị trên thanh trên cùng của app, nên
+  // mọi thay đổi ở đây phải đẩy ngược lên qua setProject.
   project: Project;
-  onBack: () => void;
+  setProject: Dispatch<SetStateAction<Project>>;
 }) {
   const [tab, setTab] = useState<Tab>("Script");
   // Keep-alive: render every tab we've visited and just hide the inactive ones, so a
@@ -61,7 +49,6 @@ export default function ProjectWorkspace({
   useEffect(() => {
     setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab)));
   }, [tab]);
-  const [project, setProject] = useState(initial);
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [reload, setReload] = useState(0);
@@ -71,18 +58,20 @@ export default function ProjectWorkspace({
     localStorage.setItem(RAIL_KEY, railed ? "1" : "0");
   }, [railed]);
 
+  const pid = project.id;
+
   // Fetch the full project (with script_raw) on open.
   useEffect(() => {
-    api.getProject(initial.id).then(setProject).catch(() => {});
-  }, [initial.id]);
+    api.getProject(pid).then(setProject).catch(() => {});
+  }, [pid, setProject]);
 
   // (Re)load entities on open, every time the node editor opens, and after a node-apply
   // (reload bump). Regenerating an asset elsewhere changes its media_id/image_path, so the
   // "Nguồn ảnh" picker must refetch — otherwise it binds a stale snapshot and shows the old
   // image even though generation (which resolves entity_id live) uses the new one.
   useEffect(() => {
-    api.listEntities(initial.id).then((r) => setEntities(r.entities)).catch(() => {});
-  }, [initial.id, reload, editor]);
+    api.listEntities(pid).then((r) => setEntities(r.entities)).catch(() => {});
+  }, [pid, reload, editor]);
 
   const openEditor = (t: EditorTarget) => setEditor(t);
 
@@ -97,52 +86,9 @@ export default function ProjectWorkspace({
 
   return (
     <JobsProvider projectId={project.id}>
+    {/* Không còn header riêng: danh tính dự án đã lên thanh trên cùng của app và ⚙ đã là
+        một tab, nên toàn bộ chiều cao ở đây thuộc về sidebar + nội dung. */}
     <div className="flex h-full flex-col">
-      {/* Thanh trên chỉ còn danh tính dự án + cấu hình. Trước đây nó ôm cả 7 tab ở giữa
-          (`mx-auto`), nên cửa sổ hẹp là tab bị cắt và tên dự án bị đẩy mất. */}
-      <div className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
-        <button
-          onClick={onBack}
-          className="shrink-0 rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
-        >
-          ← Dự án
-        </button>
-        <div className="h-6 w-px shrink-0 bg-neutral-800" />
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-[13px] font-semibold tracking-tight text-white ring-1 ring-white/10">
-            {initialsOf(project.title)}
-          </div>
-          <div className="min-w-0">
-            {/* `title=` để tên dài bị cắt vẫn xem được đầy đủ khi rê chuột */}
-            <h1
-              title={project.title}
-              className="truncate text-[15px] font-semibold leading-tight tracking-tight text-neutral-100"
-            >
-              {project.title}
-            </h1>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] leading-none text-neutral-500">
-              <span className="rounded border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 font-medium text-neutral-400">
-                {aspectLabel(project.aspect_ratio)}
-              </span>
-              <span className="truncate">{engineLabel(project.video_model)}</span>
-            </div>
-          </div>
-        </div>
-        {/* Ô Style từng nằm ở đây đã dời vào Thiết lập → Phong cách: hai ô cùng sửa một
-            giá trị thì chỉ tổ lệch nhau, vì tab Thiết lập giữ state riêng khi đã mở. */}
-        <button
-          onClick={() => setTab("Thiết lập")}
-          title="Thiết lập dự án & ứng dụng"
-          className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-sm ${
-            tab === "Thiết lập"
-              ? "border-indigo-500 text-indigo-300"
-              : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-          }`}
-        >
-          ⚙
-        </button>
-      </div>
-
       <div className="flex min-h-0 flex-1">
         <nav
           className={`flex shrink-0 flex-col gap-1 overflow-y-auto border-r border-neutral-800 p-2 transition-[width] ${

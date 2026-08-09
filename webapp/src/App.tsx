@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { type Project } from "./api/client";
 import StatusPills from "./components/StatusPills";
 import ProjectGrid from "./components/ProjectGrid";
+import ProjectIdentity from "./components/ProjectIdentity";
 import ProjectWorkspace from "./components/ProjectWorkspace";
 import { useFlowAccount } from "./lib/account";
 
 export default function App() {
+  // `open` VỪA là "đang mở dự án nào" VỪA là bản dự án hiện hành: tên/khung hình/model hiện
+  // trên thanh trên cùng nên phải sống ở đây, còn workspace cập nhật ngược lên qua setProject.
   const [open, setOpen] = useState<Project | null>(null);
   const { account, switches } = useFlowAccount();
   const [switchedTo, setSwitchedTo] = useState<string | null>(null);
@@ -22,12 +25,19 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [switches]);
 
+  // Workspace sửa dự án (đổi cover, lưu thiết lập, sửa kịch bản…) → đẩy ngược lên đây để
+  // thanh trên cùng phản ánh ngay. Bọc lại vì state ở đây có thêm trạng thái `null`.
+  const setProject = useCallback<Dispatch<SetStateAction<Project>>>((u) => {
+    setOpen((p) => (p ? (typeof u === "function" ? u(p) : u) : p));
+  }, []);
+
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
+      <header className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3">
         <button
           onClick={() => setOpen(null)}
-          className="flex items-center gap-2 text-lg font-semibold tracking-tight"
+          title={open ? "Về danh sách dự án" : undefined}
+          className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight"
         >
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm text-white">
             ▶
@@ -35,9 +45,27 @@ export default function App() {
           Flow Studio
         </button>
 
-        {/* Không còn nút ⚙ riêng ở đây: thiết lập cấp app đã gộp vào tab "Thiết lập" của
-            workspace (nhóm "Ứng dụng"), để chỉ có MỘT chỗ chỉnh cấu hình. */}
-        <StatusPills />
+        {/* Danh tính dự án nằm ở thanh TRÊN CÙNG — workspace bên dưới nhờ vậy bỏ hẳn được
+            header riêng của nó (và nút ⚙: Thiết lập đã là một tab). */}
+        {open && (
+          <>
+            <button
+              onClick={() => setOpen(null)}
+              title="Về danh sách dự án"
+              className="shrink-0 rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              ←
+            </button>
+            <div className="h-6 w-px shrink-0 bg-neutral-800" />
+            <div className="min-w-0 flex-1">
+              <ProjectIdentity project={open} />
+            </div>
+          </>
+        )}
+
+        <div className={open ? "shrink-0" : "ml-auto shrink-0"}>
+          <StatusPills />
+        </div>
       </header>
 
       {switchedTo && (
@@ -57,7 +85,7 @@ export default function App() {
 
       <main className={`flex-1 ${open ? "overflow-hidden" : "overflow-auto"}`}>
         {open ? (
-          <ProjectWorkspace project={open} onBack={() => setOpen(null)} />
+          <ProjectWorkspace key={open.id} project={open} setProject={setProject} />
         ) : (
           <ProjectGrid key={switches} onOpen={setOpen} />
         )}
