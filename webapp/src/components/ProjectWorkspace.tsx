@@ -15,6 +15,19 @@ import JobProgress from "./common/JobProgress";
 const TABS = ["Script", "Assets", "Storyboard", "Shots", "Nhạc", "Assemble", "Ảnh"] as const;
 type Tab = (typeof TABS)[number];
 
+// Biểu tượng cho chế độ thu gọn (chỉ còn dải icon) — số thứ tự một mình quá khó đoán.
+const TAB_ICON: Record<Tab, string> = {
+  Script: "📝",
+  Assets: "🎭",
+  Storyboard: "🖼",
+  Shots: "🎬",
+  Nhạc: "🎵",
+  Assemble: "🎞",
+  Ảnh: "🗂",
+};
+
+const RAIL_KEY = "fk.sidebar.collapsed";
+
 export default function ProjectWorkspace({
   project: initial,
   onBack,
@@ -35,6 +48,11 @@ export default function ProjectWorkspace({
   const [entities, setEntities] = useState<Entity[]>([]);
   const [reload, setReload] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Sidebar thu gọn thành dải icon — nhớ lựa chọn qua các phiên làm việc.
+  const [railed, setRailed] = useState(() => localStorage.getItem(RAIL_KEY) === "1");
+  useEffect(() => {
+    localStorage.setItem(RAIL_KEY, railed ? "1" : "0");
+  }, [railed]);
 
   // Fetch the full project (with script_raw) on open.
   useEffect(() => {
@@ -73,39 +91,26 @@ export default function ProjectWorkspace({
   return (
     <JobsProvider projectId={project.id}>
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-4 border-b border-neutral-800 px-6 py-3">
+      {/* Thanh trên chỉ còn danh tính dự án + cấu hình. Trước đây nó ôm cả 7 tab ở giữa
+          (`mx-auto`), nên cửa sổ hẹp là tab bị cắt và tên dự án bị đẩy mất. */}
+      <div className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           onClick={onBack}
-          className="rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+          className="shrink-0 rounded-lg px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
         >
           ← Dự án
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate font-medium">{project.title}</div>
         </div>
-        <nav className="mx-auto flex gap-1 rounded-xl bg-neutral-900 p-1">
-          {TABS.map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                tab === t
-                  ? "bg-neutral-700 text-white"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <span className="mr-1 text-neutral-500">{i + 1}.</span>
-              {t}
-            </button>
-          ))}
-        </nav>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-neutral-500">Style</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden text-xs text-neutral-500 lg:inline">Style</span>
           <input
             value={style}
             onChange={(e) => setStyle(e.target.value)}
             onBlur={saveStyle}
-            className="w-44 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500"
+            placeholder="Style"
+            className="w-32 rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500 lg:w-44"
           />
           <button
             onClick={() => setSettingsOpen(true)}
@@ -117,29 +122,69 @@ export default function ProjectWorkspace({
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        {pane(
-          "Script",
-          <ScriptTab
-            key={project.id}
-            project={project}
-            onScriptChange={(script_raw) => setProject((p) => ({ ...p, script_raw }))}
-          />
-        )}
-        {pane("Assets", <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
-        {pane(
-          "Storyboard",
-          <StoryboardTab
-            key={project.id + reload}
-            project={project}
-            onEdit={openEditor}
-            onCoverSet={(key) => setProject((p) => ({ ...p, thumb_media_key: key }))}
-          />
-        )}
-        {pane("Shots", <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
-        {pane("Nhạc", <MusicTab key={project.id} project={project} />)}
-        {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
-        {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
+      <div className="flex min-h-0 flex-1">
+        <nav
+          className={`flex shrink-0 flex-col gap-1 overflow-y-auto border-r border-neutral-800 p-2 transition-[width] ${
+            railed ? "w-14" : "w-48"
+          }`}
+        >
+          {TABS.map((t, i) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              title={railed ? `${i + 1}. ${t}` : undefined}
+              className={`flex items-center rounded-lg text-sm transition ${
+                railed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3 py-2"
+              } ${
+                tab === t
+                  ? "bg-neutral-700 text-white"
+                  : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+              }`}
+            >
+              <span className="text-base leading-none">{TAB_ICON[t]}</span>
+              {!railed && (
+                <>
+                  <span className="text-xs text-neutral-500">{i + 1}.</span>
+                  <span className="truncate">{t}</span>
+                </>
+              )}
+            </button>
+          ))}
+          <button
+            onClick={() => setRailed((r) => !r)}
+            title={railed ? "Mở rộng thanh tab" : "Thu gọn thanh tab"}
+            className={`mt-auto rounded-lg py-2 text-sm text-neutral-500 hover:bg-neutral-900 hover:text-neutral-300 ${
+              railed ? "px-0 text-center" : "px-3 text-left"
+            }`}
+          >
+            {railed ? "»" : "« Thu gọn"}
+          </button>
+        </nav>
+
+        <div className="min-w-0 flex-1 overflow-hidden">
+          {pane(
+            "Script",
+            <ScriptTab
+              key={project.id}
+              project={project}
+              onScriptChange={(script_raw) => setProject((p) => ({ ...p, script_raw }))}
+            />
+          )}
+          {pane("Assets", <AssetsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
+          {pane(
+            "Storyboard",
+            <StoryboardTab
+              key={project.id + reload}
+              project={project}
+              onEdit={openEditor}
+              onCoverSet={(key) => setProject((p) => ({ ...p, thumb_media_key: key }))}
+            />
+          )}
+          {pane("Shots", <ShotsTab key={project.id + reload} project={project} onEdit={openEditor} />)}
+          {pane("Nhạc", <MusicTab key={project.id} project={project} />)}
+          {pane("Assemble", <AssembleTab key={project.id + reload} project={project} />)}
+          {pane("Ảnh", <AllImages key={project.id + reload} project={project} />)}
+        </div>
       </div>
 
       {editor && (
