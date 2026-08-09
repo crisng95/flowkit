@@ -1025,7 +1025,7 @@ function RemoveBgNode({ id, data }: NodeProps) {
           <option value="gray">Xám trung tính</option>
         </select>
       </label>
-      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI (tốn credit)</div>
+      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI — chậm và có thể bị chặn nội dung</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -1131,7 +1131,7 @@ function ReplaceBgNode({ id, data }: NodeProps) {
       />
       <div className="text-[10px] text-neutral-500">ⓘ nối CHỦ THỂ trước, ẢNH NỀN sau</div>
       <div className="text-[10px] text-neutral-500">ⓘ prompt dùng nguyên văn — không áp style/culture dự án</div>
-      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI (tốn credit)</div>
+      <div className="text-[10px] text-amber-400/80">⚠ Dùng AI — chậm và có thể bị chặn nội dung</div>
       <GenControls id={id} data={d} />
     </Shell>
   );
@@ -2709,7 +2709,7 @@ function Editor({
         )}
       </div>
       <div className="border-t border-neutral-800 px-4 py-1 text-[11px] text-neutral-500">
-        ⓘ {"{định danh}"} trên mỗi node ảnh: gõ {"{tên}"} trong prompt để chỉ đích danh ảnh đó (vd. "cho {"{Nam}"} mặc {"{Áo khoác}"}") · ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ ·Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không tốn credit) · Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · <b className="text-neutral-400">Chuột phải vào đường nối để xóa</b> (hoặc kéo đầu nối ra chỗ trống) · <b className="text-neutral-400">Shift+kéo</b> hoặc ▭ để chọn nhóm → Ctrl+C/V/X/D, Del, kéo để di chuyển cả nhóm
+        ⓘ {"{định danh}"} trên mỗi node ảnh: gõ {"{tên}"} trong prompt để chỉ đích danh ảnh đó (vd. "cho {"{Nam}"} mặc {"{Áo khoác}"}") · ⚡ Tạo riêng 1 node · ⏬ Cập nhật xuôi dòng · 🔒 Khóa · ⧉ Nhân bản node · 💾 Preset để lưu/nạp sơ đồ ·Filter/Color grade/Crop/Vignette/Khung/Ghép/Lưới/Watermark chạy cục bộ (không gọi AI, nhanh) · Chỉ node Tạo video mới trừ credit — mọi thao tác ảnh đều miễn phí ·Kéo-thả ảnh từ máy vào canvas để tạo Nguồn ảnh · Nhấn ảnh để phóng to · <b className="text-neutral-400">Chuột phải vào đường nối để xóa</b> (hoặc kéo đầu nối ra chỗ trống) · <b className="text-neutral-400">Shift+kéo</b> hoặc ▭ để chọn nhóm → Ctrl+C/V/X/D, Del, kéo để di chuyển cả nhóm
       </div>
       {lightbox && (
         <Lightbox

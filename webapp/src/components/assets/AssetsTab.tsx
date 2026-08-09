@@ -14,7 +14,6 @@ import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
-import { creditGuard, CREDIT_COST } from "../../lib/credits";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
 const GROUPS: { type: Entity["type"]; label: string }[] = [
@@ -103,7 +102,7 @@ export default function AssetsTab({
       setErr("Tất cả asset đã có ảnh.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh asset"))) return;
+    // Không hỏi credit: tạo ảnh trên Flow KHÔNG trừ credit (chỉ video mới trừ).
     setErr(null);
     try {
       await api.generateAllAssets(project.id);

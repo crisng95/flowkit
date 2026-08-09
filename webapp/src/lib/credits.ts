@@ -2,8 +2,9 @@ import { api } from "../api/client";
 import type { ConfirmOptions } from "../components/common/Confirm";
 
 // Rough per-item credit cost (Flow doesn't expose exact pricing up front).
-// Video ≈ 20 credits/clip (observed in generate-video response); image is cheap.
-export const CREDIT_COST = { image: 4, video: 20 } as const;
+// CHỈ VIDEO tốn credit — ≈20/clip (đọc từ response generate-video). Tạo ảnh, sửa ảnh, tách
+// nền, upscale ảnh đều KHÔNG trừ credit, nên các batch ảnh không cần hỏi trước.
+export const CREDIT_COST = { video: 20 } as const;
 
 type ConfirmFn = (o: ConfirmOptions) => Promise<boolean>;
 

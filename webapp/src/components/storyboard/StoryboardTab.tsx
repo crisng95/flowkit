@@ -14,7 +14,6 @@ import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import { useConfirm } from "../common/Confirm";
-import { creditGuard, CREDIT_COST } from "../../lib/credits";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
@@ -137,7 +136,7 @@ export default function StoryboardTab({
       setErr("Mọi frame trong scene đã có ảnh.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    // Không hỏi credit: tạo ảnh trên Flow KHÔNG trừ credit (chỉ video mới trừ).
     setErr(null);
     try {
       await storyboard.genSceneAll(sid);
@@ -554,7 +553,7 @@ export default function StoryboardTab({
       setErr("Mọi frame đã có ảnh.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.image, "Tạo ảnh storyboard"))) return;
+    // Không hỏi credit: tạo ảnh trên Flow KHÔNG trừ credit (chỉ video mới trừ).
     setErr(null);
     try {
       await storyboard.genProjectAll(project.id);

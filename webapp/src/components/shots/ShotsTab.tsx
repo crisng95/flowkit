@@ -442,7 +442,10 @@ function ShotPanel({
               title={
                 chained
                   ? "Shot ghép từ nhiều clip — Flow không upscale được video ghép cục bộ"
-                  : `Render lại video ở ${upLabel || "độ phân giải cao"} (tốn credit)`
+                  // Đo thực tế: lên 1080p KHÔNG trừ credit; bản 4K chưa kiểm chứng.
+                  : `Render lại video ở ${upLabel || "độ phân giải cao"} (~1 phút${
+                      upLabel === "4K" ? ", bản 4K có thể tốn credit" : ", không tốn credit"
+                    })`
               }
               className="w-full rounded-lg border border-neutral-700 py-2 text-sm hover:bg-neutral-800 disabled:opacity-40"
             >

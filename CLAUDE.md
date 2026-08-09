@@ -57,6 +57,10 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   `project.prompt_header/footer`. `compose_prompt(..., header=, footer=)` là chỗ phân nhánh.
   Chỉ `image`/`video` nhận bọc — `editImage`/`replacebg` chạy prompt nguyên văn.
   Xem [agent/studio/graph.py](agent/studio/graph.py).
+- **CHỈ VIDEO tốn credit** (≈20/clip). Tạo ảnh, sửa ảnh, tách/thay nền, upscale ảnh, và
+  upscale video lên 1080p đều KHÔNG trừ credit — đừng cảnh báo hay hỏi xác nhận trước các
+  batch ảnh. `CREDIT_COST` trong [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts) chỉ
+  còn `video`.
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

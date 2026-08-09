@@ -77,7 +77,7 @@ async def ensure_local(media_id: str, project_id: str, ext: str = "png",
     (esp. in a concurrent batch) is often not immediately resolvable / trips Flow's media
     rate limit, and a one-shot resolve then returns None. Retrying here saves the download
     instead of leaving image_path NULL (which used to make the caller REGENERATE the image —
-    wasting credits and spawning duplicate Flow media)."""
+    burning a render slot and spawning duplicate Flow media)."""
     rel = Path(project_id) / f"{media_id}.{ext}"
     dest = MEDIA_DIR / rel
     if dest.exists() and dest.stat().st_size > 0:
