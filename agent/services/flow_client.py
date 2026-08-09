@@ -749,9 +749,22 @@ class FlowClient:
             "captchaAction": "IMAGE_GENERATION",
         }, timeout=UPSAMPLE_IMAGE_TIMEOUT)
 
-    async def check_video_status(self, operations: list[dict]) -> dict:
-        """Check status of video generation operations."""
-        body = {"operations": operations}
+    async def check_video_status(self, media: list[dict]) -> dict:
+        """Trạng thái render của các media video. `media` = [{"name": <mediaId>,
+        "projectId": <flowProjectId>}].
+
+        Contract MỚI của `video:batchCheckAsyncVideoGenerationStatus` (Flow đã đổi): trước
+        đây body là `{"operations":[{"operation":{"name":...},"sceneId":...}]}` và trả
+        `operations[]` kèm `metadata.video.fifeUrl`. Shape cũ giờ bị từ chối 400
+        INVALID_ARGUMENT với MỌI operation — đó là lý do cả render video lẫn upscale đều
+        "chạy xong trên Flow mà không lấy về được".
+
+        Response: `{"media":[{name, projectId, workflowId, mediaMetadata:{mediaStatus:{
+        mediaGenerationStatus, error, failureReasons}}, video:{...}}], remainingCredits}`.
+        KHÔNG còn URL trong response — xong rồi thì phải resolve riêng
+        (media_store.resolve_url → media.getMediaUrlRedirect).
+        """
+        body = {"media": media}
         url = self._build_url("check_video_status")
         return await self._send("api_request", {
             "url": url,

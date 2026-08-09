@@ -225,8 +225,8 @@ async def upscale_video(shot: dict, project: dict, tier: str, poll,
                         resolution: str | None = None) -> dict:
     """Submit upsample cho video của shot, chờ xong, tải về và ghi DB.
 
-    `poll(client, op, timeout)` → URL video hoặc None (studio._poll_video).
-    Raise RuntimeError kèm lý do khi hỏng.
+    `poll(client, media_id, flow_project_id, timeout)` → URL video hoặc None
+    (studio._poll_video). Raise RuntimeError kèm lý do khi hỏng.
     """
     media_id = shot.get("video_media_id")
     if not media_id:
@@ -255,7 +255,8 @@ async def upscale_video(shot: dict, project: dict, tier: str, poll,
     if gen_status and "FAIL" in gen_status:
         raise RuntimeError(f"Flow báo upscale hỏng ({gen_status})")
 
-    url = await poll(client, {"operation": {"name": op_name}, "sceneId": shot["id"]}, 600)
+    # Bản upscale là một media riêng tên `<mediaId>_upsampled`; poll theo đúng tên đó.
+    url = await poll(client, op_name, project.get("flow_project_id") or "", 600)
     if not url:
         raise RuntimeError("Upscale chưa xong trong thời gian chờ")
 

@@ -523,17 +523,23 @@ status `SCHEDULED`; duration sai (vd 7s) → 400 báo lỗi rõ. Poll/đổi tê
   "media": [{ "name": "<UUID=mediaId>", "workflowId": "...",
     "mediaMetadata": { "mediaStatus": { "mediaGenerationStatus": "MEDIA_GENERATION_STATUS_SCHEDULED" } } }] }
 ```
-→ giữ `{ "operation": { "name": "<mediaId>" }, "sceneId": "<sceneId>" }` để poll.
+→ giữ `<mediaId>` (media[0].name) để poll.
 
-**`POST /api/flow/check-status`** → body `{ "operations": [{ "operation": { "name": "<mediaId>" }, "sceneId": "..." }] }`
-(⚠️ phải đúng dạng `operation.name`; `{mediaId:...}` bị 400). Khi **xong**, trả:
+**`POST /api/flow/check-status`** → body `{ "media": [{ "name": "<mediaId>", "projectId": "<flowProjectId>" }] }`
+(⚠️ shape CŨ `{operations:[{operation:{name},sceneId}]}` nay bị Flow trả **400
+INVALID_ARGUMENT** với mọi operation). Trả:
 ```jsonc
-{ "operations": [{ "operation": { "metadata": { "video": {
-    "fifeUrl": "https://flow-content.google/video/<id>?Expires=...",      // ✅ URL video
-    "servingBaseUri": "https://flow-content.google/image/<id>?...",        // poster
-    "model": "veo_3_1_i2v_s_fast", "aspectRatio": "..." } } }, "sceneId": "..." }] }
+{ "media": [{ "name": "<mediaId>", "projectId": "...", "workflowId": "...",
+    "mediaMetadata": { "mediaStatus": {
+        "mediaGenerationStatus": "MEDIA_GENERATION_STATUS_SUCCESSFUL" } },  // hoặc _FAILED
+    "video": { "generatedVideo": {...}, "dimensions": { "length": "10s" } } }],
+  "remainingCredits": 705 }
 ```
-Chưa xong → `mediaGenerationStatus` còn `SCHEDULED`/`IN_PROGRESS`, chưa có `video.fifeUrl`.
+Chưa xong → `mediaGenerationStatus` còn `SCHEDULED`/`IN_PROGRESS`/`ACTIVE`.
+`_FAILED` kèm `mediaStatus.failureReasons` (vd `PROMINENT_PERSON`) → hỏng hẳn, đừng chờ tiếp.
+
+⚠️ Response **KHÔNG còn URL** (`fifeUrl`/`servingBaseUri` đã biến mất). Xong rồi thì phải
+resolve riêng qua `GET /api/flow/media/{mediaId}` → `{url, redirected:true}` rồi mới tải.
 
 ### 5.2 Quy tắc rate-limit & đổi tên (BẮT BUỘC trong orchestration)
 
@@ -692,8 +698,8 @@ Hành vi:
 - Batch (*Auto generate*) = tạo nhiều job con + 1 job cha gộp tiến độ, chạy **tuần tự**
   (không song song) để tôn trọng rate-limit.
 - **Rate-limit (xem §5.2):** sau mỗi ảnh chờ **2–6s**; giữa hai video chờ **15–30s**.
-- **Poll video:** worker tự gọi `/api/flow/check-status` với
-  `{operation:{name:mediaId}, sceneId}` tới khi có `video.fifeUrl` (timeout có sẵn).
+- **Poll video:** worker tự gọi `/api/flow/check-status` với `{media:[{name, projectId}]}`
+  tới khi `mediaGenerationStatus = SUCCESSFUL`, rồi resolve URL qua `media/{mediaId}`.
 - **Đổi tên tự động:** ngay khi ảnh/video xong → `change-displayname` bằng `workflow_id`.
 - **Tải về local:** sau đổi tên → `media/{primaryMediaId}` lấy URL → tải file về
   `./media/<project_id>/<media_id>.<ext>` → lưu `*_path`. Mỗi **~6 URL ảnh** nghỉ **2–6s**.

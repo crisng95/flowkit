@@ -27,7 +27,7 @@ from agent.services.flow_client import get_flow_client
 from agent.services.music_client import get_music_client
 from agent.studio import (
     db, media_store, brain, assembler, davinci_xml, vntext, align, hires,
-    accounts, music as music_mod, graph as graph_mod,
+    accounts, music as music_mod, graph as graph_mod, videopoll,
 )
 from agent.studio.jobs import get_job_manager
 
@@ -3044,25 +3044,15 @@ def _extract_video_submit(payload: dict) -> dict:
     }
 
 
-async def _poll_video(client, op: dict, timeout: float = VIDEO_POLL_TIMEOUT,
-                      interval: float = 8):
-    """Poll check-status until the video URL appears; return URL or None.
+async def _poll_video(client, media_id: str, flow_project_id: str,
+                      timeout: float = VIDEO_POLL_TIMEOUT, interval: float = 8):
+    """Chờ video render xong → URL, hoặc None khi hết giờ. Raise videopoll.VideoFailed nếu
+    Flow báo hỏng hẳn. Chỉ là vỏ mỏng quanh `videopoll.poll_video` — giữ tên cũ vì hires
+    nhận hàm này làm callback.
 
-    Default comes from VIDEO_POLL_TIMEOUT (420s), not the old hard-coded 240s — an Omni Flash
-    10s clip regularly runs past 4 minutes, and giving up early is expensive: the render keeps
-    going on Flow (already paid for) while the caller sees a failure."""
-    import time as _t
-    deadline = _t.monotonic() + timeout
-    while _t.monotonic() < deadline:
-        await asyncio.sleep(interval)
-        st = await client.check_video_status([op])
-        data = st.get("data", st)
-        ops = data.get("operations") or []
-        if ops:
-            video = ops[0].get("operation", {}).get("metadata", {}).get("video", {})
-            if video.get("fifeUrl"):
-                return video["fifeUrl"]
-    return None
+    Thời gian chờ mặc định VIDEO_POLL_TIMEOUT (420s): một clip Omni Flash 10s thường chạy
+    quá 4 phút, bỏ cuộc sớm rất đắt vì Flow vẫn render tiếp bản đã tính tiền."""
+    return await videopoll.poll_video(client, media_id, flow_project_id, timeout, interval)
 
 
 CLIP_MAX_S = 8  # one Veo i2v clip ≈ 8s; longer beats are rendered as chained sub-clips
@@ -3135,21 +3125,27 @@ async def _render_clip(client, project: dict, shot_id: str, submit, name: str) -
             if not info.get("media_id"):
                 last = _image_block_reason(res.get("data", res)) or "Flow không trả media"
             else:
-                op = {"operation": {"name": info["media_id"]}, "sceneId": shot_id}
-                url = await _poll_video(client, op)
-                if not url:
-                    # KHÔNG re-submit: hết giờ chờ nghĩa là Flow VẪN ĐANG render bản đã tính
-                    # tiền, không phải nó hỏng. Submit lại chỉ tốn thêm credit cho một bản
-                    # thứ hai rồi lại bỏ rơi cả hai. Ghi operation lại để hồi phục sau.
-                    await db.update("shot", shot_id, {
-                        "operation_json": json.dumps({**info, "name": name,
-                                                      "submitted_at": db.now()}),
-                        "updated_at": db.now()})
-                    raise HTTPException(
-                        504, f"Video vẫn đang render trên Flow (quá {VIDEO_POLL_TIMEOUT:.0f}s "
-                             f"chờ). KHÔNG tạo lại (tránh tốn credit lần nữa) — bấm 'Lấy lại "
-                             f"video' để lấy bản đang render về.")
+                try:
+                    url = await _poll_video(client, info["media_id"],
+                                            project.get("flow_project_id") or "")
+                except videopoll.VideoFailed as ex:
+                    # Flow báo hỏng HẲN (lọc nội dung…) — chờ thêm vô ích. Vẫn cho thử lại
+                    # như một lượt bị chặn: seed khác đôi khi qua được.
+                    last, blocked = f"Flow báo hỏng: {ex}", True
                 else:
+                    if not url:
+                        # KHÔNG re-submit: hết giờ chờ nghĩa là Flow VẪN ĐANG render bản đã
+                        # tính tiền, không phải nó hỏng. Submit lại chỉ tốn thêm credit cho
+                        # một bản thứ hai rồi lại bỏ rơi cả hai. Ghi operation để hồi phục.
+                        await db.update("shot", shot_id, {
+                            "operation_json": json.dumps({**info, "name": name,
+                                                          "submitted_at": db.now()}),
+                            "updated_at": db.now()})
+                        raise HTTPException(
+                            504, f"Video vẫn đang render trên Flow (quá "
+                                 f"{VIDEO_POLL_TIMEOUT:.0f}s chờ). KHÔNG tạo lại (tránh tốn "
+                                 f"credit lần nữa) — bấm 'Lấy lại video' để lấy bản đang "
+                                 f"render về.")
                     if info.get("workflow_id"):
                         try:
                             await client.change_display_name(
@@ -3324,7 +3320,13 @@ async def resume_shot_video(sid: str):
     project = await _project_or_404(scene["project_id"])
     client = _require_extension()
 
-    url = await _poll_video(client, {"operation": {"name": media_id}, "sceneId": sid})
+    try:
+        url = await _poll_video(client, media_id, project.get("flow_project_id") or "")
+    except videopoll.VideoFailed as ex:
+        # Hỏng hẳn thì đừng để nút 'Lấy lại video' treo mãi trên thẻ shot.
+        await db.update("shot", sid, {"operation_json": None, "status": "error",
+                                      "updated_at": db.now()})
+        raise HTTPException(502, f"Flow báo lượt render này hỏng: {ex}")
     if not url:
         raise HTTPException(504, "Video vẫn chưa xong — thử 'Lấy lại video' sau ít phút.")
     if op_info.get("workflow_id") and op_info.get("name"):

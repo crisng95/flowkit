@@ -339,13 +339,17 @@ Dùng để kiểm tra xem tiến trình sinh video/upscale đã hoàn thành ha
 * **Request Body (JSON):**
   ```json
   {
-    "operations": [
+    "media": [
       {
-        "name": "operations/c4898aaf-606f-47cb-b61e-52b49053ac7e/folders/scene_01/operations/123456"
+        "name": "c4898aaf-606f-47cb-b61e-52b49053ac7e",
+        "projectId": "74f00d06-ea1d-49b7-8567-e5c79f4a06b0"
       }
     ]
   }
   ```
+* **Response:** `media[].mediaMetadata.mediaStatus.mediaGenerationStatus`
+  (`..._SUCCESSFUL` / `..._FAILED` + `failureReasons` / còn lại = đang chạy).
+  Không kèm URL — xong rồi thì gọi `GET /api/flow/media/{mediaId}` để lấy link tải.
 
 ---
 

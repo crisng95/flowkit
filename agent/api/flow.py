@@ -74,7 +74,8 @@ class UploadImageRequest(BaseModel):
 
 
 class CheckStatusRequest(BaseModel):
-    operations: list[dict]
+    # [{"name": <mediaId>, "projectId": <flowProjectId>}]
+    media: list[dict]
 
 
 class EditImageRequest(BaseModel):
@@ -193,11 +194,14 @@ async def upscale_video(body: UpscaleVideoRequest):
 
 @router.post("/check-status")
 async def check_status(body: CheckStatusRequest):
-    """Check video generation status."""
+    """Trạng thái render của các media video.
+
+    `media` = [{"name": <mediaId>, "projectId": <flowProjectId>}] — contract MỚI; shape cũ
+    (`operations` + `sceneId`) bị Flow trả 400."""
     client = get_flow_client()
     if not client.connected:
         raise HTTPException(503, "Extension not connected")
-    result = await client.check_video_status(body.operations)
+    result = await client.check_video_status(body.media)
     if result.get("error"):
         raise HTTPException(502, result["error"])
     return result.get("data", result)
