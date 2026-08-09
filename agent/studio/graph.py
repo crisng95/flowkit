@@ -379,6 +379,69 @@ async def _remember_pending(kind: str, shot_id: str, payload: dict, media_id: st
         logger.warning("không ghi được operation_json cho shot %s: %s", shot_id, ex)
 
 
+_WRAP_TARGETS = ("image", "video")   # chỉ hai loại này qua compose_prompt (xem run_graph)
+
+
+def _node_type(n: dict) -> str:
+    return n.get("type") or (n.get("data") or {}).get("_type") or ""
+
+
+def prompt_wrap(graph_json: str | None, project: dict) -> dict:
+    """kwargs `header`/`footer` cho brain.compose_prompt, đọc từ ĐỒ THỊ của shot/entity.
+
+    Một shot/entity sinh được bằng HAI đường: chạy graph trong Node Editor, hoặc ⚡ tạo nhanh
+    (không đụng tới graph). Hai đường phải ra CÙNG một prompt, nên đường tạo nhanh cũng lấy
+    header/footer từ chính đồ thị đó thay vì tự chèn của dự án.
+
+    - chưa có graph (chưa mở Node Editor) → {} = dùng prompt_header/footer của dự án, đúng
+      bằng đồ thị MẶC ĐỊNH vốn có sẵn hai node bọc;
+    - có graph → chỉ tính node promptHeader/promptFooter đang nối vào một node tạo ảnh/video.
+      Xoá node đi thì ⚡ tạo nhanh cũng thôi bọc, y như chạy graph.
+    """
+    if not graph_json:
+        return {}
+    try:
+        g = json.loads(graph_json)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    nodes = {n.get("id"): n for n in (g.get("nodes") or []) if isinstance(n, dict)}
+    targets = {nid for nid, n in nodes.items() if _node_type(n) in _WRAP_TARGETS}
+    picked: dict[str, list[str]] = {"promptHeader": [], "promptFooter": []}
+    seen: set[str] = set()
+    for e in (g.get("edges") or []):
+        if not isinstance(e, dict) or e.get("target") not in targets:
+            continue
+        sid = e.get("source")
+        src = nodes.get(sid)
+        t = _node_type(src) if src else ""
+        if t not in picked or sid in seen:
+            continue
+        seen.add(sid)   # một node bọc nối tới nhiều node sinh vẫn chỉ tính MỘT lần
+        key = "prompt_header" if t == "promptHeader" else "prompt_footer"
+        txt = str((src.get("data") or {}).get("text") or "").strip()
+        picked[t].append(txt or str(project.get(key) or "").strip())
+    return {"header": ". ".join(x for x in picked["promptHeader"] if x),
+            "footer": ". ".join(x for x in picked["promptFooter"] if x)}
+
+
+def output_gen_node(graph: dict) -> str | None:
+    """Node sinh ảnh/video đang nối thẳng vào Output — thứ mà ⚡ tạo nhanh cần chạy.
+
+    ⚡ chạy ĐÚNG node này (`only_node`) chứ không chạy cả đồ thị: các node phía trên giữ
+    nguyên kết quả đã có, nên ảnh trung gian người dùng đã ưng không bị roll lại. Nhiều dây
+    vào Output thì lấy cái cuối, cùng luật với `merged_inputs`."""
+    nodes = {n.get("id"): n for n in (graph.get("nodes") or []) if isinstance(n, dict)}
+    outs = {nid for nid, n in nodes.items() if _node_type(n) == "output"}
+    hit = None
+    for e in (graph.get("edges") or []):
+        if not isinstance(e, dict) or e.get("target") not in outs:
+            continue
+        src = nodes.get(e.get("source"))
+        if src and _node_type(src) in _GEN_TYPES:
+            hit = e["source"]
+    return hit
+
+
 def _handle_of(data: dict, fallback: str) -> str:
     """The `{token}` this node's image binds to inside a downstream prompt.
 
@@ -403,13 +466,16 @@ def _reuse_locked(data: dict, ext: str, handle: str, force: bool = False):
 
 
 async def run_graph(graph: dict, target: dict, project: dict, kind: str,
-                    only_node: str | None = None, propagate: bool = False) -> dict:
+                    only_node: str | None = None, propagate: bool = False,
+                    batch_id: str | None = None) -> dict:
     """Execute the graph; return {media_id, image_path|video_path} of the Output.
 
     only_node: when set, run only that node + its upstream chain and return its media
     (no Output node required, target not modified) — used by the per-node "⚡ tạo nhanh".
     propagate: with only_node, ALSO regenerate everything DOWNSTREAM of it (the "⏬ cập nhật
     xuôi dòng" button) so a change to one node flows through the whole chain.
+    batch_id: gộp lượt tạo ảnh vào MỘT batch Flow và bỏ single-flight lock, để job "Auto gen
+    all" bắn nhiều frame chạy chồng nhau thay vì tuần tự (xem _start_image_job).
 
     Reuse rules (so iterating one node doesn't re-roll the rest):
     - full run (no only_node): a gen node reuses its stored result iff LOCKED.
@@ -571,13 +637,17 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 # node-built frame matches the storyboard table.
                 img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"),
                                                   **wrap)
+            # `seed` + `batch_id`: giống hệt đường ⚡ tạo nhanh — khoá seed của dự án phải có
+            # hiệu lực trong node editor, và batch để job Auto gen all chạy song song được.
             mid, web = await _img_gen_retry(lambda: client.generate_images(
                 prompt=img_prompt,
                 project_id=flow_pid,
                 aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
                 references=inp["references"] or None,
-                image_model=_img_model(project, data)), pid)
+                image_model=_img_model(project, data),
+                seed=project.get("seed") or None,
+                batch_id=batch_id, serialize=batch_id is None), pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
                             "handle": _handle_of(data, "image")}
 
@@ -701,7 +771,11 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
             mid, web = await _vid_gen_retry(submit, target["id"], pid, kind, flow_pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4",
-                            "handle": _handle_of(data, "video")}
+                            "handle": _handle_of(data, "video"),
+                            # Model ĐÃ DÙNG THẬT — người gọi ghi vào shot.video_model, không có
+                            # nó thì "đặt Omni mà ra Veo" chỉ phát hiện được bằng cách mở Flow.
+                            "video_model": OMNI_FLASH_MODELS.get(str(dur_v))
+                            if kind_v == "omni" or kind_v in OMNI_FLASH_MODELS.values() else None}
 
         elif t in _LOCAL_TYPES:
             # Local Pillow processing (no AI): filter / text / upscale / blend. Result is
@@ -734,7 +808,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             raise GraphError("Node này không tạo ra ảnh/video")
         return {"media_id": o.get("media_id"), "path": o.get("web"),
                 "ext": o.get("ext", "png"), "node_outputs": node_outputs,
-                "only_node": only_node}
+                "video_model": o.get("video_model"), "only_node": only_node}
 
     if not any(n.get("type") == "output" for n in nodes):
         raise GraphError("Đồ thị phải có node Output để chỉ định kết quả")

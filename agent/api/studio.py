@@ -1005,12 +1005,49 @@ async def _store_media_on_entity(entity: dict, project: dict, info: dict, label:
     return await _entity_or_404(entity["id"])
 
 
+async def _gen_via_graph(kind: str, row: dict, project: dict, goal: str = "image",
+                         batch_id: str | None = None) -> dict | None:
+    """⚡ tạo nhanh chạy chính ĐỒ THỊ của shot/entity, thay vì tự dựng một prompt riêng.
+
+    Trước đây hai đường dựng prompt độc lập nhau nên kết quả lệch (node editor có
+    header/footer + text người dùng sửa, ⚡ thì không). Nay ⚡ gọi thẳng `run_graph`.
+
+    Chạy ĐÚNG node sinh nối vào Output (`only_node`), không chạy cả đồ thị: các node phía
+    trên giữ nguyên kết quả đã có, nên ảnh trung gian người dùng đã ưng không bị roll lại.
+
+    None = shot/entity chưa có đồ thị dùng được → người gọi rơi về đường dựng prompt trực
+    tiếp, vốn tương đương đồ thị MẶC ĐỊNH.
+    """
+    col = "video_graph_json" if (kind == "shot" and goal == "video") else "graph_json"
+    raw = row.get(col)
+    if not raw:
+        return None
+    try:
+        g = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("graph_json hỏng trên %s %s — dùng đường tạo nhanh cũ", kind, row["id"])
+        return None
+    node_id = graph_mod.output_gen_node(g)
+    if not node_id:
+        return None
+    try:
+        return await graph_mod.run_graph(
+            g, row, {**project, "paygate_tier": await _current_tier()}, kind,
+            only_node=node_id, batch_id=batch_id)
+    except graph_mod.GraphError as e:
+        raise HTTPException(400, f"Chạy đồ thị lỗi: {e}")
+
+
 async def _generate_entity_image(entity: dict, project: dict) -> dict:
+    out = await _gen_via_graph("entity", entity, project)
+    if out:
+        return await _commit_entity_media(entity, project, out["media_id"], out.get("path"))
     client = _require_extension()
     body = brain.ref_image_prompt(
         entity["type"], entity["name"],
         entity.get("description") or entity.get("ref_prompt") or "")
-    prompt = brain.compose_prompt(project, body)
+    prompt = brain.compose_prompt(project, body,
+                                  **graph_mod.prompt_wrap(entity.get("graph_json"), project))
     aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
               else _to_image_aspect(project["aspect_ratio"]))
     model = await _resolve_image_model(project)
@@ -1455,10 +1492,15 @@ async def _generate_frame_image(shot: dict, batch_id: str = None) -> dict:
     fired together actually overlaps — used by the batched generate-all job."""
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
+    out = await _gen_via_graph("shot", shot, project, "image", batch_id=batch_id)
+    if out:
+        return await _commit_shot_media(shot, scene, project, out["media_id"], "png",
+                                        out.get("path"))
     client = _require_extension()
     refs = await _build_frame_references(shot, scene)
     prompt = brain.compose_prompt(
-        project, shot.get("description") or shot.get("title") or "", single_frame=True)
+        project, shot.get("description") or shot.get("title") or "", single_frame=True,
+        **graph_mod.prompt_wrap(shot.get("graph_json"), project))
     aspect = _to_image_aspect(project["aspect_ratio"])
     model = await _resolve_image_model(project)
     tier = await _current_tier()
@@ -3240,7 +3282,17 @@ async def _generate_shot_video(shot: dict) -> dict:
     tier = await _current_tier()
     try:
         if n > 1:
+            # Beat dài hơn một clip: phải cắt thành nhiều sub-clip rồi nối — đồ thị chỉ mô tả
+            # MỘT clip nên nhánh này không đi qua graph được.
             return await _chained_video(shot, scene, project, client, n, engine, clip_max)
+        out = await _gen_via_graph("shot", shot, project, "video")
+        if out:
+            row = await _commit_shot_media(shot, scene, project, out["media_id"], "mp4",
+                                           out.get("path"))
+            if out.get("video_model"):
+                await db.update("shot", shot["id"], {"video_model": out["video_model"]})
+                row = await _shot_or_404(shot["id"])
+            return row
         motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
         refs = await _build_frame_references(shot, scene) if engine == "omni" else None
         submit = _clip_submit(client, project, shot["id"], motion, shot["image_media_id"],
@@ -3476,9 +3528,12 @@ async def run_shot_graph(sid: str, body: SaveGraphRequest, goal: str | None = No
     except graph_mod.GraphError as e:
         raise HTTPException(400, str(e))
     # Chỉ lượt chạy đầy đủ mới ghi media lên shot; `only_node` chỉ trả kết quả node, việc
-    # gán đi qua apply-media (đã có hook riêng ở đó).
-    if not body.only_node and out.get("ext") == "mp4":
-        await _maybe_auto_upscale_video(sid, project)
+    # gán đi qua apply-media (đã có hook riêng ở đó). Chạy nốt phần hậu kỳ CHUNG với ⚡ tạo
+    # nhanh — đổi tên trên Flow, lịch sử phiên bản, auto hi-res/upscale — để hai đường kết
+    # thúc giống hệt nhau chứ không chỉ giống nhau ở prompt.
+    if not body.only_node and out.get("media_id"):
+        await _commit_shot_media(shot, scene, project, out["media_id"],
+                                 out.get("ext", "png"), out.get("path"))
     return {**out, "shot": await _shot_or_404(sid)}
 
 
@@ -3506,6 +3561,10 @@ async def run_entity_graph(eid: str, body: SaveGraphRequest):
                                         only_node=body.only_node, propagate=body.propagate)
     except graph_mod.GraphError as e:
         raise HTTPException(400, str(e))
+    # Hậu kỳ chung với ⚡ tạo nhanh (đổi tên trên Flow, lịch sử phiên bản, dán nhãn ô lưới
+    # cho location) — run_graph tự làm phần dán nhãn nhưng không làm hai phần kia.
+    if not body.only_node and out.get("media_id"):
+        await _commit_entity_media(entity, project, out["media_id"], out.get("path"))
     return {**out, "entity": await _entity_or_404(eid)}
 
 
@@ -3652,49 +3711,70 @@ async def _rename_flow_media(project: dict, media_id: str, label: str) -> None:
         logger.warning("đổi tên media trên Flow lỗi: %s", e)
 
 
-# Commit a media (e.g. the result of a per-node "tạo nhanh") to a shot/entity so the
-# storyboard / asset reflects it without a full graph run.
+# Commit một media (kết quả node "tạo nhanh", ứng viên đã chọn, hoặc lượt ⚡ chạy qua graph)
+# lên shot/entity. MỘT chỗ duy nhất lo phần hậu kỳ — tải về, ghi DB, lịch sử phiên bản, đổi
+# tên trên Flow, auto hi-res/upscale — để mọi đường sinh ảnh kết thúc giống hệt nhau.
+async def _commit_shot_media(shot: dict, scene: dict, project: dict,
+                             media_id: str, ext: str, web: str | None = None) -> dict:
+    col = "video" if ext == "mp4" else "image"
+    web = web or await media_store.ensure_local(media_id, project["id"], ext)
+    await db.update("shot", shot["id"], {
+        f"{col}_media_id": media_id, f"{col}_primary_id": media_id,
+        f"{col}_path": web, "updated_at": db.now(),
+        # Gán video mới ⇒ lượt render treo (nếu có) không còn ý nghĩa.
+        **({"operation_json": None, "status": "done"} if col == "video" else {})})
+    await _record_media_history(project["id"], "shot", shot["id"], col, media_id, media_id, web)
+    # Đổi tên trên Flow giống auto-gen (s01_03_img / _vid) để dễ tìm khi tham chiếu.
+    slot = "vid" if col == "video" else "img"
+    await _rename_flow_media(project, media_id,
+                             f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_{slot}")
+    if col == "video":
+        await _maybe_auto_upscale_video(shot["id"],
+                                        {**project, "paygate_tier": await _current_tier()})
+    else:
+        await _maybe_set_cover(project["id"], project.get("flow_project_id"), media_id)
+        if web and project.get("auto_hires"):
+            await hires.auto_upscale_shot({**shot, "image_media_id": media_id},
+                                          project, await _current_tier())
+    return await _shot_or_404(shot["id"])
+
+
+async def _commit_entity_media(entity: dict, project: dict, media_id: str,
+                               web: str | None = None) -> dict:
+    web = web or await media_store.ensure_local(media_id, project["id"])
+    await db.update("entity", entity["id"], {
+        "media_id": media_id, "primary_media_id": media_id,
+        "image_path": web, "updated_at": db.now()})
+    # A location's media is a 2x2 grid → overlay the position labels for display (same as
+    # quick-gen), so node "tạo nhanh" and candidate-pick get labels too.
+    if entity.get("type") == "location" and web:
+        try:
+            await _label_location_grid(await _entity_or_404(entity["id"]), project)
+        except Exception as ex:  # noqa: BLE001
+            logger.warning("location grid labelling failed for %s: %s", entity["id"], ex)
+    await _record_media_history(project["id"], "entity", entity["id"], "image",
+                                media_id, media_id, web)
+    # Đổi tên trên Flow giống auto-gen (type_tên) để dễ tìm khi tham chiếu.
+    await _rename_flow_media(project, media_id, f"{entity['type']}_{entity['name']}")
+    return await _entity_or_404(entity["id"])
+
+
 @router.post("/shots/{sid}/apply-media")
 async def apply_shot_media(sid: str, body: ApplyMediaRequest):
     shot = await _shot_or_404(sid)
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
-    web = await media_store.ensure_local(body.media_id, project["id"], body.ext)
-    col = "video" if body.ext == "mp4" else "image"
-    await db.update("shot", sid, {
-        f"{col}_media_id": body.media_id, f"{col}_primary_id": body.media_id,
-        f"{col}_path": web, "updated_at": db.now(),
-        # Gán video mới ⇒ lượt render treo (nếu có) không còn ý nghĩa.
-        **({"operation_json": None} if col == "video" else {})})
-    await _record_media_history(project["id"], "shot", sid, col, body.media_id, body.media_id, web)
-    # Đổi tên trên Flow giống auto-gen (s01_03_img / _vid) để dễ tìm khi tham chiếu.
-    slot = "vid" if col == "video" else "img"
-    await _rename_flow_media(project, body.media_id,
-                             f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_{slot}")
-    if col == "video":
-        await _maybe_auto_upscale_video(sid, {**project, "paygate_tier": await _current_tier()})
-    return {"ok": True, "path": web, "shot": await _shot_or_404(sid)}
+    row = await _commit_shot_media(shot, scene, project, body.media_id, body.ext)
+    return {"ok": True, "path": row.get("video_path" if body.ext == "mp4" else "image_path"),
+            "shot": row}
 
 
 @router.post("/entities/{eid}/apply-media")
 async def apply_entity_media(eid: str, body: ApplyMediaRequest):
     entity = await _entity_or_404(eid)
     project = await _project_or_404(entity["project_id"])
-    web = await media_store.ensure_local(body.media_id, project["id"], body.ext)
-    await db.update("entity", eid, {
-        "media_id": body.media_id, "primary_media_id": body.media_id,
-        "image_path": web, "updated_at": db.now()})
-    # A location's media is a 2x2 grid → overlay the position labels for display (same as
-    # quick-gen), so node "tạo nhanh" and candidate-pick get labels too.
-    if entity.get("type") == "location" and web:
-        try:
-            await _label_location_grid(await _entity_or_404(eid), project)
-        except Exception as ex:  # noqa: BLE001
-            logger.warning("location grid labelling (apply-media) failed for %s: %s", eid, ex)
-    await _record_media_history(project["id"], "entity", eid, "image", body.media_id, body.media_id, web)
-    # Đổi tên trên Flow giống auto-gen (type_tên) để dễ tìm khi tham chiếu.
-    await _rename_flow_media(project, body.media_id, f"{entity['type']}_{entity['name']}")
-    return {"ok": True, "path": web, "entity": await _entity_or_404(eid)}
+    row = await _commit_entity_media(entity, project, body.media_id)
+    return {"ok": True, "path": row.get("image_path"), "entity": row}
 
 
 @router.get("/shots/{sid}/history")

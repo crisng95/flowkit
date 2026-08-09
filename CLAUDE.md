@@ -45,12 +45,18 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   (`project.music_mode`): nhạc là tiếng duy nhất, các bài cách nhau `music_gap` giây, và tổng
   thời lượng playlist quyết định độ dài video — hình được lặp cho phủ kín, thừa thì cắt.
   Xem [agent/studio/music.py](agent/studio/music.py) + tab "Nhạc" trong workspace.
-- **Prompt header/footer: hai đường khác nhau.** Đường thường (storyboard, render video ở tab
-  Shots) vẫn tự chèn `project.prompt_header/footer` qua `brain.compose_prompt`. Trong NODE
-  EDITOR thì KHÔNG: chỉ chèn khi trên canvas có node `promptHeader` / `promptFooter` nối vào
-  node tạo ảnh/tạo video, và node để text rỗng nghĩa là "lấy giá trị của dự án".
-  `compose_prompt(..., header=, footer=)` là chỗ phân nhánh. Chỉ `image`/`video` nhận bọc —
-  `editImage`/`replacebg` chạy prompt nguyên văn. Xem [agent/studio/graph.py](agent/studio/graph.py).
+- **⚡ tạo nhanh CHẠY chính đồ thị của shot/entity** (`_gen_via_graph` → `run_graph` với
+  `only_node` = node sinh nối vào Output), nên nó và Node Editor ra kết quả y hệt nhau. Chỉ
+  chạy đúng node đó, không chạy cả đồ thị — node phía trên giữ nguyên kết quả đã có. Chưa có
+  đồ thị → rơi về đường dựng prompt trực tiếp, vốn tương đương đồ thị mặc định. Ngoại lệ:
+  beat dài hơn một clip vẫn đi `_chained_video` (đồ thị chỉ mô tả MỘT clip).
+  Mọi đường kết thúc ở `_commit_shot_media` / `_commit_entity_media` (tải về, ghi DB, lịch sử
+  phiên bản, đổi tên trên Flow, auto hi-res/upscale).
+- **Prompt header/footer đi bằng NODE, không chèn ngầm.** Chỉ vào prompt khi có node
+  `promptHeader` / `promptFooter` nối vào node tạo ảnh/tạo video; node để text rỗng = lấy
+  `project.prompt_header/footer`. `compose_prompt(..., header=, footer=)` là chỗ phân nhánh.
+  Chỉ `image`/`video` nhận bọc — `editImage`/`replacebg` chạy prompt nguyên văn.
+  Xem [agent/studio/graph.py](agent/studio/graph.py).
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.
