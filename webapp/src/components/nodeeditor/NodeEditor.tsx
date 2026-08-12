@@ -1281,15 +1281,15 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
     );
     edges.push({ id: `es${k}`, source: `src${k}`, target: "i" });
   });
-  // Storyboard shot frames from the same scene — let the user reference a nearby frame's
-  // composition, lighting or character pose while editing this shot's image.
-  const entityCount = refIds.length;
+  // Storyboard shot frames from the same scene, để sẵn thành "kệ" bên trái — KHÔNG nối vào
+  // node tạo ảnh. Nối cả scene vào một lượt render là sai y như bên video: mọi frame thành ảnh
+  // tham chiếu, model trộn nhân vật/bối cảnh của shot khác vào tấm đang tạo. Ai cần một frame
+  // cụ thể (dáng, ánh sáng, bố cục) thì tự kéo dây.
   shotRefs.forEach((s, k) => {
     const sid = `sshot${k}`;
-    nodes.push(mk(sid, "source", 0, 200 + (entityCount + k) * 150, {
+    nodes.push(mk(sid, "source", -300, 320 + k * 160, {
       media_id: s.media_id, web: s.web, label: s.label,
     }));
-    edges.push({ id: `ess${k}`, source: sid, target: "i" });
   });
   nodes.push(
     mk("i", "image", 340, 80, { aspect: "16:9", model: "", count: 1, _result: seed.imageSrc || "" })
@@ -1879,10 +1879,14 @@ function Editor({
           source: e.source,
           target: e.target,
         }))
-        // Dọn các dây `sref* → v` do bản defaultGraph cũ tự nối: nó đổ MỌI frame của scene vào
-        // node tạo video. Chỉ xoá đúng dây auto-seed (id `esr*` + nguồn `sref*`) — dây người
-        // dùng tự kéo mang id `e<timestamp>` nên không bao giờ khớp.
-        .filter((e) => !(/^esr\d+$/.test(e.id) && /^sref\d+$/.test(e.source)));
+        // Dọn dây auto-seed của bản defaultGraph cũ, vốn đổ MỌI frame của scene vào node tạo:
+        // `sref* → v` (video) và `sshot* → i` (ảnh). Chỉ xoá đúng cặp id+nguồn do code sinh ra
+        // — dây người dùng tự kéo mang id `e<timestamp>` nên không bao giờ khớp.
+        .filter(
+          (e) =>
+            !(/^esr\d+$/.test(e.id) && /^sref\d+$/.test(e.source)) &&
+            !(/^ess\d+$/.test(e.id) && /^sshot\d+$/.test(e.source))
+        );
       // Refresh entity-bound source nodes to the entity's CURRENT image, so regenerating a
       // location/character updates its reference node instead of keeping the stale snapshot.
       for (const n of nodes) {
