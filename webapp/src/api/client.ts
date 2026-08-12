@@ -36,6 +36,11 @@ export interface Project {
   upscale_res?: string | null;
   // Ảnh tham chiếu của một BỐI CẢNH: 4 = lưới 2x2 bốn góc máy (mặc định), 1 = một ảnh.
   location_frames?: number | null;
+  // Chế độ music video: playlist `music_track` là tiếng duy nhất và quyết định độ dài video.
+  // Sửa qua PATCH /music/settings (không phải updateProject) — xem api.musicSettings.
+  music_mode?: number | null;
+  // Khoảng lặng giữa hai bài liên tiếp trong playlist (giây).
+  music_gap?: number | null;
   // Ghi đè các PROMPT NGẦM (xem PROMPT_KEYS): trống = mặc định của agent, "-" = tắt khối đó.
   tpl_single_frame?: string | null;
   tpl_single_frame_grid?: string | null;

@@ -75,6 +75,11 @@ export default function SettingsTab({
   const [ttsGap, setTtsGap] = useState(project.tts_gap ?? 0.4);
   const [ttsSentenceGap, setTtsSentenceGap] = useState(project.tts_sentence_gap ?? 0.3);
   const [ttsEdgePad, setTtsEdgePad] = useState(project.tts_edge_pad ?? 0.5);
+  // Chế độ music video sống ở cột riêng + endpoint riêng (tab Nhạc), nhưng vẫn là THIẾT LẬP
+  // của kênh nên phải đi theo preset/export. Đọc thẳng từ server chứ không lấy `project` prop:
+  // tab Nhạc đổi nó mà prop ở đây không refresh → xuất ra giá trị cũ. null = chưa đọc được,
+  // lúc đó preset/file không mang khoá nhạc thay vì mang số bịa.
+  const [music, setMusic] = useState<{ mode: boolean; gap: number } | null>(null);
 
   const [hiresInfo, setHiresInfo] = useState<
     { label: string; done: number; total: number; missing: number } | null>(null);
@@ -106,6 +111,9 @@ export default function SettingsTab({
     // Tier quyết định trần độ phân giải (ONE → 2K, TWO → 4K) → hỏi server, không đoán ở client.
     storyboard.hiresStatus(project.id).then(setHiresInfo).catch(() => {});
     shotsApi.upscaleStatus(project.id).then(setUpInfo).catch(() => {});
+    api.musicStatus(project.id)
+      .then((m) => setMusic({ mode: !!m.music_mode, gap: m.gap ?? 3 }))
+      .catch(() => {});
   }, [project.id]);
 
   // Dự án chưa được agent bù mặc định (server bản cũ, hoặc khối ngầm vừa thêm) sẽ có ô rỗng.
@@ -229,7 +237,20 @@ export default function SettingsTab({
     seed, bgm_volume: bgmVol, bgm_duck: bgmDuck, bgm_path: bgmPath,
     voice_id: voiceId, tts_speed: ttsSpeed, tts_gap: ttsGap,
     tts_sentence_gap: ttsSentenceGap, tts_edge_pad: ttsEdgePad,
+    // Chỉ kèm khi đọc được trạng thái nhạc — xem chú thích ở state `music`.
+    ...(music ? { music_mode: music.mode, music_gap: music.gap } : {}),
   });
+
+  // File .json có thể do người dùng sửa tay, và preset cũ có thể đã lưu dạng số 0/1 của DB
+  // (cột SQLite là INTEGER) thay vì boolean. Ép kiểu ở đây chứ đừng lọc bằng `typeof` cứng —
+  // trước kia một khoá lệch kiểu là bị BỎ QUA IM LẶNG, người dùng tưởng đã áp dụng xong.
+  const asNum = (v: any): number | null => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+    return null;
+  };
+  const asBool = (v: any): boolean | null =>
+    typeof v === "boolean" ? v : typeof v === "number" ? !!v : null;
 
   const applySettings = async (obj: any, label = "thiết lập") => {
     if (!obj || typeof obj !== "object") { setErr("Dữ liệu thiết lập không hợp lệ"); return; }
@@ -237,9 +258,29 @@ export default function SettingsTab({
     try {
       const fields: any = {};
       for (const k of STR_KEYS) if (typeof obj[k] === "string") fields[k] = obj[k];
-      for (const k of NUM_KEYS) if (typeof obj[k] === "number") fields[k] = obj[k];
-      for (const k of BOOL_KEYS) if (typeof obj[k] === "boolean") fields[k] = obj[k];
-      if (!Object.keys(fields).length) throw new Error("Không có thiết lập hợp lệ");
+      for (const k of NUM_KEYS) { const v = asNum(obj[k]); if (v != null) fields[k] = v; }
+      for (const k of BOOL_KEYS) { const v = asBool(obj[k]); if (v != null) fields[k] = v; }
+
+      // Chế độ music video đi bằng endpoint RIÊNG (music_mode/music_gap không nằm trong
+      // UpdateProjectRequest). Chạy TRƯỚC updateProject để dòng project trả về ở dưới đã mang
+      // giá trị mới; lỗi ở đây không được làm hỏng cả lượt áp dụng, y như chép nhạc nền.
+      const mMode = asBool(obj.music_mode);
+      const mGap = asNum(obj.music_gap);
+      let musicN = 0;
+      let musicNote = "";
+      if (mMode != null || mGap != null) {
+        try {
+          const st = await api.musicSettings(project.id, {
+            ...(mMode != null ? { music_mode: mMode } : {}),
+            ...(mGap != null ? { gap: mGap } : {}),
+          });
+          setMusic({ mode: !!st.music_mode, gap: st.gap ?? 3 });
+          musicN = (mMode != null ? 1 : 0) + (mGap != null ? 1 : 0);
+        } catch {
+          musicNote = " — nhưng KHÔNG đặt được chế độ nhạc";
+        }
+      }
+      if (!Object.keys(fields).length && !musicN) throw new Error("Không có thiết lập hợp lệ");
       const u = await api.updateProject(project.id, fields);
       setS((p) => ({
         style: u.style ?? p.style, script_lang: u.script_lang ?? p.script_lang,
@@ -256,8 +297,11 @@ export default function SettingsTab({
       if (u.storytelling != null) setStorytelling(!!u.storytelling);
       if (u.auto_hires != null) setAutoHires(!!u.auto_hires);
       if (u.auto_upscale_video != null) setAutoUpVideo(!!u.auto_upscale_video);
-      if (u.upscale_res != null) setUpscaleRes(u.upscale_res);
-      if (u.seed != null) setSeed(u.seed);
+      // NULL ở hai cột này KHÔNG phải "không đổi" mà là một giá trị thật: seed NULL = ngẫu
+      // nhiên (ô hiện 0), upscale_res NULL = kịch trần tier (ô hiện "Cao nhất tier cho phép").
+      // Bỏ qua như các cột khác thì nhập xong ô vẫn hiện số cũ trong khi DB đã trống.
+      setUpscaleRes(u.upscale_res ?? "");
+      setSeed(u.seed ?? 0);
       if (u.bgm_volume != null) setBgmVol(u.bgm_volume);
       if (u.bgm_duck != null) setBgmDuck(!!u.bgm_duck);
       if (u.voice_id != null) setVoiceId(u.voice_id);
@@ -280,7 +324,7 @@ export default function SettingsTab({
         }
       }
       onSaved(applied);
-      setMsg(`Đã áp dụng ${Object.keys(fields).length} ${label}${bgmNote}.`);
+      setMsg(`Đã áp dụng ${Object.keys(fields).length + musicN} ${label}${bgmNote}${musicNote}.`);
     } catch (e: any) {
       setErr("Áp dụng thiết lập lỗi: " + (e.message || e));
     } finally { setBusy(false); }
@@ -299,9 +343,18 @@ export default function SettingsTab({
 
   const importSettings = async (file: File | undefined) => {
     if (!file) return;
+    let obj: any;
     try {
-      await applySettings(JSON.parse(await file.text()), "thiết lập từ file");
-    } catch { setErr("File JSON không hợp lệ"); }
+      obj = JSON.parse(await file.text());
+    } catch { setErr("File JSON không hợp lệ"); return; }
+    // Chặn nhầm file: sao lưu dự án, dump DB… đều là JSON và đều có vài khoá trùng tên, nạp
+    // vào là áp một mớ giá trị lạ mà không ai biết. File đúng luôn mang `_type`; file KHÔNG có
+    // `_type` (bản xuất từ đời trước) thì vẫn cho qua.
+    if (obj?._type && obj._type !== "flowkit-project-settings") {
+      setErr("File này không phải bản xuất THIẾT LẬP dự án.");
+      return;
+    }
+    await applySettings(obj, "thiết lập từ file");
   };
 
   const saveAsPreset = async () => {
@@ -734,7 +787,7 @@ export default function SettingsTab({
 
                 <Group
                   title="Xuất / nhập thiết lập"
-                  hint="File .json chỉ chứa THIẾT LẬP (style, prompt, model, TTS, nhạc nền…), không đụng tới kịch bản/ảnh/video. Nhạc nền đi kèm sẽ được chép sang dự án đích."
+                  hint="File .json chỉ chứa THIẾT LẬP (style, prompt ngầm, model, ảnh/video, TTS, nhạc nền, chế độ music video), không đụng tới kịch bản/ảnh/video đã tạo. Nhạc nền đi kèm sẽ được chép sang dự án đích. Muốn chuyển cả dữ liệu thì dùng .zip ở dưới, nhập lại ở màn hình danh sách dự án."
                 >
                   <div className="flex gap-2">
                     <button onClick={exportSettings}
@@ -754,6 +807,12 @@ export default function SettingsTab({
                     className="block rounded-lg border border-neutral-700 py-2 text-center text-sm text-neutral-300 hover:bg-neutral-800">
                     ⬇ Xuất dự án (.zip)
                   </a>
+                  {/* Nhập .zip tạo DỰ ÁN MỚI nên nút nằm ở màn hình danh sách, không ở đây —
+                      nói rõ ra, không thì tưởng phần này chỉ xuất được mà không nhập lại được. */}
+                  <p className="text-xs leading-relaxed text-neutral-600">
+                    Nhập lại .zip ở <b>màn hình danh sách dự án</b> (nút “⬆ Nhập .zip”) — vì nó
+                    tạo một dự án MỚI chứ không ghi đè dự án đang mở.
+                  </p>
                 </Group>
               </>
             )}
