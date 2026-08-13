@@ -1561,6 +1561,10 @@ async def _generate_frame_image(shot: dict, batch_id: str = None) -> dict:
         gen_call=lambda: client.generate_images(
             prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
             user_paygate_tier=tier, references=refs or None, image_model=model,
+            # Mô tả shot là chữ NGƯỜI DÙNG viết: gọi lại {Nhân vật} ba bốn lần trong một
+            # đoạn là chuyện thường, mà mỗi lần nhắc không dedupe là một reference part
+            # trùng → Flow trả 400 INVALID_ARGUMENT (xem CLAUDE.md).
+            dedupe_refs=True,
             seed=project.get("seed"), batch_id=batch_id, serialize=batch_id is None),
         store_call=lambda info: _store_media_on_shot(
             shot, project, info, "image", f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_img"),
@@ -3935,7 +3939,8 @@ async def shot_candidates(sid: str, body: CandidatesRequest):
     cands = await _gen_candidates(
         lambda: client.generate_images(
             prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-            user_paygate_tier=tier, references=refs or None, image_model=model),
+            user_paygate_tier=tier, references=refs or None, image_model=model,
+            dedupe_refs=True),
         project, max(2, min(4, body.n)))
     return {"candidates": cands}
 

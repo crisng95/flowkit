@@ -124,8 +124,25 @@ const freeHandle = (taken: Set<string>, base: string): string => {
   return cleanHandle(`${base} ${k}`);
 };
 
+// ─── Token {…} trong prompt ─────────────────────────────────
+// `{tên}` là cú pháp DUY NHẤT Flow bind thành reference part (flow_client
+// ._build_structured_parts): viết sai một chữ thì ảnh vẫn đi kèm request nhưng model không
+// biết nó đóng vai gì, và kết quả trả về như một lượt sinh mới. Lẫn vào chữ thường thì không
+// ai soi ra được, nên token được tô nền ngay trong ô nhập — xanh = có ảnh khớp tên, hổ phách
+// = KHÔNG khớp gì cả (token chết, sẽ không bind).
+type Tok = { start: number; end: number; name: string };
+
+// Trả cả VỊ TRÍ vì lớp tô nền và thẻ sửa/xoá phải cắt đúng đoạn chữ trong textarea, không chỉ
+// biết có những tên nào.
+const tokensOf = (text: string): Tok[] =>
+  Array.from(String(text || "").matchAll(/\{([^{}\n]*)\}/g)).map((m) => ({
+    start: m.index!,
+    end: m.index! + m[0].length,
+    name: m[1].trim(),
+  }));
+
 const tokensIn = (text: string): string[] =>
-  Array.from(String(text || "").matchAll(/\{([^{}\n]+)\}/g)).map((m) => m[1].trim());
+  tokensOf(text).map((t) => t.name).filter(Boolean);
 
 const prettyModel = (m: string) =>
   m.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -542,6 +559,10 @@ function PromptNode({ id, data }: NodeProps) {
   // Entity autocomplete: open when the caret sits inside an unclosed "{…".
   const [menu, setMenu] = useState<{ start: number; query: string } | null>(null);
   const [hi, setHi] = useState(0);
+  // Token người dùng vừa BẤM vào (không phải mọi lần con trỏ đi qua) → mở thẻ sửa/xoá.
+  const [picked, setPicked] = useState<number | null>(null);
+  // Textarea cuộn được (h-24) nên lớp nền phải cuộn theo, không thì nền lệch khỏi chữ.
+  const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
     const incoming = d.text ?? "";
@@ -579,15 +600,14 @@ function PromptNode({ id, data }: NodeProps) {
     setAll(v);
     setMenu(entities.length || handles.length ? detect(v, e.target.selectionStart ?? v.length) : null);
     setHi(0);
+    setPicked(null);      // đang gõ thì đóng thẻ, khỏi nhảy ra chắn chữ
   };
 
   // Suggestions = every picture already wired into this graph (by its "định danh"), then any
   // project asset not yet on the canvas. Picking either inserts "{token}" AND makes sure the
   // picture reaches the generator, so the mention actually binds to an image.
   type Sugg = { token: string; sub: string; nodeId?: string; entityId?: string; web?: string };
-  const matches = useMemo<Sugg[]>(() => {
-    if (!menu) return [];
-    const q = menu.query.trim().toLowerCase();
+  const allSugg = useMemo<Sugg[]>(() => {
     const out: Sugg[] = [];
     const seen = new Set<string>();
     for (const h of handles) {
@@ -601,8 +621,25 @@ function PromptNode({ id, data }: NodeProps) {
       out.push({ token: e.name, sub: "Asset — thêm Nguồn ảnh", entityId: e.id,
                  web: e.image_path || undefined });
     }
-    return out.filter((s) => !q || s.token.toLowerCase().includes(q)).slice(0, 8);
-  }, [menu, entities, handles, id]);
+    return out;
+  }, [entities, handles, id]);
+
+  const matches = useMemo<Sugg[]>(() => {
+    if (!menu) return [];
+    const q = menu.query.trim().toLowerCase();
+    return allSugg.filter((s) => !q || s.token.toLowerCase().includes(q)).slice(0, 8);
+  }, [menu, allSugg]);
+
+  // Chỉ tính node ẢNH đang có trên canvas, KHÔNG tính asset của dự án chưa được kéo vào:
+  // asset chưa có node thì chẳng có ảnh nào đi kèm request, token gọi tên nó vẫn là chữ chết.
+  // Chọn nó trong thẻ sẽ tự thêm Nguồn ảnh (bindEntitySource) rồi mới xanh.
+  const knownNames = useMemo(
+    () => new Set(handles.filter((h) => h.id !== id).map((h) => h.handle.trim().toLowerCase())),
+    [handles, id]
+  );
+  const toks = useMemo(() => tokensOf(text), [text]);
+  // Token đang mở thẻ, tra lại theo vị trí mở đầu để nó tự biến mất khi text đổi.
+  const active = picked == null ? null : toks.find((t) => t.start === picked) ?? null;
 
   // Replace the "{query" with "{token}" and drop the caret after "}".
   const pick = (s: Sugg) => {
@@ -617,7 +654,22 @@ function PromptNode({ id, data }: NodeProps) {
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
+  // Thay token đang chọn bằng entity khác (s) hoặc xoá hẳn (s = null). Vẫn là sửa CHỮ trong
+  // textarea nên gõ tay `{}` trực tiếp lúc nào cũng được — thẻ chỉ là lối tắt.
+  const replaceToken = (t: Tok, s: Sugg | null) => {
+    const next = s
+      ? text.slice(0, t.start) + "{" + s.token + "}" + text.slice(t.end)
+      : text.slice(0, t.start) + text.slice(t.end);
+    setAll(next);
+    caretRef.current = s ? t.start + s.token.length + 2 : t.start;
+    setPicked(null);
+    if (s?.entityId) bindEntitySource(id, s.entityId);
+    else if (s?.nodeId) bindNodeSource(id, s.nodeId);
+    requestAnimationFrame(() => taRef.current?.focus());
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (picked != null && e.key === "Escape") { e.preventDefault(); setPicked(null); return; }
     if (!menu || !matches.length) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => (h + 1) % matches.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => (h - 1 + matches.length) % matches.length); }
@@ -626,16 +678,68 @@ function PromptNode({ id, data }: NodeProps) {
   };
 
   return (
-    <Shell type="prompt" id={id} inputs={false} clip={!menu}>
+    <Shell type="prompt" id={id} inputs={false} clip={!menu && !active}>
       <div className="relative">
+        {/* Lớp nền: cùng hộp, cùng font, cùng cách xuống dòng với textarea, nhưng CHỮ TRONG
+            SUỐT — chỉ vẽ nền cho token. Chữ thật vẫn là của textarea nằm trên (nền của nó đặt
+            trong suốt bằng style inline, vì fieldCls cũng có bg-neutral-900 và hai class cùng
+            độ ưu tiên thì thứ tự trong stylesheet quyết định chứ không phải thứ tự viết), nên
+            con trỏ, bôi đen, undo và gõ IME tiếng Việt không bị đụng tới. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-transparent bg-neutral-900 px-2 py-1 text-[11px] leading-snug"
+          // Chừa sẵn máng thanh cuộn ở CẢ HAI lớp: prompt dài làm textarea mọc thanh cuộn,
+          // bề rộng chữ hẹp lại, và nếu lớp nền không hẹp theo thì nền lệch khỏi token.
+          style={{ scrollbarGutter: "stable" }}
+        >
+          <div
+            className="whitespace-pre-wrap break-words text-transparent"
+            style={{ transform: `translateY(${-scrollTop}px)` }}
+          >
+            {toks.length === 0
+              ? text
+              : (() => {
+                  const segs: React.ReactNode[] = [];
+                  let pos = 0;
+                  toks.forEach((t, i) => {
+                    if (t.start > pos) segs.push(<span key={`p${i}`}>{text.slice(pos, t.start)}</span>);
+                    const ok = knownNames.has(t.name.toLowerCase());
+                    segs.push(
+                      <span
+                        key={`t${i}`}
+                        className={`rounded-[3px] ring-1 ${
+                          ok
+                            ? "bg-indigo-500/25 ring-indigo-400/40"
+                            : "bg-amber-500/20 ring-amber-400/40"
+                        } ${active?.start === t.start ? "ring-2 ring-indigo-300" : ""}`}
+                      >
+                        {text.slice(t.start, t.end)}
+                      </span>
+                    );
+                    pos = t.end;
+                  });
+                  segs.push(<span key="tail">{text.slice(pos)}</span>);
+                  return segs;
+                })()}
+          </div>
+        </div>
         <textarea
           ref={taRef}
-          className={`${fieldCls} nowheel h-24 resize-none leading-snug`}
+          className={`${fieldCls} nowheel relative h-24 resize-none leading-snug`}
+          style={{ backgroundColor: "transparent", scrollbarGutter: "stable" }}
           value={text}
           placeholder="Nhập prompt…"
           onChange={onChange}
           onKeyDown={onKeyDown}
-          onBlur={() => setTimeout(() => setMenu(null), 150)}
+          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          onClick={(e) => {
+            // Bấm TRÚNG một token mới mở thẻ — không mở theo mọi lần con trỏ đi qua, vì
+            // gõ giữa token là chuyện thường và popup nhảy ra sẽ rất phiền.
+            const c = e.currentTarget.selectionStart ?? 0;
+            const t = tokensOf(text).find((x) => c > x.start && c < x.end);
+            setPicked(t ? t.start : null);
+          }}
+          onBlur={() => setTimeout(() => { setMenu(null); setPicked(null); }, 150)}
         />
         {menu && matches.length > 0 && (
           // Wider than the 228px node so a name + its source type fit on one line, and tall
@@ -665,9 +769,68 @@ function PromptNode({ id, data }: NodeProps) {
             ))}
           </div>
         )}
+        {active && !menu && (
+          <div className="nodrag nowheel absolute left-0 top-full z-[60] mt-1 w-[288px] overflow-hidden rounded-md border border-neutral-600 bg-neutral-900 shadow-2xl">
+            <div className="flex items-center gap-1.5 border-b border-neutral-800 px-2 py-1.5">
+              <span
+                className={`truncate rounded px-1 text-[11px] ${
+                  knownNames.has(active.name.toLowerCase())
+                    ? "bg-indigo-500/25 text-indigo-200"
+                    : "bg-amber-500/20 text-amber-200"
+                }`}
+              >
+                {"{" + active.name + "}"}
+              </span>
+              <button
+                type="button"
+                onMouseDown={(ev) => { ev.preventDefault(); replaceToken(active, null); }}
+                title="Xoá token này khỏi prompt"
+                className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[11px] text-rose-300 hover:bg-rose-950/50"
+              >
+                ✕ Xoá
+              </button>
+            </div>
+            {!knownNames.has(active.name.toLowerCase()) && (
+              <p className="border-b border-neutral-800 px-2 py-1.5 text-[10px] text-amber-300/90">
+                Chưa có node ảnh nào trên canvas mang tên này — token sẽ KHÔNG gắn được ảnh,
+                model chỉ đọc nó như chữ thường. Chọn một ảnh bên dưới (asset sẽ tự được thêm
+                thành Nguồn ảnh).
+              </p>
+            )}
+            <div className="max-h-56 overflow-auto">
+              {allSugg.length === 0 && (
+                <p className="px-2 py-2 text-[11px] text-neutral-500">Chưa có ảnh nào để chọn.</p>
+              )}
+              {allSugg.map((s) => (
+                <button
+                  key={s.nodeId || s.entityId}
+                  type="button"
+                  onMouseDown={(ev) => { ev.preventDefault(); replaceToken(active, s); }}
+                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] ${
+                    s.token.trim().toLowerCase() === active.name.toLowerCase()
+                      ? "bg-neutral-800 text-white"
+                      : "text-neutral-300 hover:bg-neutral-800"
+                  }`}
+                >
+                  {s.web ? (
+                    <img src={s.web} className="h-7 w-7 shrink-0 rounded object-cover" />
+                  ) : (
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-neutral-800 text-neutral-500">
+                      🖼
+                    </span>
+                  )}
+                  <span className="truncate">{s.token}</span>
+                  <span className="ml-auto shrink-0 pl-1 text-[9px] uppercase tracking-wide opacity-60">
+                    {s.sub}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="text-[10px] text-neutral-500">
-        {'ⓘ gõ "{" để gọi đích danh một ảnh (định danh) — ảnh đó sẽ gắn vào đúng chỗ này trong prompt'}
+        {'ⓘ gõ "{" để gọi đích danh một ảnh (định danh); bấm vào token đã tô nền để đổi ảnh hoặc xoá'}
       </div>
     </Shell>
   );

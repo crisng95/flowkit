@@ -327,7 +327,9 @@ class FlowClient:
                                image_model: str = None,
                                seed: int = None,
                                batch_id: str = None,
-                               serialize: bool = True) -> dict:
+                               serialize: bool = True,
+                               bind_unreferenced: bool = False,
+                               dedupe_refs: bool = False) -> dict:
         """Generate image(s).
 
         Two ways to attach character/entity references:
@@ -350,6 +352,20 @@ class FlowClient:
         overlap (the whole point of batching); the extension handles each request id + captcha
         independently, so concurrent image gens are safe.
 
+        `bind_unreferenced=True`: a reference the prompt never names still gets its own
+        reference part (prepended), instead of riding along as an anonymous `imageInputs`
+        entry. An unnamed reference is attached but NOT bound into `structuredPrompt`, and the
+        model then largely ignores it — the same failure `edit_image` fixes with its
+        `base_part`: the result comes back looking like a fresh, unreferenced generation. Use
+        it wherever the caller KNOWS the picture must be conditioned on (the Node Editor wires
+        an image in on purpose). Leave it off where references are a candidate pool the prompt
+        selects from by name — binding an entity the shot never mentions invites the model to
+        paint that character into the frame.
+
+        `dedupe_refs=True`: mỗi ảnh chỉ được bind MỘT lần (lần nhắc đầu tiên) — xem
+        `_build_structured_parts`. Bật cho prompt nhắc lại cùng entity nhiều lần (prompt do
+        người dùng viết trong Node Editor), không thì Flow trả 400 INVALID_ARGUMENT.
+
         Response structure:
             data.media[].name = mediaId (used for video gen)
         """
@@ -358,7 +374,26 @@ class FlowClient:
         model_key = image_model or IMAGE_MODELS["NANO_BANANA_PRO"]
 
         if references:
-            parts = _build_structured_parts(prompt, references)
+            parts = _build_structured_parts(prompt, references, dedupe=dedupe_refs)
+            if bind_unreferenced:
+                bound = {p["reference"]["media"]["mediaId"]
+                         for p in parts if "reference" in p}
+                # `bound` lớn dần trong vòng lặp: hai reference cùng mediaId (kho ứng viên hay
+                # gặp) chỉ được thêm MỘT part, không thì chính cái bind bù này lại đẻ ra đúng
+                # kiểu part trùng gây 400.
+                extra: list[dict] = []
+                for r in references:
+                    mid = r.get("media_id")
+                    if not mid or mid in bound:
+                        continue
+                    bound.add(mid)
+                    extra.append({"reference": {"media": {"handle": r.get("handle") or "image",
+                                                          "mediaId": mid}}})
+                if extra:
+                    logger.info("generate_images: bind %d reference chưa được prompt gọi tên (%s)",
+                                len(extra), ", ".join(
+                                    p["reference"]["media"]["handle"] for p in extra))
+                parts = extra + parts
             # imageInputs follow the reference order, de-duplicated.
             ref_ids = list(dict.fromkeys(r["media_id"] for r in references))
         else:
@@ -588,8 +623,13 @@ class FlowClient:
         # Like generate_images: prompt may embed entity names as "{handle}" so each mention
         # binds to its own reference image instead of being mixed up. referenceImages follow
         # the reference order, de-duplicated.
+        #
+        # dedupe ở đây LUÔN bật, khác generate_images (nơi nó là tuỳ chọn). Prompt timeline của
+        # một clip gọi lại cùng một frame ở nhiều mốc thời gian là chuyện bình thường, mà mỗi
+        # lần nhắc không dedupe là một reference part — đủ nhiều thì Flow trả 400
+        # INVALID_ARGUMENT (xem CLAUDE.md). Bind lần thứ hai của cùng một ảnh không thêm gì.
         if references:
-            parts = _build_structured_parts(prompt, references)
+            parts = _build_structured_parts(prompt, references, dedupe=True)
             ref_ids = list(dict.fromkeys(r["media_id"] for r in references))
         else:
             parts = [{"text": prompt}]
@@ -869,7 +909,8 @@ def _handle_aliases(handle: str) -> list[str]:
     return out
 
 
-def _build_structured_parts(prompt: str, references: list[dict]) -> list[dict]:
+def _build_structured_parts(prompt: str, references: list[dict],
+                            dedupe: bool = False) -> list[dict]:
     """Build Google Flow `structuredPrompt.parts` by splitting `{handle}` tokens.
 
     Each `{handle}` in `prompt` that matches a reference's `handle` becomes a dedicated
@@ -881,6 +922,13 @@ def _build_structured_parts(prompt: str, references: list[dict]) -> list[dict]:
 
     A reference's handle also binds via its aliases (short/full name around a parenthetical),
     so an extracted name like "Hùng (Phạm Trọng Hùng)" binds from {Hùng} too.
+
+    `dedupe=True`: bind mỗi ẢNH đúng MỘT lần, ở lần nhắc đầu tiên; các lần sau thành chữ
+    thường như token lạ. Bắt buộc cho prompt nhắc lại cùng một entity nhiều lần — một trang
+    storyboard 6 panel gọi `{Phố Hàng Mã}` ở cả 6 panel sinh ra 6 reference part trỏ CÙNG một
+    mediaId trong khi `imageInputs` chỉ có một mục, và Flow trả 400 INVALID_ARGUMENT (đã đo:
+    6 part/1 ảnh → 400; bind một lần → chạy, cùng độ dài prompt). Hai reference part cho cùng
+    một ảnh vốn cũng chẳng nói thêm gì cho model: nó chỉ cần biết ảnh này TÊN gì, một lần.
     """
     # exact handles first (priority), then aliases that don't shadow a real handle
     handle_to_id = {r["handle"].strip(): r["media_id"] for r in (references or [])}
@@ -889,20 +937,34 @@ def _build_structured_parts(prompt: str, references: list[dict]) -> list[dict]:
             handle_to_id.setdefault(alias, r["media_id"])
     parts: list[dict] = []
     pos = 0
+    bound: set[str] = set()      # mediaId đã có reference part (chỉ dùng khi dedupe)
 
     def push_text(s: str):
-        if s:
+        """Nối vào part text liền trước thay vì tạo part mới.
+
+        Mỗi token KHÔNG bind (token lạ, hoặc ảnh đã bind rồi khi dedupe) cắt đoạn văn làm đôi;
+        nếu mỗi mảnh thành một part riêng thì một prompt nhiều token biến structuredPrompt
+        thành hàng chục mảnh text vụn liền kề — Flow trả 400 INVALID_ARGUMENT. Đã đo trên trang
+        storyboard 6 panel: 30 token → 37 part → 400; gộp lại còn 8 part → chạy, cùng nguyên
+        văn prompt ấy. Các mảnh liền kề vốn chỉ là một đoạn văn bị chẻ ra, gộp lại không đổi
+        nghĩa gì."""
+        if not s:
+            return
+        if parts and "text" in parts[-1]:
+            parts[-1]["text"] += s
+        else:
             parts.append({"text": s})
 
     for m in _REF_TOKEN_RE.finditer(prompt):
         handle = m.group(1).strip()
-        if handle in handle_to_id:
+        mid = handle_to_id.get(handle)
+        if mid and not (dedupe and mid in bound):
             push_text(prompt[pos:m.start()])
-            parts.append({"reference": {"media": {"handle": handle,
-                                                  "mediaId": handle_to_id[handle]}}})
+            parts.append({"reference": {"media": {"handle": handle, "mediaId": mid}}})
+            bound.add(mid)
             pos = m.end()
         else:
-            # keep unknown token as plain text without the brackets
+            # token lạ — hoặc ảnh đã bind rồi — giữ làm chữ thường, bỏ ngoặc
             push_text(prompt[pos:m.start()] + handle)
             pos = m.end()
 

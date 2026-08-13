@@ -77,6 +77,26 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   ba thứ CÙNG LÚC — mẫu prompt (`sheet_location` vs `sheet_location_one`), việc dán nhãn bốn
   ô lên bản hiển thị (`label_quadrants`, 3 chỗ gọi), và đoạn phụ `single_frame_grid` của guard
   khung đơn. Đọc qua `brain.location_frames(project)`, đừng kiểm tra cột trực tiếp.
+- **Token `{tên}` lặp lại = Flow trả 400, nên prompt do NGƯỜI DÙNG viết luôn bật `dedupe_refs`.**
+  `_build_structured_parts` biến mỗi `{tên}` khớp reference thành một reference part; gọi lại
+  cùng một entity ở nhiều câu thì sinh nhiều part trỏ CÙNG một `mediaId` trong khi `imageInputs`
+  chỉ có một mục, và Flow trả 400 `INVALID_ARGUMENT`. Đo trên shot thật của Book-03-chapter-37:
+  **33 part / 16 reference → 400**, `dedupe_refs=True` còn 11 part / 5 reference → chạy, cùng
+  nguyên văn prompt. Với dedupe, ảnh được ĐỊNH NGHĨA ở lần nhắc đầu (giữ nguyên ngoặc, bind vào
+  ảnh) còn các lần sau rơi xuống chữ thường — model chỉ cần biết ảnh này TÊN gì một lần. Đã bật:
+  node `image` của Node Editor, `replacebg`, frame shot, candidates, `POST /api/flow/generate-image`
+  (mặc định `true`); `generate_video_from_references` bật cứng vì prompt timeline gọi lại cùng
+  một frame ở nhiều mốc là chuyện thường. Kèm theo, `push_text` phải GỘP mảnh text vào part liền
+  trước: mỗi token không bind cắt đoạn văn làm đôi, để mỗi mảnh thành một part thì structuredPrompt
+  vụn ra hàng chục mảnh và cũng 400. Đừng đổ cho prompt dài — 9306 ký tự chạy tốt, 6078 ký tự vẫn
+  hỏng khi part bị vụn. Triệu chứng đánh lừa: agent báo *"Flow không trả media (có thể bị chặn)"*
+  vì `res["error"]` rỗng; muốn thấy mã lỗi thật thì gửi lại qua `POST /api/flow/generate-image`.
+- **`bind_unreferenced` cho ảnh người dùng CỐ Ý nối vào.** Reference mà prompt không gọi tên chỉ
+  đi lên dưới dạng `imageInputs` vô danh và model gần như bỏ qua — kết quả trông như một lượt sinh
+  mới, chẳng liên quan ảnh tham chiếu. Bật ở node `image` và `replacebg` của Node Editor (người
+  dùng kéo dây vào là cố ý). ĐỪNG bật nơi references là kho ứng viên để prompt tự chọn theo tên
+  (candidates, frame storyboard): bind một entity shot không nhắc tới là mời model vẽ thêm nhân
+  vật vào khung.
 - **CHỈ VIDEO tốn credit** (≈20/clip). Tạo ảnh, sửa ảnh, tách/thay nền, upscale ảnh, và
   upscale video lên 1080p đều KHÔNG trừ credit — đừng cảnh báo hay hỏi xác nhận trước các
   batch ảnh. `CREDIT_COST` trong [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts) chỉ

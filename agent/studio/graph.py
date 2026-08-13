@@ -640,6 +640,13 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 # node-built frame matches the storyboard table.
                 img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"),
                                                   **wrap)
+            # Ảnh nối vào node này là ảnh người dùng CỐ Ý đưa vào, nên phải được bind vào
+            # structuredPrompt kể cả khi prompt không gọi tên nó — không thì Flow chỉ nhận nó
+            # như một imageInput vô danh và trả về ảnh chẳng liên quan gì tới ảnh tham chiếu.
+            if inp["references"]:
+                logger.info("image node %s: %d reference (%s)", nid, len(inp["references"]),
+                            ", ".join(f"{r.get('handle')}={r.get('media_id')}"
+                                      for r in inp["references"]))
             # `seed` + `batch_id`: giống hệt đường ⚡ tạo nhanh — khoá seed của dự án phải có
             # hiệu lực trong node editor, và batch để job Auto gen all chạy song song được.
             mid, web = await _img_gen_retry(lambda: client.generate_images(
@@ -650,6 +657,14 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 references=inp["references"] or None,
                 image_model=_img_model(project, data),
                 seed=project.get("seed") or None,
+                # Prompt của node là do NGƯỜI DÙNG viết nên cùng một entity được gọi tên bao
+                # nhiêu lần cũng được — mà mỗi lần nhắc không dedupe là một reference part, và
+                # part vụn quá nhiều thì Flow trả 400 INVALID_ARGUMENT (xem CLAUDE.md). Đo trên
+                # một prompt 6 dòng, mỗi dòng gọi 3-4 entity: 37-39 part / 19 reference → 400
+                # mọi lượt. Bind lần thứ hai của cùng một ảnh không thêm thông tin gì, nên
+                # dedupe không mất mát.
+                dedupe_refs=True,
+                bind_unreferenced=True,
                 batch_id=batch_id, serialize=batch_id is None), pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
                             "handle": _handle_of(data, "image")}
@@ -728,11 +743,15 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             # Like editImage: the instruction goes in VERBATIM (no compose_prompt). Style /
             # culture / header / footer would fight the two source pictures and repaint the
             # subject — an edit must only do what it was told.
+            # rb_prompt gọi hai ảnh bằng lời ("first/second reference image") chứ không bằng
+            # token {subject}/{background}, nên nếu không bind thì cả hai đi lên dưới dạng vô
+            # danh và model dựng ra một ảnh mới thay vì ghép đúng hai ảnh này.
             mid, web = await _img_gen_retry(lambda: client.generate_images(
                 prompt=rb_prompt,
                 project_id=flow_pid, aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
-                references=seen_rb[:10], image_model=_img_model(project, data)), pid)
+                references=seen_rb[:10], image_model=_img_model(project, data),
+                bind_unreferenced=True), pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
                             "handle": _handle_of(data, "image")}
 

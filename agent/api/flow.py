@@ -21,6 +21,10 @@ class GenerateImageRequest(BaseModel):
     # Tham chiếu có handle: prompt nhúng "{handle}" → structuredPrompt tách thành part riêng
     references: Optional[list[EntityReference]] = None
     image_model: Optional[str] = None   # override model key (vd "GEM_PIX_2", "NARWHAL")
+    # Hai cờ của _build_structured_parts, phơi ra đây vì endpoint này là chỗ soi lỗi 400
+    # INVALID_ARGUMENT: bật/tắt được thì đo thẳng được prompt nào vỡ vì reference part trùng.
+    dedupe_refs: bool = True            # bind mỗi ảnh MỘT lần (lần nhắc đầu)
+    bind_unreferenced: bool = False     # ảnh prompt không gọi tên vẫn được bind
 
 
 class GenerateVideoRequest(BaseModel):
