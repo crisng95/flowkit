@@ -89,10 +89,11 @@ def _extract_json(text: str):
 # Chặn ở HAI đầu vì mỗi đầu đều thủng: dặn model thì nó vẫn quên, còn lọc không thì lần sau ai
 # thêm một cái tên vào danh sách sẽ không hiểu vì sao phải lọc.
 NO_NAMED_STYLE_RULE = (
-    "\n\nNEVER name a real artist, animation studio, film director or franchise as a style "
-    "reference (no \"Ghibli\", \"Makoto Shinkai\", \"Pixar\", \"Disney\", \"Marvel\", "
+    "\n\nDo NOT introduce a real artist, animation studio, film director or franchise as a "
+    "style reference on your own (no \"Ghibli\", \"Makoto Shinkai\", \"Pixar\", \"Disney\", "
     "\"in the style of <person>\", etc.). Describe the look with generic visual attributes "
-    "instead — line quality, shading, palette, lighting, lens, mood."
+    "instead — line quality, shading, palette, lighting, lens, mood. The ONE exception: if "
+    "the style brief above already names one, keep that name exactly as written."
 )
 
 # Chỉ cắt cụm QUY PHONG CÁCH ("X style", "in the style of X", "X-esque"), không cắt mọi lần
@@ -105,11 +106,28 @@ _NAMED_STYLE_RE = re.compile(
     re.I)
 
 
-def strip_named_styles(text: str) -> str:
-    """Bỏ mọi cụm quy phong cách về tên riêng khỏi một đoạn text do AI sinh."""
+def named_styles_in(text: str) -> set[str]:
+    """Các tên riêng XUẤT HIỆN trong một đoạn text (viết thường), để làm danh sách cho phép."""
+    return {m.group(0).lower() for m in re.finditer(_NAMED, text or "", re.I)}
+
+
+def strip_named_styles(text: str, allow: set[str] | None = None) -> str:
+    """Bỏ cụm quy phong cách về tên riêng khỏi text do AI sinh.
+
+    `allow` = các tên NGƯỜI DÙNG đã tự đặt (lấy từ chính prompt gửi đi, nơi chứa style của dự
+    án). Chọn "Ghibli style" ở ⚙ Cấu hình là một quyết định có chủ ý — lọc mất là app tự ý đổi
+    phong cách của người dùng. Chỉ chặn tên do AI TỰ THÊM."""
     if not text or not _NAMED_STYLE_RE.search(text):
         return text
-    out = _NAMED_STYLE_RE.sub("", text)
+
+    def _cut(m: re.Match) -> str:
+        if allow and any(a in m.group(0).lower() for a in allow):
+            return m.group(0)       # tên của người dùng — giữ nguyên văn
+        return ""
+
+    out = _NAMED_STYLE_RE.sub(_cut, text)
+    if out == text:
+        return text
     # Dọn dấu câu mồ côi do chỗ cắt để lại — không dọn thì prompt đầy ", ." và " ,".
     out = re.sub(r"\s+([,.;:])", r"\1", out)       # "Chibi , a" → "Chibi, a"
     out = re.sub(r",\s*([.;:])", r"\1", out)       # "background, ." → "background."
@@ -119,14 +137,14 @@ def strip_named_styles(text: str) -> str:
     return out.strip(" ,;")
 
 
-def _scrub(obj):
+def _scrub(obj, allow: set[str] | None = None):
     """Áp strip_named_styles lên MỌI chuỗi trong cây JSON model trả về."""
     if isinstance(obj, str):
-        return strip_named_styles(obj)
+        return strip_named_styles(obj, allow)
     if isinstance(obj, list):
-        return [_scrub(v) for v in obj]
+        return [_scrub(v, allow) for v in obj]
     if isinstance(obj, dict):
-        return {k: _scrub(v) for k, v in obj.items()}
+        return {k: _scrub(v, allow) for k, v in obj.items()}
     return obj
 
 
@@ -134,7 +152,13 @@ async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int
     """Run the agent and return parsed JSON. Raises HTTPException(502) on failure.
 
     Mọi text sinh ra đều đi qua đây, nên đây cũng là chỗ DUY NHẤT lọc tên hoạ sĩ/hãng phim —
-    khỏi phải nhớ thêm luật ở từng hàm dựng prompt."""
+    khỏi phải nhớ thêm luật ở từng hàm dựng prompt.
+
+    Tên đã CÓ SẴN trong `prompt` được cho qua: prompt luôn nhúng style của dự án, nên tên nằm
+    trong đó là do người dùng tự đặt. Chỉ tên xuất hiện RIÊNG ở phần model trả về mới bị cắt."""
+    allow = named_styles_in(prompt)
+    if allow:
+        logger.info("brain: giữ tên phong cách người dùng đặt: %s", ", ".join(sorted(allow)))
     prompt = prompt + NO_NAMED_STYLE_RULE
     agent, model = await _agent_cfg()
     last_err = None
@@ -146,7 +170,7 @@ async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int
             last_err = res.get("stderr") or f"exit {res.get('exit_code')}"
             continue
         try:
-            return _scrub(_extract_json(res.get("stdout", "")))
+            return _scrub(_extract_json(res.get("stdout", "")), allow)
         except ValueError as e:
             last_err = str(e)
             logger.warning("brain JSON parse failed (try %d): %s", attempt, e)
