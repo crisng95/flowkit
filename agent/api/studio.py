@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
     UPSAMPLE_VIDEO_RESOLUTIONS, VIDEO_POLL_TIMEOUT,
-    VEO_LITE_MODELS, VEO_LITE_DURATIONS, VEO_LITE_DEFAULT_S, VEO_LITE_TIERS,
+    VEO_LITE_MODELS, VEO_LITE_FRAME_DURATIONS, VEO_LITE_DEFAULT_S, VEO_LITE_TIERS,
 )
 from agent.services.flow_client import get_flow_client
 from agent.services.music_client import get_music_client
@@ -371,8 +371,11 @@ async def options():
                          + [{"value": s, "label": f"Omni Flash {s}s (r2v)"}
                             for s in OMNI_FLASH_MODELS],
         # UI cần biết tài khoản có Ultra không để giải thích vì sao thiếu lựa chọn Lite.
+        # `frame_durations` CHỈ áp dụng cho kiểu nội suy khung đầu/cuối — kiểu "inference"
+        # Flow cứng 8s, đừng dựng ô chọn độ dài cho nó.
         "veo_lite": {"available": veo_lite_ok, "tier": tier,
-                     "durations": VEO_LITE_DURATIONS,
+                     "frame_durations": VEO_LITE_FRAME_DURATIONS,
+                     "inference_duration": VEO_LITE_DEFAULT_S,
                      "default_duration": VEO_LITE_DEFAULT_S},
         "upscale_models": list(UPSCALE_MODELS.keys()),
         "aspect_ratios": ["VIDEO_ASPECT_RATIO_LANDSCAPE", "VIDEO_ASPECT_RATIO_PORTRAIT"],

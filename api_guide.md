@@ -339,14 +339,18 @@ Kiểu sinh **suy ra từ ảnh truyền vào**, không có cờ riêng:
   | `end_media_id` | `str` | No | `null` | Ảnh khung cuối (đi kèm `start_media_id` → nội suy) |
   | `reference_media_ids` | `list[str]` | No | `null` | Ảnh tham chiếu cho kiểu inference |
   | `references` | `list[dict]` | No | `null` | `{handle, media_id}` để bind token `{handle}` trong prompt |
-  | `duration_s` | `int` | No | `8` | `4`, `6` hoặc `8`. **Chưa có tác dụng** — xem ghi chú dưới |
+  | `duration_s` | `int` | No | `8` | `4`, `6` hoặc `8` — **chỉ kiểu nội suy**; inference/i2v luôn 8s. Xem ghi chú dưới |
   | `aspect_ratio` | `str` | No | `"VIDEO_ASPECT_RATIO_LANDSCAPE"` | Tỉ lệ video |
   | `user_paygate_tier` | `str` | No | `"PAYGATE_TIER_TWO"` | Phải là `PAYGATE_TIER_TWO` |
 
-> ⚠️ **`duration_s` chưa nối được.** Mọi request mẫu bắt được từ Flow đều là bản 8s mặc định
-> nên chưa biết Flow gọi field độ dài là gì; agent cố tình KHÔNG đoán (field lạ ⇒ Flow trả 400
-> cho mọi lượt sinh). Bắt một request 4s/6s trên Flow, đọc tên field trong post data rồi đặt
-> `VEO_LITE_DURATION_FIELD=<tên field>` là 4/6s chạy ngay, không phải sửa code.
+> **Độ dài chỉ đổi được ở kiểu nội suy.** Flow cứng 8s cho inference và i2v, nên `duration_s`
+> gửi kèm hai kiểu đó bị ép về 8 thay vì chuyển tiếp một giá trị model không nhận.
+>
+> ⚠️ **Và ngay cả với nội suy, `duration_s` cũng chưa nối được.** Mọi request mẫu bắt được từ
+> Flow đều là bản 8s mặc định nên chưa biết Flow gọi field độ dài là gì; agent cố tình KHÔNG
+> đoán (field lạ ⇒ Flow trả 400 cho mọi lượt sinh). Bắt một request nội suy 4s/6s trên Flow,
+> đọc tên field trong post data rồi đặt `VEO_LITE_DURATION_FIELD=<tên field>` là chạy ngay,
+> không phải sửa code.
 
 * **Request Example (inference):**
   ```json

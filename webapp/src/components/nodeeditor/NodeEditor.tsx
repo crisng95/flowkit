@@ -997,9 +997,10 @@ function VideoNode({ id, data }: NodeProps) {
   const d = data as any;
   const model = d.model || "veo_lite";
   const isLite = model === "veo_lite";
-  // Cả Omni Flash và Veo Lite đều cho chọn độ dài clip; Veo i2v thì cứng 8s.
-  const hasDuration = isLite || model === "omni";
-  // Veo Lite chỉ có 4/6/8s, Omni Flash lên tới 10s.
+  const liteMode = d.lite_mode || "inference";
+  // Chỉ hai chỗ chọn được độ dài: Omni Flash (4-10s) và Veo Lite kiểu nội suy khung
+  // đầu/cuối (4-8s). Veo Lite "inference" và Veo i2v đều bị Flow cứng 8s.
+  const hasDuration = model === "omni" || (isLite && liteMode === "frames");
   const maxDur = isLite ? 8 : 10;
   // No per-node duration → follow ⚙ Cấu hình dự án (the backend falls back the same way).
   const eff = Math.min(d.duration || projDur || 8, maxDur);
@@ -1012,11 +1013,11 @@ function VideoNode({ id, data }: NodeProps) {
           <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Kiểu tạo</div>
           <select
             className={fieldCls}
-            value={d.lite_mode || "inference"}
+            value={liteMode}
             onChange={(e) => update(id, { lite_mode: e.target.value })}
           >
-            <option value="inference">Inference (mọi ảnh nối vào = tham chiếu)</option>
-            <option value="frames">Khung đầu + khung cuối (nội suy)</option>
+            <option value="inference">Inference — mọi ảnh nối vào = tham chiếu (8s)</option>
+            <option value="frames">Khung đầu + khung cuối — nội suy (4/6/8s)</option>
           </select>
         </label>
       )}
@@ -1043,8 +1044,9 @@ function VideoNode({ id, data }: NodeProps) {
             <br />
             ⚡ Veo 3.1 Lite [Lower Priority]: 0 credit, chỉ tài khoản Ultra — đổi lại xếp hàng
             ưu tiên thấp nên clip lâu hơn.
-            {(d.lite_mode || "inference") === "frames" &&
-              " Nối ĐÚNG 2 ảnh: ảnh vào trước là khung đầu, ảnh sau là khung cuối."}
+            {liteMode === "frames"
+              ? " Nối ĐÚNG 2 ảnh: ảnh vào trước là khung đầu, ảnh sau là khung cuối."
+              : " Kiểu inference Flow cứng 8s — muốn 4/6s thì đổi sang khung đầu + khung cuối."}
           </>
         )}
       </div>
@@ -1500,16 +1502,12 @@ const WRAP_TYPES = ["promptHeader", "promptFooter"] as const;
 const WRAP_TARGETS = ["image", "video"];
 
 // ─── Editor ─────────────────────────────────────────────────
-// Độ dài clip mà ⚙ Cấu hình dự án đang đặt, dùng làm mặc định cho ô "Thời lượng" của node
-// video. "10" / "abra_r2v_10s" → 10; "veo_lite" / "veo_lite_4" → 8 / 4; Veo i2v (cứng 8s)
-// hay giá trị lạ → null. Mirrors _omni_duration() in agent/studio/graph.py.
+// Độ dài clip mà ⚙ Cấu hình dự án đặt được — chỉ Omni Flash mới có ("10" / "abra_r2v_10s"
+// → 10). Veo Lite và Veo i2v đều bị Flow cứng 8s ở cấp dự án nên trả null: độ dài của Veo
+// Lite chỉ đổi được trên chính node, và chỉ ở kiểu nội suy khung đầu/cuối.
+// Mirrors _omni_duration() in agent/studio/graph.py.
 const omniDuration = (videoModel?: string | null): number | null => {
-  const raw = String(videoModel || "").trim();
-  if (raw.startsWith("veo_lite")) {
-    const n = Number(raw.slice("veo_lite".length).replace(/^_/, ""));
-    return [4, 6, 8].includes(n) ? n : 8;
-  }
-  const m = raw.match(/^(?:abra_r2v_)?(\d+)s?$/);
+  const m = String(videoModel || "").trim().match(/^(?:abra_r2v_)?(\d+)s?$/);
   const n = m ? Number(m[1]) : NaN;
   return [4, 6, 8, 10].includes(n) ? n : null;
 };

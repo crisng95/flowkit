@@ -131,9 +131,10 @@ IMAGE_MODELS = _MODELS["image_models"]
 # i2v lite vốn đã là mặc định của PAYGATE_TIER_TWO trong `video_models`; hai key còn lại chỉ
 # mở khi tài khoản là Gemini Ultra, nên chúng nằm riêng ở đây thay vì trộn vào bảng theo tier.
 VEO_LITE_MODELS = _MODELS.get("veo_lite_models", {})
-# Độ dài clip Flow cho chọn với họ Lite. Khác Omni Flash (độ dài NẰM TRONG model key), Veo
-# nhận độ dài như một tham số riêng — xem VEO_LITE_DURATION_FIELD.
-VEO_LITE_DURATIONS = [str(d) for d in _MODELS.get("veo_lite_durations", [])]
+# Độ dài clip: CHỈ kiểu nội suy (khung đầu + khung cuối) mới cho chọn. Kiểu "inference" r2v
+# cứng 8s — Flow không đưa ra lựa chọn nào khác cho nó. Khác Omni Flash (độ dài NẰM TRONG
+# model key), Veo nhận độ dài như một tham số riêng — xem VEO_LITE_DURATION_FIELD.
+VEO_LITE_FRAME_DURATIONS = [str(d) for d in _MODELS.get("veo_lite_durations", [])]
 VEO_LITE_DEFAULT_S = 8
 # Tier được phép dùng Lite r2v/nội suy. Flow trả tier qua /v1/credits (`userPaygateTier`);
 # Gemini Ultra = PAYGATE_TIER_TWO.

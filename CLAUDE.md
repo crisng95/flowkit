@@ -109,9 +109,12 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   khác đuôi `_low_priority` trong key. Ba key trong `models.json → veo_lite_models`, chọn theo
   ảnh truyền vào chứ không theo cờ: start+end → `interpolation`, chỉ start → `i2v`, không start
   → `r2v` ("inference"). Đổi key ở đó là đổi hoá đơn — kiểm lại đuôi trước khi sửa.
-  **`duration_s` (4/6/8) chưa nối được**: request mẫu bắt được toàn bản 8s nên chưa biết tên
-  field độ dài, và đoán bừa thì Flow trả 400 cho MỌI lượt sinh. Bắt một request 4s rồi đặt
-  `VEO_LITE_DURATION_FIELD` là xong — xem `_apply_duration` trong flow_client.
+  **Độ dài: chỉ kiểu nội suy mới chọn được (4/6/8s)**; inference và i2v Flow cứng 8s, nên
+  `generate_video_veo_lite` ép về mặc định thay vì gửi lên một độ dài model không nhận. Ngoài
+  Omni Flash ra, mọi engine đều 8s ở cấp dự án — `_omni_duration` chỉ trả số cho Omni.
+  **Bản thân `duration_s` cũng chưa nối được**: request mẫu bắt được toàn bản 8s nên chưa biết
+  tên field độ dài, và đoán bừa thì Flow trả 400 cho MỌI lượt sinh. Bắt một request nội suy 4s
+  rồi đặt `VEO_LITE_DURATION_FIELD` là xong — xem `_apply_duration` trong flow_client.
 - **Credit: chỉ VIDEO tính tiền.** Render clip ≈20 (0 với Veo Lite), upscale video lên **4K
   ≈50** (đắt hơn cả một lượt render mới), lên 1080p = 0. Mọi thao tác ẢNH đều 0 credit — kể cả
   upscale ảnh lên 2K/4K — nên đừng cảnh báo hay hỏi xác nhận trước batch ảnh. Bảng giá +

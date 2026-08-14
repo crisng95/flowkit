@@ -20,6 +20,7 @@ from agent.config import (
     UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT, UPSAMPLE_IMAGE_TIMEOUT,
     UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
     VEO_LITE_MODELS, VEO_LITE_TIERS, VEO_LITE_DEFAULT_S, VEO_LITE_DURATION_FIELD,
+    VEO_LITE_FRAME_DURATIONS,
 )
 from agent.services.headers import random_headers
 
@@ -748,6 +749,9 @@ class FlowClient:
         - chỉ start    → i2v (`veo_3_1_i2v_lite_low_priority`)
         - không start  → "inference" r2v (`veo_3_1_r2v_lite_low_priority`), cần ≥1 reference
 
+        `duration_s` CHỈ có nghĩa với kiểu nội suy (4/6/8s); hai kiểu kia Flow cứng 8s nên
+        tham số bị ép về mặc định thay vì gửi lên một độ dài mà model không nhận.
+
         Lite xếp hàng ưu tiên thấp nên clip lâu hơn Veo trả tiền — người gọi cứ chờ theo
         VIDEO_POLL_TIMEOUT như thường, đừng bỏ cuộc sớm.
         """
@@ -765,6 +769,11 @@ class FlowClient:
         if not model_key:
             return {"error": f"Veo 3.1 Lite không có model cho kiểu {gen_type}"}
 
+        # Chỉ nội suy mới đổi được độ dài; inference/i2v luôn 8s.
+        secs = (duration_s if (gen_type == "start_end_frame_2_video"
+                               and str(duration_s) in VEO_LITE_FRAME_DURATIONS)
+                else VEO_LITE_DEFAULT_S)
+
         if gen_type == "reference_frame_2_video":
             if not (reference_media_ids or references):
                 return {"error": "Veo 3.1 Lite (inference) cần ít nhất 1 ảnh tham chiếu"}
@@ -772,13 +781,13 @@ class FlowClient:
                 reference_media_ids=reference_media_ids or [],
                 prompt=prompt, project_id=project_id, scene_id=scene_id,
                 aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier,
-                references=references, video_model=model_key, duration_s=duration_s)
+                references=references, video_model=model_key, duration_s=secs)
 
         return await self.generate_video(
             start_image_media_id=start_media_id, prompt=prompt, project_id=project_id,
             scene_id=scene_id, aspect_ratio=aspect_ratio,
             end_image_media_id=end_media_id, user_paygate_tier=user_paygate_tier,
-            video_model=model_key, references=references, duration_s=duration_s)
+            video_model=model_key, references=references, duration_s=secs)
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",

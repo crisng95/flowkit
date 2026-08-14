@@ -87,7 +87,7 @@ def _descendants(node_id: str, edges: list[dict]) -> set[str]:
 
 
 from agent.config import (
-    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_DURATIONS, VEO_LITE_DEFAULT_S,
+    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_FRAME_DURATIONS, VEO_LITE_DEFAULT_S,
     VEO_LITE_TIERS,
 )
 
@@ -119,9 +119,14 @@ def video_engine(project: dict) -> tuple[str, int]:
     này, để node editor và đường ⚡ tạo nhanh không bao giờ chạy hai engine khác nhau.
 
     - `"4"/"6"/"8"/"10"` (hoặc model key `abra_r2v_10s`) → Omni Flash r2v đúng độ dài đó
-    - `"veo_lite"` / `"veo_lite_6"` → Veo 3.1 Lite [Lower Priority]: 0 credit, chỉ Ultra
+    - `"veo_lite"` → Veo 3.1 Lite [Lower Priority]: 0 credit, chỉ Ultra
     - `"veo"` → ép Veo trả tiền theo tier
     - rỗng = mặc định: Ultra thì Veo Lite (miễn phí), tài khoản khác thì Veo i2v theo tier
+
+    **CHỈ Omni Flash mới có độ dài thay đổi được ở cấp dự án** — 8s cho mọi engine còn lại.
+    Đường dựng shot chạy Veo Lite ở kiểu "inference", mà kiểu đó Flow cứng 8s; chỉ kiểu nội
+    suy khung đầu/cuối (riêng Node Editor) mới chọn được 4/6/8s. Nên giá trị cũ dạng
+    `"veo_lite_4"` giờ cũng ra 8s, đúng như Flow thật.
 
     Chú ý model key: chỉ đuôi `_low_priority` mới là bản 0 credit. "Veo 3.1 - Lite" thường
     (không có [Lower Priority]) VẪN trừ credit — đừng thay key ở models.json bằng bản đó.
@@ -133,20 +138,21 @@ def video_engine(project: dict) -> tuple[str, int]:
         if raw == key:
             return "omni", int(secs)
     if raw.startswith("veo_lite") or raw in VEO_LITE_MODELS.values():
-        tail = raw[len("veo_lite"):].lstrip("_") if raw.startswith("veo_lite") else ""
-        return "veo_lite", int(tail) if tail in VEO_LITE_DURATIONS else VEO_LITE_DEFAULT_S
+        return "veo_lite", VEO_LITE_DEFAULT_S
     if raw == "veo":
-        return "veo", 8
+        return "veo", VEO_LITE_DEFAULT_S
     if project.get("paygate_tier") in VEO_LITE_TIERS:
         return "veo_lite", VEO_LITE_DEFAULT_S
-    return "veo", 8
+    return "veo", VEO_LITE_DEFAULT_S
 
 
 def _omni_duration(project: dict) -> int | None:
-    """Độ dài clip khi dự án chạy engine r2v (Omni Flash hoặc Veo Lite), None khi là Veo i2v.
-    Node editor dùng nó làm mặc định cho ô "Thời lượng"."""
+    """Độ dài clip mà ⚙ Cấu hình dự án đặt được, None khi engine cứng 8s.
+
+    Chỉ Omni Flash trả số; Veo Lite và Veo i2v đều 8s cố định nên node editor không lấy gì
+    từ dự án làm mặc định cho ô "Thời lượng"."""
     engine, secs = video_engine(project)
-    return secs if engine in ("omni", "veo_lite") else None
+    return secs if engine == "omni" else None
 
 
 def _vid_aspect(project: dict, data: dict | None = None) -> str:
@@ -805,8 +811,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             elif kind_v in VEO_LITE_MODELS.values():
                 kind_v = "veo_lite"
             # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor
-            # cứng 8s nên chọn "Omni Flash 10s" ở cấu hình vẫn ra clip 8s.
-            dur_v = int(data.get("duration") or 0) or proj_secs or 8
+            # cứng 8s nên chọn "Omni Flash 10s" ở cấu hình vẫn ra clip 8s. Chỉ Omni Flash và
+            # Veo Lite kiểu nội suy đọc ô này; các kiểu còn lại Flow cứng 8s.
+            dur_v = int(data.get("duration") or 0) or proj_secs or VEO_LITE_DEFAULT_S
             used_model = None
             if kind_v == "omni":
                 ref_ids = [r["media_id"] for r in inp["references"]]
@@ -823,8 +830,10 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             elif kind_v == "veo_lite":
                 # Hai kiểu, chọn bằng `lite_mode` trên node (mặc định "inference"):
                 #   "frames" — nội suy khung đầu→khung cuối, cần ĐÚNG hai ảnh nối vào; thứ tự
-                #              lấy theo thứ tự ảnh chảy vào node (ref đầu = đầu, ref sau = cuối)
-                #   khác     — "inference" r2v, mọi ảnh nối vào đều thành reference
+                #              lấy theo thứ tự ảnh chảy vào node (ref đầu = đầu, ref sau = cuối).
+                #              Kiểu DUY NHẤT chọn được độ dài (4/6/8s).
+                #   khác     — "inference" r2v, mọi ảnh nối vào đều thành reference; Flow cứng
+                #              8s cho kiểu này nên ô "Thời lượng" bị bỏ qua, không phải quên.
                 imgs = [r for r in inp["references"] if r.get("media_id")]
                 mode_v = str(data.get("lite_mode") or "inference").lower()
                 if mode_v == "frames":
@@ -832,10 +841,12 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                         raise GraphError("Veo Lite kiểu 'khung đầu + khung cuối' cần 2 ảnh "
                                          "nối vào (ảnh đầu tiên là khung đầu)")
                     start_v, end_v = imgs[0]["media_id"], imgs[1]["media_id"]
+                    frame_dur = (dur_v if str(dur_v) in VEO_LITE_FRAME_DURATIONS
+                                 else VEO_LITE_DEFAULT_S)
                     used_model = VEO_LITE_MODELS.get("start_end_frame_2_video")
                     submit = lambda: client.generate_video_veo_lite(
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
-                        start_media_id=start_v, end_media_id=end_v, duration_s=dur_v,
+                        start_media_id=start_v, end_media_id=end_v, duration_s=frame_dur,
                         aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"],
                         references=imgs[:2])
                 else:
@@ -848,7 +859,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     submit = lambda: client.generate_video_veo_lite(
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
                         reference_media_ids=[r["media_id"] for r in imgs],
-                        duration_s=dur_v, aspect_ratio=aspect_v,
+                        duration_s=VEO_LITE_DEFAULT_S, aspect_ratio=aspect_v,
                         user_paygate_tier=project["paygate_tier"], references=imgs)
             else:   # Veo i2v — needs a start frame
                 if not inp["media_id"]:

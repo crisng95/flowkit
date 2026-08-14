@@ -625,9 +625,10 @@ export default function SettingsTab({
                     <b className="text-emerald-500/90">Veo 3.1 Lite [Lower Priority]</b> là bản
                     <b> 0 credit</b>, chỉ có trên tài khoản Gemini Ultra — đổi lại nó xếp hàng ưu
                     tiên thấp nên clip lâu hơn. Nó chạy r2v (ảnh frame + ảnh nhân vật đều thành
-                    ảnh tham chiếu, nên token <code>{"{Tên}"}</code> trong motion prompt bind được),
-                    và trong Node Editor còn có kiểu <i>khung đầu + khung cuối</i>. Cẩn thận:
-                    “Veo 3.1 - Lite” <i>không</i> kèm [Lower Priority] thì <b>vẫn trừ credit</b>.
+                    ảnh tham chiếu, nên token <code>{"{Tên}"}</code> trong motion prompt bind được)
+                    và <b>cứng 8s</b>; muốn 4/6s thì dùng kiểu <i>khung đầu + khung cuối</i> trên
+                    node video trong Node Editor. Cẩn thận: “Veo 3.1 - Lite” <i>không</i> kèm
+                    [Lower Priority] thì <b>vẫn trừ credit</b>.
                   </p>
                   <p className="text-xs leading-relaxed text-neutral-600">
                     Veo i2v dựng video TỪ ảnh frame (model cụ thể tự chọn theo tier + khung hình)
