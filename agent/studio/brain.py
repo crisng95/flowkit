@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -378,6 +379,29 @@ _SHEET = {
                      "captions, labels or watermarks — clean image only"),
 }
 
+# "Character Production Bible" — sheet nhân vật 13 mục, mặc định MỚI cho `sheet_character`.
+#
+# Nằm ở file riêng chứ không phải string literal trong đây: nó dài 26KB JSON, nhồi vào brain.py
+# thì không ai đọc nổi phần còn lại của module, và nó vốn là thứ người dùng chỉnh (chép nguyên
+# văn vào ô ⚙ Thiết lập → 🧩 Prompt ngầm) chứ không phải logic. Gửi lên Flow dưới dạng JSON
+# THÔ — model đọc được cấu trúc, và cấu trúc mới là thứ khoá danh tính giữa 13 panel.
+#
+# Đọc lỗi (thiếu file, JSON hỏng) → rơi về mẫu một-sheet cũ ở `_SHEET["character"]` thay vì
+# làm sập cả agent: một sheet nhân vật kém đẹp còn hơn không sinh được ảnh nào.
+_BIBLE_FILE = Path(__file__).parent.parent.parent / "presets" / "character-sheet-prompt.json"
+
+
+def _character_bible() -> str:
+    try:
+        text = _BIBLE_FILE.read_text(encoding="utf-8").strip()
+        json.loads(text)          # chỉ để chắc file không hỏng; gửi đi là bản THÔ
+        return text
+    except (OSError, ValueError) as e:
+        logger.warning("Không đọc được %s (%s) — dùng mẫu sheet nhân vật cũ",
+                       _BIBLE_FILE.name, e)
+        return ""
+
+
 # Position labels overlaid on the location grid quadrants (TL, TR, BL, BR), matching the
 # order fixed in the _SHEET["location"] prompt above. Chỉ dùng ở chế độ lưới 4 khung.
 LOCATION_GRID_LABELS = ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận cảnh"]
@@ -512,7 +536,8 @@ PROMPT_DEFAULTS: dict[str, str] = {
     "single_frame_grid": _SINGLE_FRAME_GRID,
     "image_text": _IMAGE_TEXT,
     "video_text": _VIDEO_TEXT,
-    "sheet_character": _SHEET["character"],
+    # Bible 13 mục nếu đọc được file preset, không thì mẫu một-sheet cũ.
+    "sheet_character": _character_bible() or _SHEET["character"],
     "sheet_prop": _SHEET["prop"],
     "sheet_location": _SHEET["location"],
     "sheet_location_one": _SHEET["location_one"],
