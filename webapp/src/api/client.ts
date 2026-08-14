@@ -747,6 +747,12 @@ export const projectExportUrl = (pid: string) =>
 export const storyboardExportUrl = (pid: string) =>
   `/api/studio/projects/${pid}/storyboard/export`;
 
+// Tải ảnh MỘT shot ở độ phân giải cao nhất tài khoản cho phép (Ultra → 4K). Server tự xin
+// Flow bản hi-res nếu chưa có rồi mới trả file — upsample ảnh không tốn credit. Đừng trỏ
+// thẳng vào `shot.image_path`: đó là bản HD app dùng để hiển thị, đem ra ngoài là thiếu nét.
+export const shotImageDownloadUrl = (sid: string) =>
+  `/api/studio/shots/${sid}/image/download`;
+
 // OmniVoice base URL config lives on the tts router (not /studio).
 export async function getTtsConfig(): Promise<{ base_url: string }> {
   const res = await fetch("/api/tts/config");

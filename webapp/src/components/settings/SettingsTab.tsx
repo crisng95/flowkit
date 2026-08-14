@@ -570,7 +570,7 @@ export default function SettingsTab({
 
                 <Group
                   title="Độ phân giải cao"
-                  hint="Ảnh Flow trả về chỉ là bản HD. Bản phóng to dùng khi DỰNG VIDEO TỪ ẢNH và EXPORT DaVinci Resolve. Trần theo tier: ONE → 2K, TWO → 4K. Ảnh hiển thị trong app vẫn là bản HD cho nhẹ."
+                  hint="Ảnh Flow trả về chỉ là bản HD. Bản phóng to dùng khi DỰNG VIDEO TỪ ẢNH, EXPORT DaVinci Resolve, và khi bấm ⬇ tải một ảnh. Trần theo tier: ONE → 2K, Ultra (TWO) → 4K — luôn 0 credit. Ảnh hiển thị trong app vẫn là bản HD cho nhẹ. Không bật ô này thì nút ⬇ vẫn tự kéo bản nét lúc bấm, chỉ chậm hơn vài giây."
                 >
                   <label className="flex items-center gap-2.5 text-sm text-neutral-300">
                     <input type="checkbox" checked={autoHires}

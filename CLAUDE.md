@@ -119,6 +119,18 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   ≈50** (đắt hơn cả một lượt render mới), lên 1080p = 0. Mọi thao tác ẢNH đều 0 credit — kể cả
   upscale ảnh lên 2K/4K — nên đừng cảnh báo hay hỏi xác nhận trước batch ảnh. Bảng giá +
   `videoCost()` / `upscaleVideoCost()` ở [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts).
+- **Ảnh ĐEM RA NGOÀI phải là bản hi-res, ảnh HIỂN THỊ trong app thì không.** `image_path` là
+  bản HD Flow phát ra, đủ để xem chứ đem ra ngoài là thiếu nét; bản 2K/4K nằm ở
+  `image_hires_path` và xin riêng qua `upsampleImage` (0 credit, trần theo tier: ONE → 2K,
+  Ultra → 4K). Mọi đường tải ảnh ra ngoài phải đi qua `hires.shot_image()` hoặc
+  `GET /shots/{sid}/image/download` — endpoint đó tự xin Flow bản nét khi thiếu rồi mới trả
+  file, nên nút ⬇ ra 4K kể cả khi dự án không bật "tự tải bản 2K/4K". Đừng trỏ nút tải thẳng
+  vào `image_path`.
+- **Tier: `_current_tier()` đoán TIER_ONE khi chưa đọc được** — dùng thẳng nó cho việc chọn độ
+  phân giải là âm thầm hạ 4K xuống 2K trên tài khoản Ultra. Chỗ nào có `project` thì gọi
+  `_current_tier_for(project)`; nó rơi về cột `project.paygate_tier`, vốn được
+  `_sync_project_tier` cập nhật mỗi lần mở dự án (cột đó chỉ được GHI LÚC TẠO, nên nâng gói
+  xong mọi dự án cũ vẫn mang tier cũ nếu không đồng bộ).
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

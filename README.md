@@ -135,7 +135,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | Thư viện asset | `GET /library/entities`, `GET /library/all-media`, `…/entities/import`, `…/entities/import-media` |
 | Storyboard | `POST /projects/{pid}/storyboard/generate-all`, `…/storyboard/autofill-all`, `POST /scenes/{sid}/storyboard/autofill`, `GET /projects/{pid}/storyboard/export` |
 | Shot | `GET/POST /scenes/{sid}/shots`, `PATCH/DELETE /shots/{sid}`, `…/shots/{sid}/image`, `…/video`, `…/video/resume`, `…/prompts`, `…/upscale`, `…/insert`, `POST /projects/{pid}/shots/generate-all` |
-| Ảnh 2K/4K | `GET /projects/{pid}/hires/status`, `POST /projects/{pid}/hires/generate-all`, `POST /shots/{sid}/hires` |
+| Ảnh 2K/4K | `GET /projects/{pid}/hires/status`, `POST /projects/{pid}/hires/generate-all`, `POST /shots/{sid}/hires`, `GET /shots/{sid}/image/download` (tải ảnh ở trần tier — tự kéo bản nét nếu thiếu) |
 | Video 1080p/4K | `GET /projects/{pid}/upscale/status`, `POST /projects/{pid}/upscale/generate-all`, `POST /shots/{sid}/upscale` |
 | Storytelling | `POST /scenes/{sid}/beats`, `POST /projects/{pid}/voiceover`, `POST /shots/{sid}/narration` |
 | Node graph | `GET/PUT /shots/{sid}/graph`, `POST /shots/{sid}/graph/run` (tương tự cho `/entities/{eid}/graph`) |

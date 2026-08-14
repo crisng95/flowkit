@@ -274,6 +274,17 @@ async def _current_tier() -> str:
     return _tier_cache["value"] or "PAYGATE_TIER_ONE"
 
 
+async def _current_tier_for(project: dict) -> str:
+    """Tier để gọi Flow cho MỘT dự án cụ thể.
+
+    `_current_tier()` trả TIER_ONE khi chưa đọc được gì từ Flow, mà đoán thấp là âm thầm hạ
+    trần độ phân giải: tài khoản Ultra đáng lẽ tải ảnh 4K lại nhận 2K, và không có chỗ nào
+    trên UI nói vì sao. Chưa đọc được thì tin cột `paygate_tier` đã lưu của dự án hơn — nó
+    được `_sync_project_tier` cập nhật mỗi lần mở dự án."""
+    tier = await _current_tier()
+    return tier if _tier_cache["value"] else (project.get("paygate_tier") or tier)
+
+
 # ─── Chủ sở hữu dự án (xem agent/studio/accounts.py) ─────────
 
 async def _assert_owner(project: dict) -> None:
@@ -1577,7 +1588,8 @@ async def _store_media_on_shot(shot: dict, project: dict, info: dict,
         # bản hi-res ngay (best-effort — hỏng thì chỉ ghi log, ảnh HD đã có).
         if web and project.get("auto_hires"):
             await hires.auto_upscale_shot(
-                {**shot, "image_media_id": info.get("media_id")}, project, await _current_tier())
+                {**shot, "image_media_id": info.get("media_id")}, project,
+                await _current_tier_for(project))
     return await _shot_or_404(shot["id"])
 
 
@@ -3043,6 +3055,41 @@ def _slug(s: str) -> str:
     return s[:60] or "shot"
 
 
+@router.get("/shots/{sid}/image/download")
+async def download_shot_image(sid: str, hires_first: bool = True):
+    """Tải ảnh của MỘT shot ở độ phân giải cao nhất tài khoản cho phép.
+
+    Bản `image_path` mà app hiển thị chỉ là HD — đủ để xem, thiếu hẳn chi tiết khi đem ra
+    ngoài. Nút ⬇ trước đây trả đúng bản HD đó, nên tài khoản Ultra tải về vẫn là ảnh nhỏ
+    trong khi Flow sẵn sàng phát bản 4K miễn phí. Endpoint này lo nốt phần còn thiếu: chưa
+    có bản hi-res (hoặc bản cũ thuộc về ảnh đã bị regen) thì xin Flow ngay rồi mới trả file.
+
+    Upsample ảnh KHÔNG trừ credit nên không cần hỏi trước, và hỏng thì vẫn trả bản HD — nút
+    tải về không được phép chết chỉ vì Flow bận."""
+    shot = await _shot_or_404(sid)
+    scene = await _scene_or_404(shot["scene_id"])
+    project = await _project_or_404(scene["project_id"])
+    if not shot.get("image_path"):
+        raise HTTPException(404, "Shot chưa có ảnh")
+
+    if hires_first and hires.is_stale(shot) and get_flow_client().connected:
+        try:
+            await hires.upscale_shot(shot, project, await _current_tier_for(project))
+            shot = await _shot_or_404(sid)
+        except RuntimeError as e:
+            logger.warning("Tải ảnh hi-res cho shot %s hỏng, trả bản HD: %s", sid[:8], e)
+
+    path = hires.path_for(shot) or shot["image_path"]
+    f = _media_abs(path)
+    if not f or not f.exists():
+        raise HTTPException(404, "Không tìm thấy file ảnh")
+    res = shot.get("image_hires_res") if path == shot.get("image_hires_path") else None
+    suffix = f"-{hires.res_label(res)}" if res else ""
+    desc = _slug(shot.get("description") or shot.get("title") or "")
+    name = f"sc{scene['idx']+1:03d}-s{shot['idx']+1:03d}-{desc}{suffix}{f.suffix or '.png'}"
+    return FileResponse(f, filename=name)
+
+
 @router.get("/projects/{pid}/storyboard/export")
 async def export_storyboard_images(pid: str):
     """Đóng gói toàn bộ ảnh storyboard thành .zip, đặt tên scXXX-sXXX-mô-tả.png."""
@@ -3120,11 +3167,11 @@ def _start_image_job(pid: str, shots: list[dict], force: bool, type_: str) -> di
 @router.get("/projects/{pid}/hires/status")
 async def hires_status(pid: str):
     """Đếm số ảnh đã/chưa có bản hi-res + độ phân giải tier hiện tại cho phép."""
-    await _project_or_404(pid)
+    project = await _project_or_404(pid)
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? AND sh.image_media_id IS NOT NULL", (pid,))
-    tier = await _current_tier()
+    tier = await _current_tier_for(project)
     resolution = hires.res_for_tier(tier)
     missing = [s for s in shots if hires.is_stale(s)]
     return {
@@ -3143,7 +3190,7 @@ async def generate_shot_hires(sid: str, force: bool = False):
     if not force and not hires.is_stale(shot):
         return shot
     try:
-        await hires.upscale_shot(shot, project, await _current_tier())
+        await hires.upscale_shot(shot, project, await _current_tier_for(project))
     except RuntimeError as e:
         raise HTTPException(502, f"Tải ảnh 2K/4K thất bại: {e}") from e
     return await _shot_or_404(sid)
@@ -3158,7 +3205,7 @@ async def generate_project_hires(pid: str, force: bool = False):
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? AND sh.image_media_id IS NOT NULL ORDER BY sc.idx, sh.idx", (pid,))
     todo = [s for s in shots if force or hires.is_stale(s)]
-    tier = await _current_tier()
+    tier = await _current_tier_for(project)
     label = hires.res_label(hires.res_for_tier(tier)).upper()
 
     async def _worker(s):
@@ -3461,7 +3508,7 @@ async def _maybe_auto_upscale_video(sid: str, project: dict) -> None:
     if not project.get("auto_upscale_video"):
         return
     await hires.auto_upscale_video(
-        await _shot_or_404(sid), project, await _current_tier(), _poll_video)
+        await _shot_or_404(sid), project, await _current_tier_for(project), _poll_video)
 
 
 @router.post("/shots/{sid}/prompts")
@@ -3540,7 +3587,7 @@ async def upscale_shot(sid: str, resolution: Optional[str] = None, force: bool =
     if not force and not hires.video_is_stale(shot):
         return shot
     try:
-        await hires.upscale_video(shot, project, await _current_tier(),
+        await hires.upscale_video(shot, project, await _current_tier_for(project),
                                   _poll_video, resolution)
     except RuntimeError as e:
         raise HTTPException(502, f"Upscale video thất bại: {e}") from e
@@ -3557,7 +3604,7 @@ async def upscale_video_status(pid: str):
     # Shot chained không upscale được → không tính vào tổng, nếu không "còn thiếu" sẽ
     # không bao giờ về 0.
     shots = [s for s in rows if hires.video_upscalable(s)]
-    tier = await _current_tier()
+    tier = await _current_tier_for(project)
     resolution = hires.video_res_for_tier(tier, project.get("upscale_res"))
     missing = [s for s in shots if hires.video_is_stale(s)]
     return {
@@ -3581,7 +3628,7 @@ async def upscale_all_videos(pid: str, force: bool = False):
         "WHERE sc.project_id=? AND sh.video_media_id IS NOT NULL ORDER BY sc.idx, sh.idx", (pid,))
     todo = [s for s in shots
             if hires.video_upscalable(s) and (force or hires.video_is_stale(s))]
-    tier = await _current_tier()
+    tier = await _current_tier_for(project)
     label = hires.video_res_label(
         hires.video_res_for_tier(tier, project.get("upscale_res"))).upper()
 

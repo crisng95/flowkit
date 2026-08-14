@@ -3,6 +3,7 @@ import {
   api,
   storyboard,
   storyboardExportUrl,
+  shotImageDownloadUrl,
   type Entity,
   type Project,
   type Scene,
@@ -61,6 +62,9 @@ export default function StoryboardTab({
   // Narration preview playback (one scene at a time).
   const [playing, setPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Trần độ phân giải ảnh của tài khoản (ONE → 2K, Ultra → 4K) — chỉ để ghi vào tooltip nút
+  // ⬇ cho biết bấm xuống sẽ ra file cỡ nào. Hỏi server chứ không đoán ở client.
+  const [hiresInfo, setHiresInfo] = useState<{ label: string } | null>(null);
 
   const setAsCover = async (shot: Shot) => {
     if (!shot.image_media_id) return;
@@ -81,6 +85,7 @@ export default function StoryboardTab({
   };
 
   useEffect(() => {
+    storyboard.hiresStatus(project.id).then(setHiresInfo).catch(() => {});
     (async () => {
       const sc = (await api.listScenes(project.id)).scenes;
       setScenes(sc);
@@ -900,12 +905,15 @@ export default function StoryboardTab({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              downloadFile(
-                                sh.image_path!,
-                                `sc${pad3(sc.idx)}-s${pad3(sh.idx)}-${slug(sh.description || sh.title)}.png`
-                              );
+                              // Server tự kéo bản 2K/4K rồi mới trả file, và tự đặt tên
+                              // scXXX-sXXX-mô-tả-4k.png — đừng tải thẳng image_path (bản HD).
+                              downloadFile(shotImageDownloadUrl(sh.id));
                             }}
-                            title="Tải ảnh này"
+                            title={
+                              hiresInfo
+                                ? `Tải ảnh ở ${hiresInfo.label} (tự kéo bản nét nếu chưa có — không tốn credit)`
+                                : "Tải ảnh ở độ phân giải cao nhất (tự kéo bản nét nếu chưa có)"
+                            }
                             className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-emerald-600"
                           >
                             ⬇
@@ -967,7 +975,14 @@ export default function StoryboardTab({
       )}
 
       {lightbox && (
-        <Lightbox imageSrc={lightbox.image_path} title={lightbox.title} onClose={() => setLightbox(null)} />
+        // Xem thì dùng bản HD cho nhẹ, nhưng ⬇ trong lightbox phải ra bản 2K/4K như nút ⬇
+        // trên thẻ — hai nút cùng một chỗ mà cho ra hai file khác cỡ là bẫy.
+        <Lightbox
+          imageSrc={lightbox.image_path}
+          title={lightbox.title}
+          downloadUrl={shotImageDownloadUrl(lightbox.id)}
+          onClose={() => setLightbox(null)}
+        />
       )}
 
       {candidate && (

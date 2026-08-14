@@ -6,6 +6,8 @@ interface Props {
   title?: string;
   // Save the media being viewed. Defaults to the previewed file itself; pass these to save a
   // different one (e.g. the 1080p upscale behind an HD preview) or to name the file.
+  // `downloadUrl` KHÔNG kèm `downloadName` = endpoint tự đặt tên qua Content-Disposition
+  // (chỉ server mới biết file trả về là bản 2K hay 4K) — đừng bịa tên đè lên.
   downloadUrl?: string | null;
   downloadName?: string;
   onClose: () => void;
@@ -22,7 +24,9 @@ export default function Lightbox({
   const src = downloadUrl || videoSrc || imageSrc;
   const name =
     downloadName ||
-    `${slugName(title || "media")}.${(src || "").toLowerCase().endsWith(".mp4") ? "mp4" : "png"}`;
+    (downloadUrl
+      ? undefined
+      : `${slugName(title || "media")}.${(src || "").toLowerCase().endsWith(".mp4") ? "mp4" : "png"}`);
   return (
     <div
       className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/85 p-6"
@@ -40,7 +44,7 @@ export default function Lightbox({
         {src && (
           <button
             onClick={() => downloadFile(src, name)}
-            title={`Tải về → ${name}`}
+            title={name ? `Tải về → ${name}` : "Tải về (bản độ phân giải cao nhất)"}
             className="grid h-9 w-9 place-items-center rounded-full bg-neutral-800 text-neutral-200 hover:bg-emerald-600"
           >
             ⬇
