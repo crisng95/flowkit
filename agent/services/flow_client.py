@@ -7,6 +7,7 @@ extension executes them in browser context (residential IP, cookies, reCAPTCHA).
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Optional
@@ -29,6 +30,8 @@ class FlowClient:
         self._pending: dict[str, asyncio.Future] = {}
         self._pending_ws: dict[str, object] = {}
         self._flow_key: Optional[str] = None
+        # media_id → signed GCS URL cache (populated by TRPC intercept)
+        self._media_url_cache: dict[str, str] = {}
         # WS stats
         self._ws_connect_count = 0
         self._ws_disconnect_count = 0
@@ -235,7 +238,7 @@ class FlowClient:
             self._sync_in_progress = False
 
     _UUID_RE = __import__("re").compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
-    _SAFE_URL_RE = __import__("re").compile(r'^https://(storage\.googleapis\.com|lh3\.googleusercontent\.com)/')
+    _SAFE_URL_RE = __import__("re").compile(r'^https://(flow-content\.google|storage\.googleapis\.com|lh3\.googleusercontent\.com)/')
 
     async def _refresh_media_urls(self, urls: list[dict]):
         """Update scene/character URLs in DB from fresh TRPC-captured signed URLs.
@@ -252,6 +255,8 @@ class FlowClient:
             url = entry.get("url", "")
             if not media_id or not url:
                 continue
+            # Cache freshest signed URL for every media id seen
+            self._media_url_cache[media_id] = url
             # Validate media_id is UUID and url is from trusted domains
             if not self._UUID_RE.match(media_id):
                 logger.warning("Rejected invalid media_id: %s", media_id[:20])
@@ -369,10 +374,14 @@ class FlowClient:
         return last_result
 
     def _build_url(self, endpoint_key: str, **kwargs) -> str:
-        """Build full API URL."""
+        """Build full API URL.
+
+        NOTE (research 14/08): Google now blocks ?key= (API_KEY_SERVICE_BLOCKED
+        on UploadImage etc). The web UI authenticates ONLY with Bearer flowKey
+        (added by extension handleApiRequest) — no key param in URL.
+        """
         path = ENDPOINTS[endpoint_key].format(**kwargs)
-        sep = "&" if "?" in path else "?"
-        return f"{GOOGLE_FLOW_API}{path}{sep}key={GOOGLE_API_KEY}"
+        return f"{GOOGLE_FLOW_API}{path}"
 
     def _client_context(self, project_id: str, user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
         """Build clientContext with recaptcha placeholder."""
@@ -406,6 +415,50 @@ class FlowClient:
             },
             "body": body,
         }, timeout=30)
+
+    async def create_character(self, project_id: str, media_id: str,
+                               image_reference_index: int = 0) -> dict:
+        """Create a character entity on Google Flow and attach a reference image.
+
+        Mirrors the Flow web UI "New Character → Add from Project" flow
+        (captured 14/08/2026):
+          1. flow.createEntity       → entityId (character container)
+          2. flow:copyProjectMedia   → copies media into the entity's
+                                       characterSlot at imageReferenceIndex
+
+        After this, referencing "@<character_name>" in any video/image prompt
+        makes the server resolve the entity and use its image as a character
+        reference (this is how "r2v" works on tier TWO: the reference is
+        resolved server-side, the video still renders on veo_3_1_i2v_lite_low_priority).
+
+        Returns {"entityId": ..., "copy": <copyProjectMedia response>}.
+        """
+        entity = await self._send("trpc_request", {
+            "url": "https://labs.google/fx/api/trpc/flow.createEntity",
+            "method": "POST",
+            "headers": {"content-type": "application/json", "accept": "*/*"},
+            "body": {"json": {"projectId": project_id, "collectionId": None}},
+        }, timeout=30)
+        data = entity.get("data") or entity.get("json") or {}
+        entity_id = data.get("entityId") or data.get("id") or ""
+        if not entity_id:
+            return {"error": f"createEntity failed: {str(entity)[:200]}"}
+        copy = await self._send("trpc_request", {
+            "url": "https://labs.google/fx/api/trpc/flow:copyProjectMedia",
+            "method": "POST",
+            "headers": {"content-type": "application/json", "accept": "*/*"},
+            "body": {"json": {
+                "mediaId": media_id,
+                "destinationProjectId": project_id,
+                "destinationMediaContext": {
+                    "entityContext": {
+                        "entityId": entity_id,
+                        "characterSlot": {"imageReferenceIndex": image_reference_index},
+                    }
+                },
+            }},
+        }, timeout=30)
+        return {"entityId": entity_id, "copy": copy}
 
     async def generate_images(self, prompt: str, project_id: str,
                                aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
@@ -657,18 +710,34 @@ class FlowClient:
         status = result.get("status", 500)
         return isinstance(status, int) and status == 200
 
-    async def get_media(self, media_id: str) -> dict:
-        """Fetch media metadata from Google Flow.
+    async def get_media(self, media_id: str, media_type: str = "") -> dict:
+        """Fetch a fresh signed media URL via tRPC redirect (getMediaUrlRedirect).
 
-        Returns the raw API response which contains a fresh signed URL
-        in data.fifeUrl or data.servingUri.
+        /v1/media is dead (Google switched to tRPC + CDN redirects), so we ask the
+        extension to fetch media.getMediaUrlRedirect: the fetch follows the 302
+        and we read resp.url (the signed flow-content.google URL) from finalUrl.
+
+        NOTE: passing mediaUrlType=MEDIA_URL_TYPE_VIDEO returns 400 "Internal
+        Error" — omit it and the default redirect serves the video URL.
+
+        Response: {status, finalUrl, ...}
         """
-        url = f"{GOOGLE_FLOW_API}/v1/media/{media_id}?key={GOOGLE_API_KEY}&clientContext.tool=PINHOLE"
-        return await self._send("api_request", {
+        qs = f"name={media_id}"
+        if media_type:
+            qs += f"&mediaUrlType={media_type}"
+        url = f"https://labs.google/fx/api/trpc/media.getMediaUrlRedirect?{qs}"
+        result = await self._send("trpc_request", {
             "url": url,
             "method": "GET",
-            "headers": random_headers(),
-        }, timeout=15)
+        }, timeout=30)
+        final_url = result.get("finalUrl", "")
+        if final_url and final_url.startswith("https://flow-content.google/"):
+            m = re.match(r"https://flow-content\.google/(image|video)/([0-9a-f-]{36})\?", final_url)
+            if m:
+                self._media_url_cache[media_id] = final_url
+                result["url"] = final_url
+                result["mediaType"] = m.group(1)
+        return result
 
     async def upload_image(self, image_base64: str, mime_type: str = "image/jpeg",
                             project_id: str = "", file_name: str = "image.jpg") -> dict:

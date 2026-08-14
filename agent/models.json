@@ -11,7 +11,7 @@
       },
       "reference_frame_2_video": {
         "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_r2v_fast_landscape_ultra_relaxed",
-        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_landscape_ultra_relaxed"
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_r2v_fast_portrait"
       }
     },
     "PAYGATE_TIER_ONE": {

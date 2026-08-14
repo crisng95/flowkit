@@ -7,7 +7,7 @@
 
 const AGENT_WS_URL = 'ws://127.0.0.1:9222';
 // NOTE: This is a browser-restricted public API key — safe to ship in extension bundles.
-const API_KEY = 'AIzaSyBtrm0o5ab1c-Ec8ZuLcGt3oJAA5VWt3pY';
+const API_KEY = 'REPLACE_WITH_YOUR_API_KEY';
 
 let ws = null;
 let flowKey = null;
@@ -380,10 +380,15 @@ async function handleTrpcRequest(msg) {
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'include',
     });
-    const data = await resp.json();
+    // Read as text first: media redirects return non-JSON (video/image) bodies
+    // but we still need resp.url (the signed CDN URL) after the redirect.
+    const rawText = await resp.text();
+    let data = null;
+    try { data = JSON.parse(rawText); } catch { data = rawText.slice(0, 500); }
     chrome.storage.local.set({ metrics });
     updateRequestLog(logId, { status: 'success' });
-    sendToAgent({ id, status: resp.status, data });
+    // finalUrl = post-redirect URL (signed GCS/flow-content URL) — needed for media downloads
+    sendToAgent({ id, status: resp.status, data, finalUrl: resp.url || '' });
   } catch (e) {
     console.error('[FlowAgent] tRPC request failed:', e);
     chrome.storage.local.set({ metrics });
@@ -604,6 +609,37 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
 });
 
 // ─── TRPC Media URL Extractor ──────────────────────────────
+
+// NEW: webRequest-based capture — catches redirects of ANY request
+// (including <img>/<video> tags, which never go through window.fetch).
+// getMediaUrlRedirect returns 302 → details.redirectUrl is the signed GCS URL.
+chrome.webRequest.onBeforeRedirect.addListener(
+  (details) => {
+    try {
+      // Filter in code: specific match patterns on getMediaUrlRedirect* do not
+      // fire reliably (query-string URL), so listen broadly and filter here.
+      if (!details.url.includes('media.getMediaUrlRedirect')) return;
+      const redirectUrl = details.redirectUrl || '';
+      console.log('[FlowAgent] redirect:', details.url.slice(0, 80), '→', redirectUrl.slice(0, 120));
+      // Google switched CDN: flow-content.google (new) + storage.googleapis.com/ai-sandbox-videofx (legacy)
+      const m = redirectUrl.match(/https:\/\/(?:flow-content\.google|storage\.googleapis\.com\/ai-sandbox-videofx)\/(image|video)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\?/);
+      if (!m) return;
+      const [, mediaType, mediaId] = m;
+      // Forward to agent for cache/DB update
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'media_urls_refresh',
+          urls: [{ mediaId, mediaType, url: redirectUrl }],
+        }));
+        console.log(`[FlowAgent] Captured ${mediaType} URL for ${mediaId.slice(0, 8)}`);
+      }
+    } catch (e) {
+      console.error('[FlowAgent] webRequest capture failed:', e);
+    }
+  },
+  { urls: ['*://labs.google/*'], types: ['main_frame', 'sub_frame', 'image', 'media', 'xmlhttprequest', 'other'] },
+  []
+);
 
 function handleTrpcMediaUrls(trpcUrl, bodyText) {
   try {

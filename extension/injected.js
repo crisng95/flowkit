@@ -24,6 +24,12 @@ window.fetch = async function (...args) {
         }
       }).catch(() => {});
     }
+    // NEW: getMediaUrlRedirect returns 302 → response.url is the final GCS URL
+    if (response.url && response.url.includes('storage.googleapis.com/ai-sandbox-videofx/')) {
+      window.dispatchEvent(new CustomEvent('TRPC_MEDIA_URLS', {
+        detail: { url: response.url, body: response.url },
+      }));
+    }
   } catch {}
   return response;
 };

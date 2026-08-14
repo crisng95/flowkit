@@ -172,6 +172,31 @@ async def get_media(media_id: str):
     return result.get("data", result)
 
 
+@router.get("/media-url/{media_id}")
+async def get_media_url(media_id: str):
+    """Return cached signed GCS URL for a media id (captured via TRPC intercept).
+
+    The extension intercepts getMediaUrlRedirect responses while the project
+    is open in Chrome, so the URL here is fresher than get_media output.
+    """
+    client = get_flow_client()
+    url = client._media_url_cache.get(media_id)
+    if not url:
+        # Fallback: ask extension to fetch the tRPC redirect (freshest signed URL)
+        result = await client.get_media(media_id)
+        url = result.get("url") or ""
+        # only accept a real signed CDN URL (never the raw tRPC URL)
+        if url and not url.startswith("https://flow-content.google/"):
+            url = ""
+        if not url:
+            # Two cases: media still rendering (no signed URL yet — poll again)
+            # or the extension/Flow session is actually gone. Check connectivity.
+            if not client.connected:
+                raise HTTPException(503, f"No URL for {media_id} — extension not connected (reload the Flow tab)")
+            raise HTTPException(404, f"No URL for {media_id} yet — media is still rendering, poll again in 15-20s")
+    return {"media_id": media_id, "url": url}
+
+
 @router.post("/edit-image")
 async def edit_image(body: EditImageRequest):
     """Edit an existing image using IMAGE_INPUT_TYPE_BASE_IMAGE (bypasses queue)."""
@@ -187,6 +212,31 @@ async def edit_image(body: EditImageRequest):
         raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
     return result.get("data", result)
 
+
+@router.post("/create-character")
+async def create_character(body: dict):
+    """Create a character entity and attach a reference image.
+
+    Body: {"project_id": "...", "media_id": "...", "image_reference_index": 0}
+    After creation, reference the character in any prompt as "@<name>".
+    """
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    return await client.create_character(
+        body.get("project_id", ""),
+        body.get("media_id", ""),
+        body.get("image_reference_index", 0),
+    )
+
+
+@router.post("/create-project")
+async def create_project(body: dict):
+    """Create a new Flow project. Body: {"title": "...", "tool_name": "PINHOLE"}"""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    return await client.create_project(body.get("title", "New project"), body.get("tool_name", "PINHOLE"))
 
 @router.post("/upload-image")
 async def upload_image(body: UploadImageRequest):
