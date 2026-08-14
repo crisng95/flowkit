@@ -21,15 +21,13 @@ export function videoCost(videoModel?: string | null, paygateTier?: string | nul
 }
 
 /**
- * Giá một lượt upscale video theo độ phân giải đích. `null` = CHƯA ĐO ĐƯỢC (mức 2K) — người
- * gọi phải nói "chưa rõ giá" chứ không được hiển thị 0, vì đoán 0 rồi hoá ra tính tiền thì
- * người dùng chạy batch 50 video mới biết.
+ * Giá một lượt upscale video theo độ phân giải đích. Video chỉ có hai mức —
+ * `VIDEO_RESOLUTION_1080P` (0) và `VIDEO_RESOLUTION_4K` (~50); không có 2K như upscale ảnh.
  */
-export function upscaleVideoCost(resolution?: string | null): number | null {
-  const r = String(resolution ?? "");
-  if (r.includes("4K")) return CREDIT_COST.upscaleVideo4k;
-  if (r.includes("1080")) return CREDIT_COST.upscaleVideo1080p;
-  return null;
+export function upscaleVideoCost(resolution?: string | null): number {
+  return String(resolution ?? "").includes("4K")
+    ? CREDIT_COST.upscaleVideo4k
+    : CREDIT_COST.upscaleVideo1080p;
 }
 
 type ConfirmFn = (o: ConfirmOptions) => Promise<boolean>;

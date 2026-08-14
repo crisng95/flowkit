@@ -177,18 +177,13 @@ export default function SettingsTab({
   const upscaleMissingVideos = async () => {
     const n = upInfo?.missing ?? 0;
     // 4K tốn ~50 credit/video (đo thực tế) — đắt hơn cả một lượt render clip mới, nên báo
-    // thẳng tổng tiền chứ không nói chung chung "có thể tốn credit". 1080p đo được là 0.
-    // 2K CHƯA đo → nói thẳng là chưa rõ, đừng để người dùng tưởng miễn phí.
+    // thẳng tổng tiền chứ không nói chung chung "có thể tốn credit"; 1080p đo được là 0.
     const per = upscaleVideoCost(upInfo?.resolution);
     if (!window.confirm(
       `Upscale ${n} video lên ${upInfo?.label}?\n\n` +
       `Mỗi video là một lượt render thật trên Flow (~1 phút/video)` +
-      (per == null
-        ? `. Mức ${upInfo?.label} CHƯA đo được giá credit — 1080p là 0, 4K là ~50/video, `
-          + `nên nhiều khả năng mức này cũng tốn. Xem lại số credit sau vài video đầu.`
-        : per
-          ? ` và tốn ~${per} credit — tổng ~${n * per} credit.`
-          : ", đo được là không tốn credit.")
+      (per ? ` và tốn ~${per} credit — tổng ~${n * per} credit.`
+           : ", đo được là không tốn credit.")
     )) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
@@ -654,7 +649,7 @@ export default function SettingsTab({
 
                 <Group
                   title="Upscale"
-                  hint="Video render ra cũng chỉ là bản HD. Trần theo tier: ONE → Full HD 1080p, Ultra (TWO) → chọn được 1080p / 2K / 4K. Mỗi video mất ~1 phút (Flow render lại). Credit: 1080p = 0, 4K = ~50/video (đắt hơn cả một lượt render clip mới), 2K chưa đo. Upscale ẢNH lên 2K/4K thì luôn 0. Shot ghép từ nhiều clip (chained) không upscale được."
+                  hint="Video render ra cũng chỉ là bản HD. Video CHỈ có hai mức (không có 2K như ảnh): trần theo tier là ONE → Full HD 1080p, Ultra (TWO) → 4K. Mỗi video mất ~1 phút (Flow render lại). Credit: 1080p = 0, 4K = ~50/video (đắt hơn cả một lượt render clip mới); upscale ẢNH lên 2K/4K thì luôn 0. Shot ghép từ nhiều clip (chained) không upscale được."
                 >
                   <label className="flex items-center gap-2.5 text-sm text-neutral-300">
                     <input type="checkbox" checked={autoUpVideo}
@@ -664,21 +659,11 @@ export default function SettingsTab({
                   </label>
                   {/* Bật ô này với mức 4K là mỗi shot render xong tự trừ thêm ~50 credit, âm
                       thầm, nhiều hơn cả tiền render clip. Phải nói ra ngay cạnh ô tick. */}
-                  {autoUpVideo && upscaleVideoCost(upInfo?.resolution) !== 0 && (
+                  {autoUpVideo && upscaleVideoCost(upInfo?.resolution) > 0 && (
                     <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-neutral-400">
-                      {upscaleVideoCost(upInfo?.resolution) == null ? (
-                        <>
-                          ⚠ Mức <b>{upInfo?.label}</b> <b className="text-amber-500/90">chưa đo được
-                          giá credit</b> (1080p là 0, 4K là ~50/video). Bật tự động thì mỗi shot
-                          render xong lại chạy thêm một lượt — theo dõi số credit sau vài video đầu.
-                        </>
-                      ) : (
-                        <>
-                          ⚠ Mức <b>4K</b> tốn <b className="text-amber-500/90">~50 credit mỗi video</b> —
-                          bật tự động nghĩa là mỗi shot render xong lại trừ thêm chừng đó. Chọn
-                          <b> Full HD 1080p</b> ở dưới nếu muốn miễn phí.
-                        </>
-                      )}
+                      ⚠ Mức <b>4K</b> tốn <b className="text-amber-500/90">~50 credit mỗi video</b> —
+                      bật tự động nghĩa là mỗi shot render xong lại trừ thêm chừng đó. Chọn
+                      <b> Full HD 1080p</b> ở dưới nếu muốn miễn phí.
                     </p>
                   )}
                   {(upInfo?.choices?.length ?? 0) > 1 && (

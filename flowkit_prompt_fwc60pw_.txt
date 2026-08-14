@@ -1,5 +1,5 @@
 Break this scene into storyboard FRAMES (still shots). Every frame in this scene happens at ONE shared location.
-This scene takes place at ONE fixed location: {Phố Hàng Chiếu}. EVERY frame is at this SAME place — begin each `description` with {Phố Hàng Chiếu}, use ONLY {Phố Hàng Chiếu} and NO other location anywhere, and put {Phố Hàng Chiếu} (and no other place) in ref_entity_names. Do NOT invent or switch to any other location.
+This scene takes place at ONE fixed location: {CỬA Ô QUAN CHƯỞNG}. EVERY frame is at this SAME place — begin each `description` with {CỬA Ô QUAN CHƯỞNG}, use ONLY {CỬA Ô QUAN CHƯỞNG} and NO other location anywhere, and put {CỬA Ô QUAN CHƯỞNG} (and no other place) in ref_entity_names. Do NOT invent or switch to any other location.
 
 For each frame return:
 - `title`: short label.
@@ -49,11 +49,23 @@ AVAILABLE ENTITIES:
 - {Đèn lồng} (prop): Chiếc đèn lồng lụa đỏ truyền thống hình tròn treo trước các cửa hiệu phố Hàng Mã, phát ra ánh sáng vàng đỏ ấm áp lung linh dưới dòng nước mưa xối xả.
 - {CỬA Ô QUAN CHƯỞNG} (location): 
 
-SCENE: EXT. PHỐ HÀNG CHIẾU - NIGHT
-Những ngôi nhà ống sâu hun hút với hàng hiên hẹp đặc trưng của Hà Nội thế kỷ 19. Dưới ánh đèn vàng mờ, từng cuộn chiếu cói khô ráo được che bạt cẩn thận.
+SCENE: EXT. CỬA Ô QUAN CHƯỞNG - NIGHT
+Cửa ô cổ kính sừng sững uy nghiêm giữa màn mưa bão. Cổng vòm gạch đỏ sẫm phủ rêu phong hàng trăm năm tuổi đứng vững chãi, thách thức thời gian và bão dông.
 
-PAN SHOT: Máy quay quét theo bóng lưng của Mai. Mái tóc dài ngang hông của cô bay nhẹ trong gió đêm. Ánh sáng từ ngọn đèn đường rọi bóng cô gái đổ dài trên bức tường gạch rêu phong loang lổ.
+Cơn mưa bắt đầu ngớt dần, chỉ còn lại những hạt mưa bụi li ti bay như sương khói.
 
-CUT TO:
+WIDE CRANE SHOT: Mai bước qua vòm cổng chính của Ô Quan Chưởng. Cô từ từ khép chiếc ô trong suốt lại, để những giọt sương đêm mát lành chạm nhẹ vào làn da và mái tóc đen dài mượt mà.
+
+Chiếc áo dài trắng tinh khôi của cô gái 18 tuổi bồng bềnh trong làn gió sớm mai đang về. Mai quay đầu lại, nhìn ngắm toàn cảnh kinh thành cổ kính phía sau lưng.
+
+MAI
+(Nụ cười rạng ngời, nói với thành phố)
+Hà Nội ơi... dù trải qua bao nhiêu giông bão, em vẫn luôn yêu vẻ đẹp vẹn nguyên này của người.
+
+SLOW MOTION: Mai khẽ xoay người một vòng tròn duyên dáng. Tà áo lụa trắng tung bay tuyệt mỹ giữa không gian cổ kính ngập ánh sáng đèn phản chiếu lung linh trên mặt đường ẩm ướt.
+
+Bầu trời phía đông bắt đầu le lói những tia sáng rạng đông màu lam biếc, báo hiệu một ngày mới tinh khôi chuẩn bị bắt đầu trên thủ đô ngàn năm văn hiến.
+
+FADE OUT.
 
 Return ONLY JSON array: [{"title":"...","description":"At {Location}, <angle>, ... {Entity} ...","visual_prompt":"...","motion_prompt":"...","ref_entity_names":["Location","Entity"]}]

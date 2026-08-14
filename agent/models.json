@@ -41,13 +41,11 @@
   },
   "upscale_models": {
     "VIDEO_RESOLUTION_4K": "veo_3_1_upsampler_4k",
-    "VIDEO_RESOLUTION_2K": "veo_3_1_upsampler_2k",
     "VIDEO_RESOLUTION_1080P": "veo_3_1_upsampler_1080p"
   },
-  "_comment_upscale_video_order": "Thứ tự TĂNG DẦN, dùng để hạ lựa chọn của dự án xuống đúng trần tier. Thêm mức mới thì thêm vào cả đây lẫn upscale_models.",
+  "_comment_upscale_video_order": "Thu tu TANG DAN, dung de ha lua chon cua du an xuong dung tran tier. Video CHI co 1080p va 4K (khong co 2K nhu upsample anh). Them muc moi thi them vao ca day lan upscale_models.",
   "upscale_video_order": [
     "VIDEO_RESOLUTION_1080P",
-    "VIDEO_RESOLUTION_2K",
     "VIDEO_RESOLUTION_4K"
   ],
   "omni_flash_models": {

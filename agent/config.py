@@ -163,7 +163,7 @@ UPSAMPLE_IMAGE_TIMEOUT = float(os.environ.get("UPSAMPLE_IMAGE_TIMEOUT", "180"))
 # Đo thực tế trên tier ONE → 1080p: KHÔNG trừ credit (914 → 914 cho một video render mới).
 # Bản 4K (tier TWO) thì CÓ: ≈50 credit/video — đắt gấp 2.5 lần một lượt render clip mới, nên
 # batch upscale 4K phải hỏi trước (webapp/src/lib/credits.ts). Upscale ẢNH lên 4K vẫn 0 credit.
-# Mức 2K nằm giữa; CHƯA ĐO giá của nó — coi như chưa biết chứ đừng suy ra là 0.
+# Video CHỈ có 1080p và 4K — không có mức 2K như upsample ẢNH, đừng suy từ bên đó sang.
 UPSAMPLE_VIDEO_RESOLUTIONS = {
     "PAYGATE_TIER_ONE": "VIDEO_RESOLUTION_1080P",
     "PAYGATE_TIER_TWO": "VIDEO_RESOLUTION_4K",
