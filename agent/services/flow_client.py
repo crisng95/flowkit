@@ -19,10 +19,23 @@ from agent.config import (
     OMNI_FLASH_MODELS, OMNI_FLASH_VALID_ASPECTS,
     UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT, UPSAMPLE_IMAGE_TIMEOUT,
     UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
+    VEO_LITE_MODELS, VEO_LITE_TIERS, VEO_LITE_DEFAULT_S, VEO_LITE_DURATION_FIELD,
 )
 from agent.services.headers import random_headers
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_duration(request: dict, duration_s: int | None) -> None:
+    """Ghi độ dài clip vào request video — nếu ta BIẾT Flow gọi field đó là gì.
+
+    Veo nhận độ dài như một tham số riêng (khác Omni Flash, nơi độ dài nằm trong model key),
+    nhưng mọi request mẫu bắt được đều là bản 8s mặc định nên chưa thấy tên field. Không biết
+    thì im lặng bỏ qua và để Flow dùng mặc định — nhét bừa một field lạ vào là Flow trả 400
+    INVALID_ARGUMENT cho MỌI lượt sinh, hỏng hẳn còn tệ hơn chạy sai độ dài. Đặt
+    VEO_LITE_DURATION_FIELD khi đã bắt được request 4s/6s."""
+    if duration_s and VEO_LITE_DURATION_FIELD:
+        request[VEO_LITE_DURATION_FIELD] = int(duration_s)
 
 
 class FlowClient:
@@ -558,27 +571,41 @@ class FlowClient:
                               project_id: str, scene_id: str,
                               aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
                               end_image_media_id: str = None,
-                              user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
+                              user_paygate_tier: str = "PAYGATE_TIER_TWO",
+                              video_model: str = None,
+                              references: list[dict] = None,
+                              duration_s: int = None) -> dict:
         """Generate video from start image (i2v).
 
         Two sub-types:
         - frame_2_video (i2v): startImage only
         - start_end_frame_2_video (i2v_fl): startImage + endImage (for scene chaining)
+
+        `video_model` ép một model key cụ thể thay vì bảng theo tier — đường Veo 3.1 Lite
+        dùng nó (xem generate_video_veo_lite). `references` cho phép prompt gọi ảnh start/end
+        bằng token `{handle}` như bên r2v; không truyền thì prompt đi nguyên một part text.
         """
         gen_type = "start_end_frame_2_video" if end_image_media_id else "frame_2_video"
-        model_key = VIDEO_MODELS.get(user_paygate_tier, {}).get(gen_type, {}).get(aspect_ratio)
+        model_key = video_model or VIDEO_MODELS.get(
+            user_paygate_tier, {}).get(gen_type, {}).get(aspect_ratio)
 
         if not model_key:
             return {"error": f"No model for tier={user_paygate_tier} type={gen_type} ratio={aspect_ratio}"}
 
+        # dedupe=True vì cùng lý do như r2v: nhắc lại một ảnh ở nhiều câu sinh nhiều reference
+        # part trỏ cùng mediaId → Flow 400 INVALID_ARGUMENT (xem CLAUDE.md).
+        parts = (_build_structured_parts(prompt, references, dedupe=True)
+                 if references else [{"text": prompt}])
+
         request = {
             "aspectRatio": aspect_ratio,
             "seed": int(time.time()) % 10000,
-            "textInput": {"structuredPrompt": {"parts": [{"text": prompt}]}},
+            "textInput": {"structuredPrompt": {"parts": parts}},
             "videoModelKey": model_key,
             "startImage": {"mediaId": start_image_media_id},
             "metadata": {"sceneId": scene_id},
         }
+        _apply_duration(request, duration_s)
 
         if end_image_media_id:
             request["endImage"] = {"mediaId": end_image_media_id}
@@ -605,7 +632,8 @@ class FlowClient:
                                               aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
                                               user_paygate_tier: str = "PAYGATE_TIER_TWO",
                                               references: list[dict] = None,
-                                              video_model: str = None) -> dict:
+                                              video_model: str = None,
+                                              duration_s: int = None) -> dict:
         """Generate video from multiple reference images (r2v).
 
         Uses referenceImages instead of startImage — the model composes
@@ -646,6 +674,7 @@ class FlowClient:
             ],
             "metadata": {},
         }
+        _apply_duration(request, duration_s)
 
         body = {
             "mediaGenerationContext": {
@@ -700,6 +729,56 @@ class FlowClient:
             references=references,
             video_model=model_key,
         )
+
+    async def generate_video_veo_lite(self, prompt: str, project_id: str,
+                                       scene_id: str = "",
+                                       start_media_id: str = None,
+                                       end_media_id: str = None,
+                                       reference_media_ids: list[str] = None,
+                                       references: list[dict] = None,
+                                       duration_s: int = VEO_LITE_DEFAULT_S,
+                                       aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
+                                       user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
+        """**Veo 3.1 Lite [Lower Priority]** — 0 credit, chỉ tài khoản Gemini Ultra.
+
+        Cùng ba endpoint như Veo thường, chỉ khác `videoModelKey`; kiểu sinh suy ra từ ảnh
+        được truyền vào (không có cờ riêng để hai chỗ gọi không lệch nhau):
+
+        - start + end  → nội suy hai khung (`veo_3_1_interpolation_lite_low_priority`)
+        - chỉ start    → i2v (`veo_3_1_i2v_lite_low_priority`)
+        - không start  → "inference" r2v (`veo_3_1_r2v_lite_low_priority`), cần ≥1 reference
+
+        Lite xếp hàng ưu tiên thấp nên clip lâu hơn Veo trả tiền — người gọi cứ chờ theo
+        VIDEO_POLL_TIMEOUT như thường, đừng bỏ cuộc sớm.
+        """
+        if user_paygate_tier not in VEO_LITE_TIERS:
+            return {"error": "Veo 3.1 Lite chỉ có trên tài khoản Gemini Ultra "
+                             f"({'/'.join(sorted(VEO_LITE_TIERS))}); tài khoản này là "
+                             f"{user_paygate_tier}"}
+        if start_media_id and end_media_id:
+            gen_type = "start_end_frame_2_video"
+        elif start_media_id:
+            gen_type = "frame_2_video"
+        else:
+            gen_type = "reference_frame_2_video"
+        model_key = VEO_LITE_MODELS.get(gen_type)
+        if not model_key:
+            return {"error": f"Veo 3.1 Lite không có model cho kiểu {gen_type}"}
+
+        if gen_type == "reference_frame_2_video":
+            if not (reference_media_ids or references):
+                return {"error": "Veo 3.1 Lite (inference) cần ít nhất 1 ảnh tham chiếu"}
+            return await self.generate_video_from_references(
+                reference_media_ids=reference_media_ids or [],
+                prompt=prompt, project_id=project_id, scene_id=scene_id,
+                aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier,
+                references=references, video_model=model_key, duration_s=duration_s)
+
+        return await self.generate_video(
+            start_image_media_id=start_media_id, prompt=prompt, project_id=project_id,
+            scene_id=scene_id, aspect_ratio=aspect_ratio,
+            end_image_media_id=end_media_id, user_paygate_tier=user_paygate_tier,
+            video_model=model_key, references=references, duration_s=duration_s)
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",

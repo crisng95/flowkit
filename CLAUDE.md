@@ -97,10 +97,25 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   dùng kéo dây vào là cố ý). ĐỪNG bật nơi references là kho ứng viên để prompt tự chọn theo tên
   (candidates, frame storyboard): bind một entity shot không nhắc tới là mời model vẽ thêm nhân
   vật vào khung.
-- **CHỈ VIDEO tốn credit** (≈20/clip). Tạo ảnh, sửa ảnh, tách/thay nền, upscale ảnh, và
-  upscale video lên 1080p đều KHÔNG trừ credit — đừng cảnh báo hay hỏi xác nhận trước các
-  batch ảnh. `CREDIT_COST` trong [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts) chỉ
-  còn `video`.
+- **Engine video do `project.video_model` quyết định, luật nằm ở `graph.video_engine`.** Một
+  chỗ duy nhất đọc cột đó; `api/studio.py._video_engine` gọi lại nó, nên Node Editor và ⚡ tạo
+  nhanh không bao giờ chạy hai engine khác nhau. Giá trị: `"4"/"6"/"8"/"10"` → Omni Flash;
+  `"veo_lite"`/`"veo_lite_4"` → Veo 3.1 Lite; `"veo"` → ép Veo trả tiền theo tier; **rỗng =
+  mặc định**, và mặc định của tài khoản Ultra (`PAYGATE_TIER_TWO`) là **Veo Lite**. Thêm engine
+  mới thì sửa `video_engine` + `_R2V_ENGINES` + `_engine_model_key` + `_clip_submit`, đừng rải
+  thêm nhánh `if engine == ...` chỗ khác.
+- **`veo_3_1_*_lite_low_priority` là bản 0 credit; `*_lite` KHÔNG.** "Veo 3.1 - Lite [Lower
+  Priority]" (0đ, chỉ Ultra) và "Veo 3.1 - Lite" (vẫn tính tiền) là HAI model khác nhau, chỉ
+  khác đuôi `_low_priority` trong key. Ba key trong `models.json → veo_lite_models`, chọn theo
+  ảnh truyền vào chứ không theo cờ: start+end → `interpolation`, chỉ start → `i2v`, không start
+  → `r2v` ("inference"). Đổi key ở đó là đổi hoá đơn — kiểm lại đuôi trước khi sửa.
+  **`duration_s` (4/6/8) chưa nối được**: request mẫu bắt được toàn bản 8s nên chưa biết tên
+  field độ dài, và đoán bừa thì Flow trả 400 cho MỌI lượt sinh. Bắt một request 4s rồi đặt
+  `VEO_LITE_DURATION_FIELD` là xong — xem `_apply_duration` trong flow_client.
+- **Credit: chỉ VIDEO tính tiền.** Render clip ≈20 (0 với Veo Lite), upscale video lên **4K
+  ≈50** (đắt hơn cả một lượt render mới), lên 1080p = 0. Mọi thao tác ẢNH đều 0 credit — kể cả
+  upscale ảnh lên 2K/4K — nên đừng cảnh báo hay hỏi xác nhận trước batch ảnh. Bảng giá +
+  `videoCost()` / `upscaleVideoCost()` ở [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts).
 - `media_id` is always UUID format (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`), never `CAMS...`
 - The agent holds no state; all generation goes through the connected extension.
   If `extension_connected: false`, open Google Flow in Chrome with the extension loaded.

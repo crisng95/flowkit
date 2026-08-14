@@ -2,9 +2,28 @@ import { api } from "../api/client";
 import type { ConfirmOptions } from "../components/common/Confirm";
 
 // Rough per-item credit cost (Flow doesn't expose exact pricing up front).
-// CHỈ VIDEO tốn credit — ≈20/clip (đọc từ response generate-video). Tạo ảnh, sửa ảnh, tách
-// nền, upscale ảnh đều KHÔNG trừ credit, nên các batch ảnh không cần hỏi trước.
-export const CREDIT_COST = { video: 20 } as const;
+// Mọi thao tác trên ẢNH đều 0 credit — tạo, sửa, tách/thay nền, kể cả upscale lên 2K/4K —
+// nên batch ảnh không bao giờ phải hỏi trước. Chỉ hai thứ tính tiền:
+//   video          ≈20/clip  (đọc từ response generate-video)
+//   upscaleVideo4k ≈50/video (đắt hơn cả một lượt render mới; bản 1080p thì 0)
+export const CREDIT_COST = { video: 20, upscaleVideo4k: 50, upscaleVideo1080p: 0 } as const;
+
+// Veo 3.1 Lite [Lower Priority] render MIỄN PHÍ (chỉ tài khoản Ultra), nên dự án đặt engine
+// đó thì batch video không cần hỏi credit nữa. Cảnh báo thừa làm người dùng mất phản xạ đọc
+// nó khi lượt render THẬT SỰ tốn tiền.
+// Chú ý: chỉ bản có [Lower Priority] mới 0đ — "Veo 3.1 - Lite" thường vẫn trừ credit.
+export function videoCost(videoModel?: string | null, paygateTier?: string | null): number {
+  const raw = String(videoModel ?? "").trim();
+  if (raw.startsWith("veo_lite") || raw.endsWith("_lite_low_priority")) return 0;
+  // Ô rỗng = "tự động": Ultra (tier TWO) rơi vào Veo Lite, xem graph.video_engine.
+  if (!raw && paygateTier === "PAYGATE_TIER_TWO") return 0;
+  return CREDIT_COST.video;
+}
+
+/** Giá một lượt upscale video theo độ phân giải đích (`VIDEO_RESOLUTION_4K` | `..._1080P`). */
+export function upscaleVideoCost(resolution?: string | null): number {
+  return String(resolution ?? "").includes("4K") ? CREDIT_COST.upscaleVideo4k : 0;
+}
 
 type ConfirmFn = (o: ConfirmOptions) => Promise<boolean>;
 

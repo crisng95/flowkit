@@ -114,19 +114,14 @@ export default function AppSettingsSection({
               {(opts?.image_models || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
             </select>
           </Field>
-          <Field label="Video model">
+          {/* Cùng danh sách với ⚙ Cấu hình dự án (`video_engines`) — dropdown cũ liệt kê tên
+              TIER như thể là model, chọn vào là lưu rác vào project.video_model. */}
+          <Field label="Video model" hint="Mặc định cho dự án mới. Veo 3.1 Lite [Lower Priority] không trừ credit (chỉ Ultra).">
             <select value={s.video_model || ""} onChange={(e) => set("video_model", e.target.value)} className={inp}>
-              <option value="">(mặc định)</option>
-              {(opts?.video_models?.veo_tiers || []).length > 0 && (
-                <optgroup label="Veo (i2v)">
-                  {(opts?.video_models?.veo_tiers || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
-                </optgroup>
-              )}
-              {(opts?.video_models?.omni_flash_durations || []).length > 0 && (
-                <optgroup label="Omni Flash (r2v)">
-                  {(opts?.video_models?.omni_flash_durations || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
-                </optgroup>
-              )}
+              {(opts?.video_engines || [{ value: "", label: "(mặc định)" }]).map(
+                (m: { value: string; label: string }) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
             </select>
           </Field>
           <Field label="Khung hình">

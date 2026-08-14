@@ -122,6 +122,28 @@ VIDEO_MODELS = _MODELS["video_models"]
 UPSCALE_MODELS = _MODELS["upscale_models"]
 IMAGE_MODELS = _MODELS["image_models"]
 
+# ─── Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Ultra ────
+# Họ model "lite low priority": render xếp hàng sau (chậm hơn) nhưng KHÔNG trừ credit. Cùng
+# ba kiểu sinh như Veo thường, mỗi kiểu một endpoint khác nhau:
+#   frame_2_video           — startImage (i2v)            → batchAsyncGenerateVideoStartImage
+#   start_end_frame_2_video — startImage + endImage (nội suy) → ...StartAndEndImage
+#   reference_frame_2_video — referenceImages (r2v/"inference") → ...ReferenceImages
+# i2v lite vốn đã là mặc định của PAYGATE_TIER_TWO trong `video_models`; hai key còn lại chỉ
+# mở khi tài khoản là Gemini Ultra, nên chúng nằm riêng ở đây thay vì trộn vào bảng theo tier.
+VEO_LITE_MODELS = _MODELS.get("veo_lite_models", {})
+# Độ dài clip Flow cho chọn với họ Lite. Khác Omni Flash (độ dài NẰM TRONG model key), Veo
+# nhận độ dài như một tham số riêng — xem VEO_LITE_DURATION_FIELD.
+VEO_LITE_DURATIONS = [str(d) for d in _MODELS.get("veo_lite_durations", [])]
+VEO_LITE_DEFAULT_S = 8
+# Tier được phép dùng Lite r2v/nội suy. Flow trả tier qua /v1/credits (`userPaygateTier`);
+# Gemini Ultra = PAYGATE_TIER_TWO.
+VEO_LITE_TIERS = {"PAYGATE_TIER_TWO"}
+# Tên field độ dài trong request video. CHƯA XÁC ĐỊNH: các request mẫu bắt được đều là bản
+# 8s (mặc định) nên không có field nào để đối chiếu. Để rỗng thì mọi clip Lite ra 8s; điền
+# đúng tên field (bắt một request 4s trên Flow rồi đọc post data) là bật được 4/6s ngay,
+# không phải sửa chỗ nào khác. Đoán bừa tên field thì Flow trả 400 INVALID_ARGUMENT.
+VEO_LITE_DURATION_FIELD = os.environ.get("VEO_LITE_DURATION_FIELD", "")
+
 # ─── Image upsample (Flow /v1/flow/upsampleImage) ───────────
 # Ảnh sinh ra chỉ là bản HD (phân giải thấp). Flow cho tải bản phóng to theo tier:
 # TIER_ONE → 2K, TIER_TWO → 4K. Response trả base64 trong `encodedImage`.
@@ -138,7 +160,8 @@ UPSAMPLE_IMAGE_TIMEOUT = float(os.environ.get("UPSAMPLE_IMAGE_TIMEOUT", "180"))
 # Full HD (1080p), TIER_TWO mới lên 4K. Khác upsample ảnh (đồng bộ, trả base64), việc này
 # chạy BẤT ĐỒNG BỘ như một lượt sinh video: submit → poll, ~1 phút/video.
 # Đo thực tế trên tier ONE → 1080p: KHÔNG trừ credit (914 → 914 cho một video render mới).
-# Bản 4K (tier TWO) chưa kiểm chứng được — nhiều khả năng mới là bản tính tiền.
+# Bản 4K (tier TWO) thì CÓ: ≈50 credit/video — đắt gấp 2.5 lần một lượt render clip mới, nên
+# batch upscale 4K phải hỏi trước (webapp/src/lib/credits.ts). Upscale ẢNH lên 4K vẫn 0 credit.
 UPSAMPLE_VIDEO_RESOLUTIONS = {
     "PAYGATE_TIER_ONE": "VIDEO_RESOLUTION_1080P",
     "PAYGATE_TIER_TWO": "VIDEO_RESOLUTION_4K",

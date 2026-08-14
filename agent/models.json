@@ -6,8 +6,8 @@
         "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite_low_priority"
       },
       "start_end_frame_2_video": {
-        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite_low_priority",
-        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite_low_priority"
+        "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_interpolation_lite_low_priority",
+        "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_interpolation_lite_low_priority"
       },
       "reference_frame_2_video": {
         "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_r2v_fast_landscape_ultra_relaxed",
@@ -29,6 +29,12 @@
       }
     }
   },
+  "veo_lite_models": {
+    "frame_2_video": "veo_3_1_i2v_lite_low_priority",
+    "start_end_frame_2_video": "veo_3_1_interpolation_lite_low_priority",
+    "reference_frame_2_video": "veo_3_1_r2v_lite_low_priority"
+  },
+  "veo_lite_durations": ["4", "6", "8"],
   "upscale_models": {
     "VIDEO_RESOLUTION_4K": "veo_3_1_upsampler_4k",
     "VIDEO_RESOLUTION_1080P": "veo_3_1_upsampler_1080p"

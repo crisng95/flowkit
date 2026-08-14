@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from agent.config import (
     IMAGE_MODELS, VIDEO_MODELS, UPSCALE_MODELS, OMNI_FLASH_MODELS,
     UPSAMPLE_VIDEO_RESOLUTIONS, VIDEO_POLL_TIMEOUT,
+    VEO_LITE_MODELS, VEO_LITE_DURATIONS, VEO_LITE_DEFAULT_S, VEO_LITE_TIERS,
 )
 from agent.services.flow_client import get_flow_client
 from agent.services.music_client import get_music_client
@@ -350,6 +351,8 @@ async def options():
         agents = (await list_agents())["agents"]
     except Exception:
         agents = []
+    tier = await _current_tier()
+    veo_lite_ok = tier in VEO_LITE_TIERS
     return {
         "image_models": list(IMAGE_MODELS.keys()),
         # Người dùng chỉ chọn ENGINE, không chọn model key: Veo i2v tự chọn theo tier + khung
@@ -357,9 +360,20 @@ async def options():
         # nó là danh sách TIER, không phải model, dropdown cũ hiển thị nhầm thành model.)
         "video_models": {"veo_tiers": list(VIDEO_MODELS.keys()),
                           "omni_flash_durations": list(OMNI_FLASH_MODELS.keys())},
-        "video_engines": [{"value": "", "label": "Veo i2v (mặc định — tự chọn theo tier)"}]
+        # Thứ tự = thứ tự nên chọn. Veo 3.1 Lite [Lower Priority] đứng đầu vì nó KHÔNG trừ
+        # credit; "Lite" bản thường (không có [Lower Priority]) thì VẪN tính tiền — đừng gộp
+        # hai cái làm một, model key khác nhau ở đuôi `_low_priority`.
+        "video_engines": ([{"value": "veo_lite",
+                            "label": "Veo 3.1 Lite [Lower Priority] — 0 credit (Ultra)"}]
+                          if veo_lite_ok else [])
+                         + [{"value": "", "label": "Tự động (Ultra → Lite miễn phí, còn lại Veo i2v)"},
+                            {"value": "veo", "label": "Veo i2v theo tier (tốn credit)"}]
                          + [{"value": s, "label": f"Omni Flash {s}s (r2v)"}
                             for s in OMNI_FLASH_MODELS],
+        # UI cần biết tài khoản có Ultra không để giải thích vì sao thiếu lựa chọn Lite.
+        "veo_lite": {"available": veo_lite_ok, "tier": tier,
+                     "durations": VEO_LITE_DURATIONS,
+                     "default_duration": VEO_LITE_DEFAULT_S},
         "upscale_models": list(UPSCALE_MODELS.keys()),
         "aspect_ratios": ["VIDEO_ASPECT_RATIO_LANDSCAPE", "VIDEO_ASPECT_RATIO_PORTRAIT"],
         "paygate_tiers": ["PAYGATE_TIER_ONE", "PAYGATE_TIER_TWO"],
@@ -711,7 +725,32 @@ async def _project_or_404(pid: str) -> dict:
     if not row:
         raise HTTPException(404, "Project không tồn tại")
     await _assert_owner(row)
-    return row
+    return await _sync_project_tier(row)
+
+
+async def _sync_project_tier(project: dict) -> dict:
+    """Cập nhật `project.paygate_tier` khi tài khoản đã đổi gói.
+
+    Cột này được ghi MỘT LẦN lúc tạo dự án, nên nâng lên Gemini Ultra xong thì mọi dự án cũ
+    vẫn mang TIER_ONE — mà chính cột đó quyết định engine video mặc định (Veo Lite 0 credit
+    chỉ mở cho TIER_TWO) và được gửi lên Flow làm `userPaygateTier`. Không đồng bộ thì người
+    dùng nâng gói mà app vẫn render bằng model tính tiền, không hiểu vì sao.
+
+    `_current_tier()` cache 60s nên đây gần như luôn là một phép so sánh trong bộ nhớ. Chỉ
+    đồng bộ khi dự án thuộc tài khoản ĐANG đăng nhập — tier của người khác không suy ra được
+    từ phiên hiện tại."""
+    tier = await _current_tier()
+    # `_current_tier` trả TIER_ONE khi KHÔNG đọc được (extension rớt) — ghi giá trị đoán đó
+    # đè lên dự án là hạ cấp nhầm một tài khoản Ultra. Chỉ tin khi đã đọc thật ít nhất một lần.
+    if not _tier_cache["value"] or project.get("paygate_tier") == tier:
+        return project
+    owner = project.get("account_id")
+    if owner and owner != await accounts.current_id():
+        return project
+    await db.update("project", project["id"], {"paygate_tier": tier})
+    logger.info("Dự án %s: tier %s → %s", project["id"][:8],
+                project.get("paygate_tier"), tier)
+    return {**project, "paygate_tier": tier}
 
 
 async def _purge_shots_of_scene(scene_id: str) -> int:
@@ -3156,31 +3195,30 @@ async def _poll_video(client, media_id: str, flow_project_id: str,
 
 CLIP_MAX_S = 8  # one Veo i2v clip ≈ 8s; longer beats are rendered as chained sub-clips
 
+# Engine chạy r2v: ảnh frame đi vào làm REFERENCE chứ không phải start image, nên chúng cần
+# thêm entity reference của shot để token `{Tên}` trong motion_prompt bind được.
+_R2V_ENGINES = {"omni", "veo_lite"}
+
 
 def _video_engine(project: dict) -> tuple[str, int]:
-    """('omni'|'veo', độ dài tối đa MỘT clip tính bằng giây) theo cấu hình dự án.
+    """('omni'|'veo_lite'|'veo', độ dài tối đa MỘT clip) theo ⚙ Cấu hình dự án.
 
-    `project.video_model` là lựa chọn của người dùng ở ⚙ Cấu hình dự án. Một key thời lượng
-    Omni Flash ("4"/"6"/"8"/"10") → Omni Flash r2v với đúng độ dài đó; rỗng → Veo i2v tự chọn
-    theo tier. Các giá trị RÁC do dropdown cũ lưu nhầm (nó liệt kê tên tier như thể là model,
-    vd "PAYGATE_TIER_ONE") cũng rơi về Veo thay vì làm hỏng lượt render.
-    """
-    raw = (project.get("video_model") or "").strip()
-    if raw in OMNI_FLASH_MODELS:
-        return "omni", int(raw)
-    for secs, key in OMNI_FLASH_MODELS.items():      # chấp nhận cả model key đầy đủ
-        if raw == key:
-            return "omni", int(secs)
-    return "veo", CLIP_MAX_S
+    Luật nằm trong graph.video_engine — node editor cũng đọc từ đó, nên hai đường không bao
+    giờ chạy hai engine khác nhau cho cùng một dự án."""
+    return graph_mod.video_engine(project)
 
 
 def _engine_kw(project: dict) -> dict:
     """kwargs {engine, clip_s} cho các hàm sinh prompt của brain — quyết định motion prompt
-    được viết dạng MỘT câu (Veo) hay dạng nhiều mốc thời gian `[mm:ss]` (Omni Flash)."""
+    được viết dạng MỘT câu (Veo) hay dạng nhiều mốc thời gian `[mm:ss]` (Omni Flash).
+
+    Veo Lite đi cùng nhóm Veo ở đây: nó vẫn là một cú máy liền mạch trong 4-8s, mốc thời gian
+    chỉ hợp với clip Omni dài tới 10s."""
     engine, clip_s = _video_engine(project)
     # `project` đi kèm để brain lấy được bản ghi đè của các prompt ngầm (CINEMATOGRAPHY,
     # MOTION, mốc thời gian Omni) — xem brain.PROMPT_DEFAULTS.
-    return {"engine": engine, "clip_s": clip_s, "project": project}
+    return {"engine": "omni" if engine == "omni" else "veo", "clip_s": clip_s,
+            "project": project}
 
 
 def _video_prompt(project: dict, shot: dict, motion: str) -> str:
@@ -3203,22 +3241,44 @@ def _clip_submit(client, project: dict, shot_id: str, prompt: str,
     Veo là i2v (ảnh frame làm START image); Omni Flash là r2v (không có start image) nên ảnh
     frame đi vào làm REFERENCE, kèm các entity reference của shot.
 
+    Veo 3.1 Lite [Lower Priority] cũng là r2v ("inference") — cùng lý do như Omni: nó bind
+    được token entity, thứ Veo i2v không làm được. Đổi lại nó xếp hàng ưu tiên thấp nên clip
+    lâu hơn, bù lại KHÔNG trừ credit.
+
     `refs` QUAN TRỌNG với Omni: motion_prompt chứa token `{Tên entity}`, và chỉ khi truyền
     references thì chúng mới được bind thành reference part; không có nó thì dấu ngoặc nhọn
     lọt thẳng vào structuredPrompt dưới dạng text thô."""
+    # Ảnh frame đứng đầu (mỏ neo thị giác của shot), rồi tới entity refs để bind token.
+    r2v_refs = [{"handle": "frame", "media_id": start_media_id}] + [
+        r for r in (refs or []) if r.get("media_id") != start_media_id]
     if engine == "omni":
-        # Ảnh frame đứng đầu (mỏ neo thị giác của shot), rồi tới entity refs để bind token.
-        omni_refs = [{"handle": "frame", "media_id": start_media_id}] + [
-            r for r in (refs or []) if r.get("media_id") != start_media_id]
         return lambda: client.generate_video_omni(
             prompt=prompt, project_id=project["flow_project_id"],
             reference_media_ids=[start_media_id], duration_s=duration_s,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
-            references=omni_refs)
+            references=r2v_refs)
+    if engine == "veo_lite":
+        return lambda: client.generate_video_veo_lite(
+            prompt=prompt, project_id=project["flow_project_id"], scene_id=shot_id,
+            reference_media_ids=[start_media_id], duration_s=duration_s,
+            aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
+            references=r2v_refs)
     return lambda: client.generate_video(
         start_image_media_id=start_media_id, prompt=prompt,
         project_id=project["flow_project_id"], scene_id=shot_id,
         aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
+
+
+def _engine_model_key(engine: str, clip_s: int, tier: str, aspect: str) -> str | None:
+    """Model key ĐÃ DÙNG THẬT, để ghi vào `shot.video_model`.
+
+    Không có nó thì "đặt Veo Lite mà ra Veo trả tiền" chỉ phát hiện được bằng cách mở Flow lên
+    xem — mà đó đúng là thứ tốn credit."""
+    if engine == "omni":
+        return OMNI_FLASH_MODELS.get(str(clip_s))
+    if engine == "veo_lite":
+        return VEO_LITE_MODELS.get("reference_frame_2_video")
+    return VIDEO_MODELS.get(tier, {}).get("frame_2_video", {}).get(aspect)
 
 
 async def _render_clip(client, project: dict, shot_id: str, submit, name: str) -> dict:
@@ -3302,7 +3362,7 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
     out_dir = assembler.STUDIO_MEDIA_DIR / project["id"]
     out_dir.mkdir(parents=True, exist_ok=True)
     start_media = shot["image_media_id"]
-    refs = await _build_frame_references(shot, scene) if engine == "omni" else None
+    refs = await _build_frame_references(shot, scene) if engine in _R2V_ENGINES else None
     clips, first = [], None
     for k in range(n):
         name = f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_p{k+1}_vid"
@@ -3330,9 +3390,7 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
     await db.update("shot", shot["id"], {
         "video_media_id": first["media_id"], "video_primary_id": first.get("primary_media_id"),
         "video_workflow_id": first.get("workflow_id"), "video_path": web,
-        "video_model": (OMNI_FLASH_MODELS.get(str(clip_max)) if engine == "omni"
-                        else VIDEO_MODELS.get(tier, {}).get("frame_2_video", {})
-                                         .get(project["aspect_ratio"])),
+        "video_model": _engine_model_key(engine, clip_max, tier, project["aspect_ratio"]),
         "status": "done", "updated_at": db.now()})
     return await _shot_or_404(shot["id"])
 
@@ -3366,7 +3424,7 @@ async def _generate_shot_video(shot: dict) -> dict:
                 row = await _shot_or_404(shot["id"])
             return row
         motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
-        refs = await _build_frame_references(shot, scene) if engine == "omni" else None
+        refs = await _build_frame_references(shot, scene) if engine in _R2V_ENGINES else None
         submit = _clip_submit(client, project, shot["id"],
                               _video_prompt(project, shot, motion), shot["image_media_id"],
                               engine, clip_max, tier, refs)
@@ -3376,11 +3434,7 @@ async def _generate_shot_video(shot: dict) -> dict:
         await db.update("shot", shot["id"], {
             "video_media_id": info["media_id"], "video_primary_id": info.get("primary_media_id"),
             "video_workflow_id": info.get("workflow_id"), "video_path": info["web"],
-            # Ghi lại model ĐÃ DÙNG THẬT — không có nó thì "đặt Omni mà ra Veo" chỉ phát hiện
-            # được bằng cách mở Flow lên xem.
-            "video_model": (OMNI_FLASH_MODELS.get(str(clip_max)) if engine == "omni"
-                            else VIDEO_MODELS.get(tier, {}).get("frame_2_video", {})
-                                             .get(project["aspect_ratio"])),
+            "video_model": _engine_model_key(engine, clip_max, tier, project["aspect_ratio"]),
             # Lượt treo (nếu có) đã bị thay bằng clip mới này → tắt nút "Lấy lại video".
             "operation_json": None,
             "status": "done", "updated_at": db.now()})

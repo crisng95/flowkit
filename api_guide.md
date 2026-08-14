@@ -314,6 +314,63 @@ Sinh video tham chiếu (r2v) bằng mô hình **Omni Flash** với tùy chọn 
   }
   ```
 
+### 3b. Tạo Video Bằng Veo 3.1 Lite [Lower Priority] (0 credit — chỉ Gemini Ultra)
+Họ model `*_lite_low_priority`: render xếp hàng ưu tiên thấp (clip lâu hơn) nhưng **không trừ
+credit**. Chỉ mở trên tài khoản Ultra (`PAYGATE_TIER_TWO`) — tier khác trả lỗi ngay, không gửi
+request. ⚠️ Đừng nhầm với "Veo 3.1 - Lite" thường (không có `[Lower Priority]`, thiếu đuôi
+`_low_priority` trong model key): bản đó **vẫn tính tiền**.
+
+Kiểu sinh **suy ra từ ảnh truyền vào**, không có cờ riêng:
+
+| Ảnh truyền vào | Kiểu | Model key | Endpoint Flow |
+| :--- | :--- | :--- | :--- |
+| `start_media_id` + `end_media_id` | Nội suy khung đầu→cuối | `veo_3_1_interpolation_lite_low_priority` | `video:batchAsyncGenerateVideoStartAndEndImage` |
+| chỉ `start_media_id` | i2v | `veo_3_1_i2v_lite_low_priority` | `video:batchAsyncGenerateVideoStartImage` |
+| chỉ `reference_media_ids` | "inference" r2v | `veo_3_1_r2v_lite_low_priority` | `video:batchAsyncGenerateVideoReferenceImages` |
+
+* **URL:** `/api/flow/generate-video-veo-lite`
+* **Method:** `POST`
+* **Request Body (JSON):**
+  | Field | Type | Required | Default | Description |
+  | :--- | :--- | :---: | :---: | :--- |
+  | `prompt` | `str` | Yes | | Prompt mô tả hành động (hỗ trợ token `{handle}`) |
+  | `project_id` | `str` | Yes | | ID project |
+  | `start_media_id` | `str` | No | `null` | Ảnh khung đầu |
+  | `end_media_id` | `str` | No | `null` | Ảnh khung cuối (đi kèm `start_media_id` → nội suy) |
+  | `reference_media_ids` | `list[str]` | No | `null` | Ảnh tham chiếu cho kiểu inference |
+  | `references` | `list[dict]` | No | `null` | `{handle, media_id}` để bind token `{handle}` trong prompt |
+  | `duration_s` | `int` | No | `8` | `4`, `6` hoặc `8`. **Chưa có tác dụng** — xem ghi chú dưới |
+  | `aspect_ratio` | `str` | No | `"VIDEO_ASPECT_RATIO_LANDSCAPE"` | Tỉ lệ video |
+  | `user_paygate_tier` | `str` | No | `"PAYGATE_TIER_TWO"` | Phải là `PAYGATE_TIER_TWO` |
+
+> ⚠️ **`duration_s` chưa nối được.** Mọi request mẫu bắt được từ Flow đều là bản 8s mặc định
+> nên chưa biết Flow gọi field độ dài là gì; agent cố tình KHÔNG đoán (field lạ ⇒ Flow trả 400
+> cho mọi lượt sinh). Bắt một request 4s/6s trên Flow, đọc tên field trong post data rồi đặt
+> `VEO_LITE_DURATION_FIELD=<tên field>` là 4/6s chạy ngay, không phải sửa code.
+
+* **Request Example (inference):**
+  ```json
+  {
+    "prompt": "Chú chó trắng {dog1} ngậm quả bóng rồi chạy ra chỗ khác nhặt được cái đĩa {dog2}",
+    "project_id": "2a0fb3cf-f5e3-4195-a385-9042d0e5e27f",
+    "reference_media_ids": ["c245eb35-...", "6e7cc08d-..."],
+    "references": [
+      { "handle": "dog1", "media_id": "c245eb35-..." },
+      { "handle": "dog2", "media_id": "6e7cc08d-..." }
+    ]
+  }
+  ```
+
+* **Request Example (khung đầu + khung cuối):**
+  ```json
+  {
+    "prompt": "Máy quay lia chậm theo chú chó",
+    "project_id": "2a0fb3cf-f5e3-4195-a385-9042d0e5e27f",
+    "start_media_id": "c245eb35-...",
+    "end_media_id": "6e7cc08d-..."
+  }
+  ```
+
 ### 4. Nâng Cấp Chất Lượng Video (Upscale Video)
 Tăng chất lượng/độ phân giải của video lên tối đa 4K.
 

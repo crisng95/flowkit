@@ -60,6 +60,24 @@ class GenerateVideoOmniRequest(BaseModel):
     references: Optional[list[EntityReference]] = None
 
 
+class GenerateVideoVeoLiteRequest(BaseModel):
+    """Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Gemini Ultra (PAYGATE_TIER_TWO).
+
+    Kiểu sinh suy ra từ ảnh truyền vào: start+end → nội suy hai khung, chỉ start → i2v,
+    không start → "inference" r2v (cần ≥1 reference)."""
+    prompt: str
+    project_id: str
+    scene_id: str = ""
+    start_media_id: Optional[str] = None
+    end_media_id: Optional[str] = None
+    reference_media_ids: Optional[list[str]] = None
+    # prompt nhúng "{handle}" → structuredPrompt tách part riêng cho từng reference
+    references: Optional[list[EntityReference]] = None
+    duration_s: int = 8                 # 4 | 6 | 8 — xem VEO_LITE_DURATION_FIELD
+    aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"
+    user_paygate_tier: str = "PAYGATE_TIER_TWO"
+
+
 class UpscaleVideoRequest(BaseModel):
     media_id: str
     scene_id: str
@@ -179,6 +197,18 @@ async def generate_video_omni(body: GenerateVideoOmniRequest):
     if not client.connected:
         raise HTTPException(503, "Extension not connected")
     result = await client.generate_video_omni(**body.model_dump(exclude_none=True))
+    if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
+        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+    return result.get("data", result)
+
+
+@router.post("/generate-video-veo-lite")
+async def generate_video_veo_lite(body: GenerateVideoVeoLiteRequest):
+    """Submit Veo 3.1 Lite [Lower Priority] video generation (0 credit, Ultra only)."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    result = await client.generate_video_veo_lite(**body.model_dump(exclude_none=True))
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
         raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
     return result.get("data", result)

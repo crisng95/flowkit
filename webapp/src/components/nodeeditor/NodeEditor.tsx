@@ -883,7 +883,9 @@ function AspectModelRow({
       <label className="flex-1">
         <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Model</div>
         {videoModels ? (
-          <select className={fieldCls} value={data.model || "omni"} onChange={(e) => update(id, { model: e.target.value })}>
+          <select className={fieldCls} value={data.model || "veo_lite"} onChange={(e) => update(id, { model: e.target.value })}>
+            {/* [Lower Priority] = bản 0 credit. "Veo 3.1 - Lite" thường vẫn tính tiền. */}
+            <option value="veo_lite">Veo 3.1 Lite ⚡0đ</option>
             <option value="omni">Omni Flash</option>
             <option value="veo">Veo i2v</option>
           </select>
@@ -993,17 +995,35 @@ function ImageNode({ id, data, type }: NodeProps) {
 function VideoNode({ id, data }: NodeProps) {
   const { update, projDur } = useContext(NodeOps);
   const d = data as any;
-  const isOmni = (d.model || "omni") === "omni";
+  const model = d.model || "veo_lite";
+  const isLite = model === "veo_lite";
+  // Cả Omni Flash và Veo Lite đều cho chọn độ dài clip; Veo i2v thì cứng 8s.
+  const hasDuration = isLite || model === "omni";
+  // Veo Lite chỉ có 4/6/8s, Omni Flash lên tới 10s.
+  const maxDur = isLite ? 8 : 10;
   // No per-node duration → follow ⚙ Cấu hình dự án (the backend falls back the same way).
-  const eff = d.duration || projDur || 8;
+  const eff = Math.min(d.duration || projDur || 8, maxDur);
   return (
     <Shell type="video" id={id} data={d}>
       <Preview nodeId={id} src={d._result} video label="Kết quả video" />
       <AspectModelRow id={id} data={d} videoModels />
+      {isLite && (
+        <label className="block">
+          <div className="mb-0.5 text-[10px] uppercase tracking-wide text-neutral-500">Kiểu tạo</div>
+          <select
+            className={fieldCls}
+            value={d.lite_mode || "inference"}
+            onChange={(e) => update(id, { lite_mode: e.target.value })}
+          >
+            <option value="inference">Inference (mọi ảnh nối vào = tham chiếu)</option>
+            <option value="frames">Khung đầu + khung cuối (nội suy)</option>
+          </select>
+        </label>
+      )}
       <Slider label="Số lượng tạo" value={d.count || 1} min={1} max={4} step={1} onChange={(v) => update(id, { count: v })} />
-      {isOmni && (
+      {hasDuration && (
         <>
-          <Slider label="Thời lượng" value={eff} min={4} max={10} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
+          <Slider label="Thời lượng" value={eff} min={4} max={maxDur} step={2} suffix="s" onChange={(v) => update(id, { duration: v })} />
           {/* A node saved back when the editor hard-coded 8s silently overrode a project set
               to 10s — say so instead of quietly rendering the shorter clip. */}
           {!!projDur && !!d.duration && d.duration !== projDur && (
@@ -1018,6 +1038,15 @@ function VideoNode({ id, data }: NodeProps) {
       )}
       <div className="text-[10px] text-neutral-500">
         ⓘ prompt áp style/header/footer dự án (như node Tạo ảnh)
+        {isLite && (
+          <>
+            <br />
+            ⚡ Veo 3.1 Lite [Lower Priority]: 0 credit, chỉ tài khoản Ultra — đổi lại xếp hàng
+            ưu tiên thấp nên clip lâu hơn.
+            {(d.lite_mode || "inference") === "frames" &&
+              " Nối ĐÚNG 2 ảnh: ảnh vào trước là khung đầu, ảnh sau là khung cuối."}
+          </>
+        )}
       </div>
       <GenControls id={id} data={d} />
     </Shell>
@@ -1420,7 +1449,8 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
-        model: "omni", aspect: "16:9", count: 1, _result: seed.videoSrc || "",
+        model: "veo_lite", lite_mode: "inference", aspect: "16:9", count: 1,
+        _result: seed.videoSrc || "",
       })
     );
     nodes.push(mk("o", "output", 660, 110, { _result: seed.videoSrc || "", _ext: "mp4" }));
@@ -1470,10 +1500,16 @@ const WRAP_TYPES = ["promptHeader", "promptFooter"] as const;
 const WRAP_TARGETS = ["image", "video"];
 
 // ─── Editor ─────────────────────────────────────────────────
-// "10" / "abra_r2v_10s" → 10; anything else (Veo, empty) → null. Mirrors _omni_duration()
-// in agent/studio/graph.py.
+// Độ dài clip mà ⚙ Cấu hình dự án đang đặt, dùng làm mặc định cho ô "Thời lượng" của node
+// video. "10" / "abra_r2v_10s" → 10; "veo_lite" / "veo_lite_4" → 8 / 4; Veo i2v (cứng 8s)
+// hay giá trị lạ → null. Mirrors _omni_duration() in agent/studio/graph.py.
 const omniDuration = (videoModel?: string | null): number | null => {
-  const m = String(videoModel || "").trim().match(/^(?:abra_r2v_)?(\d+)s?$/);
+  const raw = String(videoModel || "").trim();
+  if (raw.startsWith("veo_lite")) {
+    const n = Number(raw.slice("veo_lite".length).replace(/^_/, ""));
+    return [4, 6, 8].includes(n) ? n : 8;
+  }
+  const m = raw.match(/^(?:abra_r2v_)?(\d+)s?$/);
   const n = m ? Number(m[1]) : NaN;
   return [4, 6, 8, 10].includes(n) ? n : null;
 };
@@ -2163,7 +2199,7 @@ function Editor({
     note: { text: "" },
     // No `duration`: a fresh video node follows ⚙ Cấu hình dự án (VideoNode shows the
     // effective value, the backend falls back the same way).
-    video: { aspect: "16:9", model: "omni", count: 1 },
+    video: { aspect: "16:9", model: "veo_lite", lite_mode: "inference", count: 1 },
     filter: { brightness: 1, contrast: 1, saturation: 1, sharpness: 1, blur: 0, rotate: 0 },
     text: { text: "", anchor: "bottom", color: "#ffffff", font_scale: 0.06, stroke: true },
     upscale: { scale: 2, sharpen: true },

@@ -4,7 +4,7 @@ import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import { useConfirm } from "../common/Confirm";
-import { creditGuard, CREDIT_COST } from "../../lib/credits";
+import { creditGuard, videoCost } from "../../lib/credits";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
@@ -138,7 +138,9 @@ export default function ShotsTab({
       setErr("Không có shot nào (có ảnh, chưa có video) để render.");
       return;
     }
-    if (!(await creditGuard(confirm, todo.length, CREDIT_COST.video, "Render video"))) return;
+    // 0 credit với Veo 3.1 Lite [Lower Priority] → creditGuard tự bỏ qua, không hỏi thừa.
+    const per = videoCost(project.video_model, project.paygate_tier);
+    if (!(await creditGuard(confirm, todo.length, per, "Render video"))) return;
     setErr(null);
     try {
       await shotsApi.genAllVideos(project.id);

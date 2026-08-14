@@ -86,7 +86,10 @@ def _descendants(node_id: str, edges: list[dict]) -> set[str]:
     return seen
 
 
-from agent.config import OMNI_FLASH_MODELS
+from agent.config import (
+    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_DURATIONS, VEO_LITE_DEFAULT_S,
+    VEO_LITE_TIERS,
+)
 
 # Friendly aspect tokens used by the node UI → Flow enums.
 _IMG_ASPECT = {"16:9": "IMAGE_ASPECT_RATIO_LANDSCAPE",
@@ -109,17 +112,41 @@ def _img_aspect(project: dict, data: dict | None = None) -> str:
         "VIDEO_ASPECT_RATIO_", "IMAGE_ASPECT_RATIO_") or "IMAGE_ASPECT_RATIO_LANDSCAPE"
 
 
-def _omni_duration(project: dict) -> int | None:
-    """Độ dài một clip Omni Flash theo ⚙ Cấu hình dự án — `video_model` là "4"/"6"/"8"/"10"
-    (hoặc cả model key `abra_r2v_10s`). None khi dự án đang dùng Veo. Cùng luật với
-    `_video_engine` bên api/studio.py, để node editor không tự ý chạy một độ dài khác."""
+def video_engine(project: dict) -> tuple[str, int]:
+    """('omni'|'veo_lite'|'veo', độ dài MỘT clip tính bằng giây) theo ⚙ Cấu hình dự án.
+
+    Đây là chỗ DUY NHẤT đọc `project.video_model`; `api/studio.py._video_engine` gọi lại hàm
+    này, để node editor và đường ⚡ tạo nhanh không bao giờ chạy hai engine khác nhau.
+
+    - `"4"/"6"/"8"/"10"` (hoặc model key `abra_r2v_10s`) → Omni Flash r2v đúng độ dài đó
+    - `"veo_lite"` / `"veo_lite_6"` → Veo 3.1 Lite [Lower Priority]: 0 credit, chỉ Ultra
+    - `"veo"` → ép Veo trả tiền theo tier
+    - rỗng = mặc định: Ultra thì Veo Lite (miễn phí), tài khoản khác thì Veo i2v theo tier
+
+    Chú ý model key: chỉ đuôi `_low_priority` mới là bản 0 credit. "Veo 3.1 - Lite" thường
+    (không có [Lower Priority]) VẪN trừ credit — đừng thay key ở models.json bằng bản đó.
+    """
     raw = str(project.get("video_model") or "").strip()
     if raw in OMNI_FLASH_MODELS:
-        return int(raw)
+        return "omni", int(raw)
     for secs, key in OMNI_FLASH_MODELS.items():
         if raw == key:
-            return int(secs)
-    return None
+            return "omni", int(secs)
+    if raw.startswith("veo_lite") or raw in VEO_LITE_MODELS.values():
+        tail = raw[len("veo_lite"):].lstrip("_") if raw.startswith("veo_lite") else ""
+        return "veo_lite", int(tail) if tail in VEO_LITE_DURATIONS else VEO_LITE_DEFAULT_S
+    if raw == "veo":
+        return "veo", 8
+    if project.get("paygate_tier") in VEO_LITE_TIERS:
+        return "veo_lite", VEO_LITE_DEFAULT_S
+    return "veo", 8
+
+
+def _omni_duration(project: dict) -> int | None:
+    """Độ dài clip khi dự án chạy engine r2v (Omni Flash hoặc Veo Lite), None khi là Veo i2v.
+    Node editor dùng nó làm mặc định cho ô "Thời lượng"."""
+    engine, secs = video_engine(project)
+    return secs if engine in ("omni", "veo_lite") else None
 
 
 def _vid_aspect(project: dict, data: dict | None = None) -> str:
@@ -771,21 +798,58 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             prompt = brain.compose_prompt(project, body, header=inp["header"] or "",
                                           footer=inp["footer"] or "", media="video")
             aspect_v = _vid_aspect(project, data)
-            kind_v = (data.get("model") or "omni").lower()
+            proj_engine, proj_secs = video_engine(project)
+            kind_v = (data.get("model") or "").lower() or proj_engine
+            if kind_v in OMNI_FLASH_MODELS.values():
+                kind_v = "omni"
+            elif kind_v in VEO_LITE_MODELS.values():
+                kind_v = "veo_lite"
             # Node không tự đặt thời lượng → theo ⚙ Cấu hình dự án. Trước đây node editor
             # cứng 8s nên chọn "Omni Flash 10s" ở cấu hình vẫn ra clip 8s.
-            dur_v = int(data.get("duration") or 0) or _omni_duration(project) or 8
-            if kind_v == "omni" or kind_v in OMNI_FLASH_MODELS.values():
+            dur_v = int(data.get("duration") or 0) or proj_secs or 8
+            used_model = None
+            if kind_v == "omni":
                 ref_ids = [r["media_id"] for r in inp["references"]]
                 if not ref_ids and inp["media_id"]:
                     ref_ids = [inp["media_id"]]
                 if not ref_ids:
                     raise GraphError("Omni Flash cần ít nhất 1 ảnh tham chiếu/nguồn")
+                used_model = OMNI_FLASH_MODELS.get(str(dur_v))
                 submit = lambda: client.generate_video_omni(
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
                     duration_s=dur_v, aspect_ratio=aspect_v,
                     user_paygate_tier=project["paygate_tier"],
                     references=inp["references"] or None)
+            elif kind_v == "veo_lite":
+                # Hai kiểu, chọn bằng `lite_mode` trên node (mặc định "inference"):
+                #   "frames" — nội suy khung đầu→khung cuối, cần ĐÚNG hai ảnh nối vào; thứ tự
+                #              lấy theo thứ tự ảnh chảy vào node (ref đầu = đầu, ref sau = cuối)
+                #   khác     — "inference" r2v, mọi ảnh nối vào đều thành reference
+                imgs = [r for r in inp["references"] if r.get("media_id")]
+                mode_v = str(data.get("lite_mode") or "inference").lower()
+                if mode_v == "frames":
+                    if len(imgs) < 2:
+                        raise GraphError("Veo Lite kiểu 'khung đầu + khung cuối' cần 2 ảnh "
+                                         "nối vào (ảnh đầu tiên là khung đầu)")
+                    start_v, end_v = imgs[0]["media_id"], imgs[1]["media_id"]
+                    used_model = VEO_LITE_MODELS.get("start_end_frame_2_video")
+                    submit = lambda: client.generate_video_veo_lite(
+                        prompt=prompt, project_id=flow_pid, scene_id=target["id"],
+                        start_media_id=start_v, end_media_id=end_v, duration_s=dur_v,
+                        aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"],
+                        references=imgs[:2])
+                else:
+                    if not imgs and inp["media_id"]:
+                        imgs = [{"handle": "source", "media_id": inp["media_id"]}]
+                    if not imgs:
+                        raise GraphError("Veo 3.1 Lite (inference) cần ít nhất 1 ảnh "
+                                         "tham chiếu/nguồn")
+                    used_model = VEO_LITE_MODELS.get("reference_frame_2_video")
+                    submit = lambda: client.generate_video_veo_lite(
+                        prompt=prompt, project_id=flow_pid, scene_id=target["id"],
+                        reference_media_ids=[r["media_id"] for r in imgs],
+                        duration_s=dur_v, aspect_ratio=aspect_v,
+                        user_paygate_tier=project["paygate_tier"], references=imgs)
             else:   # Veo i2v — needs a start frame
                 if not inp["media_id"]:
                     raise GraphError("Veo i2v cần ảnh start (nối từ Nguồn ảnh / Tạo ảnh)")
@@ -798,9 +862,9 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4",
                             "handle": _handle_of(data, "video"),
                             # Model ĐÃ DÙNG THẬT — người gọi ghi vào shot.video_model, không có
-                            # nó thì "đặt Omni mà ra Veo" chỉ phát hiện được bằng cách mở Flow.
-                            "video_model": OMNI_FLASH_MODELS.get(str(dur_v))
-                            if kind_v == "omni" or kind_v in OMNI_FLASH_MODELS.values() else None}
+                            # nó thì "đặt Lite mà ra Veo trả tiền" chỉ phát hiện được bằng cách
+                            # mở Flow lên xem (mà đó đúng là thứ tốn credit).
+                            "video_model": used_model}
 
         elif t in _LOCAL_TYPES:
             # Local Pillow processing (no AI): filter / text / upscale / blend. Result is

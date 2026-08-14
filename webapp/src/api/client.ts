@@ -13,6 +13,9 @@ export interface Project {
   script_raw: string | null;
   image_model?: string | null;
   video_model?: string | null;
+  // Tier của tài khoản Flow lúc tạo dự án (TWO = Gemini Ultra). Quyết định engine video mặc
+  // định khi `video_model` để trống — xem graph.video_engine.
+  paygate_tier?: string | null;
   voice_id?: number | null;
   shot_duration?: number | null;
   tts_speed?: number | null;

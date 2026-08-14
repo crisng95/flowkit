@@ -17,6 +17,7 @@ import MusicManager from "../music/MusicManager";
 import AppSettingsSection from "./AppSettingsSection";
 import ImplicitPrompts from "./ImplicitPrompts";
 import { Field, Group, Slider, inp } from "./ui";
+import { upscaleVideoCost } from "../../lib/credits";
 
 // Toàn bộ cấu hình của app nằm ở ĐÂY — trước kia tách làm hai chỗ (drawer ⚙ "Settings" cấp
 // app + modal "Cấu hình dự án"), phải nhớ cái nào ở đâu. Giờ là một tab, chia theo NHÓM
@@ -84,7 +85,7 @@ export default function SettingsTab({
   const [hiresInfo, setHiresInfo] = useState<
     { label: string; done: number; total: number; missing: number } | null>(null);
   const [upInfo, setUpInfo] = useState<
-    { label: string; done: number; total: number; missing: number;
+    { label: string; resolution: string; done: number; total: number; missing: number;
       choices: { value: string; label: string }[] } | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [presets, setPresets] = useState<SettingsPreset[]>([]);
@@ -175,11 +176,14 @@ export default function SettingsTab({
 
   const upscaleMissingVideos = async () => {
     const n = upInfo?.missing ?? 0;
-    // 4K (tier TWO) chưa đo được nên vẫn hỏi trước khi chạy hàng loạt; 1080p đo được là miễn phí.
+    // 4K tốn ~50 credit/video (đo thực tế) — đắt hơn cả một lượt render clip mới, nên báo
+    // thẳng tổng tiền chứ không nói chung chung "có thể tốn credit"; 1080p thì miễn phí.
+    const per = upscaleVideoCost(upInfo?.resolution);
     if (!window.confirm(
       `Upscale ${n} video lên ${upInfo?.label}?\n\n` +
       `Mỗi video là một lượt render thật trên Flow (~1 phút/video)` +
-      (upInfo?.label === "4K" ? " và bản 4K có thể tốn credit." : ", đo được là không tốn credit.")
+      (per ? ` và tốn ~${per} credit — tổng ~${n * per} credit.`
+           : ", đo được là không tốn credit.")
     )) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
@@ -618,11 +622,20 @@ export default function SettingsTab({
                       ))}
                   </select>
                   <p className="text-xs leading-relaxed text-neutral-600">
-                    Veo i2v dựng video TỪ ảnh frame (model cụ thể tự chọn theo tier + khung hình).
-                    Omni Flash là r2v — ảnh frame thành ảnh tham chiếu — và cho chọn thẳng độ dài
-                    clip, nên beat 10s chỉ cần MỘT clip thay vì hai clip Veo 8s nối nhau; motion
-                    prompt cũng được viết theo mốc thời gian <code>[00:04]</code> để clip có nhiều
-                    pha chuyển động thay vì một cú máy đơn điệu.
+                    <b className="text-emerald-500/90">Veo 3.1 Lite [Lower Priority]</b> là bản
+                    <b> 0 credit</b>, chỉ có trên tài khoản Gemini Ultra — đổi lại nó xếp hàng ưu
+                    tiên thấp nên clip lâu hơn. Nó chạy r2v (ảnh frame + ảnh nhân vật đều thành
+                    ảnh tham chiếu, nên token <code>{"{Tên}"}</code> trong motion prompt bind được),
+                    và trong Node Editor còn có kiểu <i>khung đầu + khung cuối</i>. Cẩn thận:
+                    “Veo 3.1 - Lite” <i>không</i> kèm [Lower Priority] thì <b>vẫn trừ credit</b>.
+                  </p>
+                  <p className="text-xs leading-relaxed text-neutral-600">
+                    Veo i2v dựng video TỪ ảnh frame (model cụ thể tự chọn theo tier + khung hình)
+                    và <b>tốn ~20 credit/clip</b>. Omni Flash là r2v — ảnh frame thành ảnh tham
+                    chiếu — và cho chọn thẳng độ dài clip, nên beat 10s chỉ cần MỘT clip thay vì
+                    hai clip Veo 8s nối nhau; motion prompt cũng được viết theo mốc thời gian{" "}
+                    <code>[00:04]</code> để clip có nhiều pha chuyển động thay vì một cú máy đơn
+                    điệu.
                   </p>
                   <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-neutral-400">
                     ⚠ <b className="text-amber-500/90">Watermark</b>: cả hai đều đóng dấu ở góc dưới
@@ -635,7 +648,7 @@ export default function SettingsTab({
 
                 <Group
                   title="Upscale"
-                  hint="Video render ra cũng chỉ là bản HD. Trần theo tier: ONE → Full HD 1080p, TWO → 4K. Mỗi video mất ~1 phút (Flow render lại). Đo thực tế: lên 1080p KHÔNG trừ credit; bản 4K chưa kiểm chứng. Shot ghép từ nhiều clip (chained) không upscale được."
+                  hint="Video render ra cũng chỉ là bản HD. Trần theo tier: ONE → Full HD 1080p, TWO → 4K. Mỗi video mất ~1 phút (Flow render lại). Credit: video lên 1080p = 0, video lên 4K = ~50/video (đắt hơn cả một lượt render clip mới); upscale ẢNH lên 2K/4K thì luôn 0. Shot ghép từ nhiều clip (chained) không upscale được."
                 >
                   <label className="flex items-center gap-2.5 text-sm text-neutral-300">
                     <input type="checkbox" checked={autoUpVideo}
@@ -643,6 +656,15 @@ export default function SettingsTab({
                       className="h-4 w-4 accent-indigo-500" />
                     Tự upscale {upInfo?.label ? `(${upInfo.label})` : "(1080p/4K)"} sau mỗi lần render
                   </label>
+                  {/* Bật ô này với mức 4K là mỗi shot render xong tự trừ thêm ~50 credit, âm
+                      thầm, nhiều hơn cả tiền render clip. Phải nói ra ngay cạnh ô tick. */}
+                  {autoUpVideo && upscaleVideoCost(upInfo?.resolution) > 0 && (
+                    <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-neutral-400">
+                      ⚠ Mức <b>4K</b> tốn <b className="text-amber-500/90">~50 credit mỗi video</b> —
+                      bật tự động nghĩa là mỗi shot render xong lại trừ thêm chừng đó. Chọn
+                      <b> Full HD 1080p</b> ở dưới nếu muốn miễn phí.
+                    </p>
+                  )}
                   {(upInfo?.choices?.length ?? 0) > 1 && (
                     <Field label="Mức upscale">
                       <select value={upscaleRes} onChange={(e) => setUpscaleRes(e.target.value)}

@@ -159,6 +159,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | POST | `/upload-image` | Upload ảnh cục bộ → `media_id` |
 | POST | `/generate-video` | Video i2v từ ảnh đầu (+ ảnh cuối tuỳ chọn, để nối clip) |
 | POST | `/generate-video-omni` | Video r2v (Omni Flash, `abra_r2v_{4,6,8,10}s`) |
+| POST | `/generate-video-veo-lite` | Video Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Ultra |
 | POST | `/generate-video-refs` | Video từ các ảnh tham chiếu |
 | POST | `/upscale/video` | Upscale một video đã sinh |
 | POST | `/check-status` | Poll operation async (video/upscale) |
