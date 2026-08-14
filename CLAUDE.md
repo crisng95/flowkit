@@ -148,8 +148,13 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   còn 8s lại là `veo_3_1_interpolation_lite_low_priority`. Inference và i2v thì Flow cứng 8s
   nên `duration_s` bị bỏ qua. Ngoài Omni Flash ra, mọi engine đều 8s ở cấp dự án —
   `_omni_duration` chỉ trả số cho Omni.
+- **Upscale video có BA mức: 1080p / 2K / 4K**, thứ tự tăng dần khai ở `models.json →
+  upscale_video_order` + key model ở `upscale_models`. `hires.py` đọc từ đó, đừng hardcode lại
+  danh sách — thêm một mức nằm GIỮA là chỗ hardcode sai ngay. Trần vẫn theo tier: ONE → 1080p,
+  Ultra → 4K (và chọn xuống được 2K/1080p cho nhẹ + rẻ).
 - **Credit: chỉ VIDEO tính tiền.** Render clip ≈20 (0 với Veo Lite), upscale video lên **4K
-  ≈50** (đắt hơn cả một lượt render mới), lên 1080p = 0. Mọi thao tác ẢNH đều 0 credit — kể cả
+  ≈50** (đắt hơn cả một lượt render mới), lên 1080p = 0, **2K chưa đo** — `upscaleVideoCost()`
+  trả `null` cho nó và UI phải nói "chưa rõ giá", đừng hiển thị 0. Mọi thao tác ẢNH đều 0 credit — kể cả
   upscale ảnh lên 2K/4K — nên đừng cảnh báo hay hỏi xác nhận trước batch ảnh. Bảng giá +
   `videoCost()` / `upscaleVideoCost()` ở [webapp/src/lib/credits.ts](webapp/src/lib/credits.ts).
 - **Ảnh ĐEM RA NGOÀI phải là bản hi-res, ảnh HIỂN THỊ trong app thì không.** `image_path` là

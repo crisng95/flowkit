@@ -115,7 +115,9 @@ AI_AGENTS = {
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
-with open(_MODELS_FILE) as _f:
+# encoding BẮT BUỘC: `open()` không tham số dùng codec mặc định của hệ (cp1252 trên Windows
+# tiếng Việt), nên chỉ cần một chữ có dấu trong models.json là agent chết ngay lúc import.
+with open(_MODELS_FILE, encoding="utf-8") as _f:
     _MODELS = json.load(_f)
 
 VIDEO_MODELS = _MODELS["video_models"]
@@ -161,11 +163,17 @@ UPSAMPLE_IMAGE_TIMEOUT = float(os.environ.get("UPSAMPLE_IMAGE_TIMEOUT", "180"))
 # Đo thực tế trên tier ONE → 1080p: KHÔNG trừ credit (914 → 914 cho một video render mới).
 # Bản 4K (tier TWO) thì CÓ: ≈50 credit/video — đắt gấp 2.5 lần một lượt render clip mới, nên
 # batch upscale 4K phải hỏi trước (webapp/src/lib/credits.ts). Upscale ẢNH lên 4K vẫn 0 credit.
+# Mức 2K nằm giữa; CHƯA ĐO giá của nó — coi như chưa biết chứ đừng suy ra là 0.
 UPSAMPLE_VIDEO_RESOLUTIONS = {
     "PAYGATE_TIER_ONE": "VIDEO_RESOLUTION_1080P",
     "PAYGATE_TIER_TWO": "VIDEO_RESOLUTION_4K",
 }
 UPSAMPLE_VIDEO_DEFAULT = "VIDEO_RESOLUTION_1080P"
+# Thứ tự TĂNG DẦN của các mức upscale video — một chỗ duy nhất, để việc "hạ lựa chọn của dự án
+# xuống đúng trần tier" không phải đoán thứ tự từ tên. Thêm mức mới thì sửa models.json, đừng
+# rải hằng số vào hires.py.
+UPSAMPLE_VIDEO_ORDER = _MODELS.get("upscale_video_order") or [
+    "VIDEO_RESOLUTION_1080P", "VIDEO_RESOLUTION_4K"]
 # Omni Flash — r2v đa-độ-dài (4/6/8/10s), key theo số giây (string). Aspect chỉ
 # PORTRAIT/LANDSCAPE (không SQUARE). Dùng chung endpoint r2v.
 OMNI_FLASH_MODELS = _MODELS.get("omni_flash_models", {})

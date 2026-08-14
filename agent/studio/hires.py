@@ -19,7 +19,7 @@ import logging
 
 from agent.config import (
     UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT,
-    UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
+    UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT, UPSAMPLE_VIDEO_ORDER,
 )
 from agent.services.flow_client import get_flow_client
 from agent.studio import db, media_store
@@ -149,17 +149,25 @@ def shot_image(shot: dict) -> str | None:
 # Bất đồng bộ: submit rồi poll như một lượt render. Hàm poll do studio.py truyền vào
 # (`_poll_video`) để module này không phải import ngược lên tầng API.
 
-# Thứ tự tăng dần — dùng để hạ lựa chọn của người dùng xuống đúng trần của tier.
-_VIDEO_RES_ORDER = ["VIDEO_RESOLUTION_1080P", "VIDEO_RESOLUTION_4K"]
+# Thứ tự tăng dần — dùng để hạ lựa chọn của người dùng xuống đúng trần của tier. Đọc từ
+# config (models.json) chứ không hardcode: Flow mở thêm mức 2K nằm GIỮA 1080p và 4K, mà bảng
+# hardcode hai mức thì thêm một mức là phải sửa cả thứ tự lẫn phép cắt danh sách.
+_VIDEO_RES_ORDER = list(UPSAMPLE_VIDEO_ORDER)
+
+
+def _cap_for(tier: str) -> str:
+    """Trần của tier, đã kẹp vào danh sách mức đang có (cấu hình lệch không làm nổ index)."""
+    cap = UPSAMPLE_VIDEO_RESOLUTIONS.get(tier or "", UPSAMPLE_VIDEO_DEFAULT)
+    return cap if cap in _VIDEO_RES_ORDER else _VIDEO_RES_ORDER[-1]
 
 
 def video_res_for_tier(tier: str, prefer: str | None = None) -> str:
     """Độ phân giải upscale sẽ dùng.
 
     Trần theo tier (ONE → 1080p, TWO → 4K). `prefer` là lựa chọn của dự án: tier TWO có thể
-    cố tình lấy 1080p cho file nhẹ + rẻ hơn thay vì luôn 4K. Lựa chọn CAO HƠN trần bị hạ
-    xuống trần thay vì gửi đi rồi để Flow từ chối."""
-    cap = UPSAMPLE_VIDEO_RESOLUTIONS.get(tier or "", UPSAMPLE_VIDEO_DEFAULT)
+    cố tình lấy 1080p hay 2K cho file nhẹ + rẻ hơn thay vì luôn 4K. Lựa chọn CAO HƠN trần bị
+    hạ xuống trần thay vì gửi đi rồi để Flow từ chối."""
+    cap = _cap_for(tier)
     if not prefer or prefer not in _VIDEO_RES_ORDER:
         return cap
     return min(prefer, cap, key=_VIDEO_RES_ORDER.index)
@@ -167,8 +175,7 @@ def video_res_for_tier(tier: str, prefer: str | None = None) -> str:
 
 def video_res_choices(tier: str) -> list[str]:
     """Các mức người dùng được chọn ở tier này (mọi mức ≤ trần)."""
-    cap = UPSAMPLE_VIDEO_RESOLUTIONS.get(tier or "", UPSAMPLE_VIDEO_DEFAULT)
-    return _VIDEO_RES_ORDER[:_VIDEO_RES_ORDER.index(cap) + 1]
+    return _VIDEO_RES_ORDER[:_VIDEO_RES_ORDER.index(_cap_for(tier)) + 1]
 
 
 def video_res_label(resolution: str) -> str:
