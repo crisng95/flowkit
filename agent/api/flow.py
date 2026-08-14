@@ -73,7 +73,9 @@ class GenerateVideoVeoLiteRequest(BaseModel):
     reference_media_ids: Optional[list[str]] = None
     # prompt nhúng "{handle}" → structuredPrompt tách part riêng cho từng reference
     references: Optional[list[EntityReference]] = None
-    duration_s: int = 8                 # 4 | 6 | 8 — xem VEO_LITE_DURATION_FIELD
+    # 4 | 6 | 8 — CHỈ kiểu nội suy đọc (độ dài nằm trong model key, xem
+    # models.json → veo_lite_frame_models); inference/i2v Flow cứng 8s.
+    duration_s: int = 8
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"
     user_paygate_tier: str = "PAYGATE_TIER_TWO"
 

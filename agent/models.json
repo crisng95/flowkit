@@ -34,7 +34,11 @@
     "start_end_frame_2_video": "veo_3_1_interpolation_lite_low_priority",
     "reference_frame_2_video": "veo_3_1_r2v_lite_low_priority"
   },
-  "veo_lite_durations": ["4", "6", "8"],
+  "veo_lite_frame_models": {
+    "4": "veo_3_1_i2v_s_lite_4s_fl_low_priority",
+    "6": "veo_3_1_i2v_s_lite_6s_fl_low_priority",
+    "8": "veo_3_1_interpolation_lite_low_priority"
+  },
   "upscale_models": {
     "VIDEO_RESOLUTION_4K": "veo_3_1_upsampler_4k",
     "VIDEO_RESOLUTION_1080P": "veo_3_1_upsampler_1080p"

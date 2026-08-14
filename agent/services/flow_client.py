@@ -19,24 +19,11 @@ from agent.config import (
     OMNI_FLASH_MODELS, OMNI_FLASH_VALID_ASPECTS,
     UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT, UPSAMPLE_IMAGE_TIMEOUT,
     UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
-    VEO_LITE_MODELS, VEO_LITE_TIERS, VEO_LITE_DEFAULT_S, VEO_LITE_DURATION_FIELD,
-    VEO_LITE_FRAME_DURATIONS,
+    VEO_LITE_MODELS, VEO_LITE_TIERS, VEO_LITE_DEFAULT_S, VEO_LITE_FRAME_MODELS,
 )
 from agent.services.headers import random_headers
 
 logger = logging.getLogger(__name__)
-
-
-def _apply_duration(request: dict, duration_s: int | None) -> None:
-    """Ghi độ dài clip vào request video — nếu ta BIẾT Flow gọi field đó là gì.
-
-    Veo nhận độ dài như một tham số riêng (khác Omni Flash, nơi độ dài nằm trong model key),
-    nhưng mọi request mẫu bắt được đều là bản 8s mặc định nên chưa thấy tên field. Không biết
-    thì im lặng bỏ qua và để Flow dùng mặc định — nhét bừa một field lạ vào là Flow trả 400
-    INVALID_ARGUMENT cho MỌI lượt sinh, hỏng hẳn còn tệ hơn chạy sai độ dài. Đặt
-    VEO_LITE_DURATION_FIELD khi đã bắt được request 4s/6s."""
-    if duration_s and VEO_LITE_DURATION_FIELD:
-        request[VEO_LITE_DURATION_FIELD] = int(duration_s)
 
 
 class FlowClient:
@@ -574,8 +561,7 @@ class FlowClient:
                               end_image_media_id: str = None,
                               user_paygate_tier: str = "PAYGATE_TIER_TWO",
                               video_model: str = None,
-                              references: list[dict] = None,
-                              duration_s: int = None) -> dict:
+                              references: list[dict] = None) -> dict:
         """Generate video from start image (i2v).
 
         Two sub-types:
@@ -606,7 +592,6 @@ class FlowClient:
             "startImage": {"mediaId": start_image_media_id},
             "metadata": {"sceneId": scene_id},
         }
-        _apply_duration(request, duration_s)
 
         if end_image_media_id:
             request["endImage"] = {"mediaId": end_image_media_id}
@@ -633,8 +618,7 @@ class FlowClient:
                                               aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
                                               user_paygate_tier: str = "PAYGATE_TIER_TWO",
                                               references: list[dict] = None,
-                                              video_model: str = None,
-                                              duration_s: int = None) -> dict:
+                                              video_model: str = None) -> dict:
         """Generate video from multiple reference images (r2v).
 
         Uses referenceImages instead of startImage — the model composes
@@ -675,7 +659,6 @@ class FlowClient:
             ],
             "metadata": {},
         }
-        _apply_duration(request, duration_s)
 
         body = {
             "mediaGenerationContext": {
@@ -749,8 +732,9 @@ class FlowClient:
         - chỉ start    → i2v (`veo_3_1_i2v_lite_low_priority`)
         - không start  → "inference" r2v (`veo_3_1_r2v_lite_low_priority`), cần ≥1 reference
 
-        `duration_s` CHỈ có nghĩa với kiểu nội suy (4/6/8s); hai kiểu kia Flow cứng 8s nên
-        tham số bị ép về mặc định thay vì gửi lên một độ dài mà model không nhận.
+        `duration_s` CHỈ có nghĩa với kiểu nội suy (4/6/8s) và đi vào MODEL KEY chứ không
+        phải một field riêng — hệt Omni Flash. Inference/i2v thì Flow cứng 8s nên tham số bị
+        bỏ qua thay vì đổi sang một model không tồn tại.
 
         Lite xếp hàng ưu tiên thấp nên clip lâu hơn Veo trả tiền — người gọi cứ chờ theo
         VIDEO_POLL_TIMEOUT như thường, đừng bỏ cuộc sớm.
@@ -761,18 +745,14 @@ class FlowClient:
                              f"{user_paygate_tier}"}
         if start_media_id and end_media_id:
             gen_type = "start_end_frame_2_video"
-        elif start_media_id:
-            gen_type = "frame_2_video"
+            # Độ dài nằm trong key; số lạ rơi về bản 8s mặc định thay vì dựng một key bịa ra.
+            model_key = (VEO_LITE_FRAME_MODELS.get(str(duration_s))
+                         or VEO_LITE_MODELS.get(gen_type))
         else:
-            gen_type = "reference_frame_2_video"
-        model_key = VEO_LITE_MODELS.get(gen_type)
+            gen_type = "frame_2_video" if start_media_id else "reference_frame_2_video"
+            model_key = VEO_LITE_MODELS.get(gen_type)
         if not model_key:
             return {"error": f"Veo 3.1 Lite không có model cho kiểu {gen_type}"}
-
-        # Chỉ nội suy mới đổi được độ dài; inference/i2v luôn 8s.
-        secs = (duration_s if (gen_type == "start_end_frame_2_video"
-                               and str(duration_s) in VEO_LITE_FRAME_DURATIONS)
-                else VEO_LITE_DEFAULT_S)
 
         if gen_type == "reference_frame_2_video":
             if not (reference_media_ids or references):
@@ -781,13 +761,13 @@ class FlowClient:
                 reference_media_ids=reference_media_ids or [],
                 prompt=prompt, project_id=project_id, scene_id=scene_id,
                 aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier,
-                references=references, video_model=model_key, duration_s=secs)
+                references=references, video_model=model_key)
 
         return await self.generate_video(
             start_image_media_id=start_media_id, prompt=prompt, project_id=project_id,
             scene_id=scene_id, aspect_ratio=aspect_ratio,
             end_image_media_id=end_media_id, user_paygate_tier=user_paygate_tier,
-            video_model=model_key, references=references, duration_s=secs)
+            video_model=model_key, references=references)
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",

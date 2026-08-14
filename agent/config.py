@@ -131,19 +131,17 @@ IMAGE_MODELS = _MODELS["image_models"]
 # i2v lite vốn đã là mặc định của PAYGATE_TIER_TWO trong `video_models`; hai key còn lại chỉ
 # mở khi tài khoản là Gemini Ultra, nên chúng nằm riêng ở đây thay vì trộn vào bảng theo tier.
 VEO_LITE_MODELS = _MODELS.get("veo_lite_models", {})
-# Độ dài clip: CHỈ kiểu nội suy (khung đầu + khung cuối) mới cho chọn. Kiểu "inference" r2v
-# cứng 8s — Flow không đưa ra lựa chọn nào khác cho nó. Khác Omni Flash (độ dài NẰM TRONG
-# model key), Veo nhận độ dài như một tham số riêng — xem VEO_LITE_DURATION_FIELD.
-VEO_LITE_FRAME_DURATIONS = [str(d) for d in _MODELS.get("veo_lite_durations", [])]
+# Độ dài clip: CHỈ kiểu nội suy (khung đầu + khung cuối) mới cho chọn — "inference" r2v và
+# i2v thì Flow cứng 8s. Và giống Omni Flash, độ dài NẰM TRONG model key chứ không phải một
+# field riêng: `veo_3_1_i2v_s_lite_{4,6}s_fl_low_priority` (bản 8s mặc định lại mang tên
+# `veo_3_1_interpolation_lite_low_priority` — đừng suy ra theo công thức, Flow đặt tên
+# không đều). Đã bắt tận tay request 6s; 4s theo đúng khuôn 6s.
+VEO_LITE_FRAME_MODELS = _MODELS.get("veo_lite_frame_models", {})
+VEO_LITE_FRAME_DURATIONS = list(VEO_LITE_FRAME_MODELS.keys())
 VEO_LITE_DEFAULT_S = 8
 # Tier được phép dùng Lite r2v/nội suy. Flow trả tier qua /v1/credits (`userPaygateTier`);
 # Gemini Ultra = PAYGATE_TIER_TWO.
 VEO_LITE_TIERS = {"PAYGATE_TIER_TWO"}
-# Tên field độ dài trong request video. CHƯA XÁC ĐỊNH: các request mẫu bắt được đều là bản
-# 8s (mặc định) nên không có field nào để đối chiếu. Để rỗng thì mọi clip Lite ra 8s; điền
-# đúng tên field (bắt một request 4s trên Flow rồi đọc post data) là bật được 4/6s ngay,
-# không phải sửa chỗ nào khác. Đoán bừa tên field thì Flow trả 400 INVALID_ARGUMENT.
-VEO_LITE_DURATION_FIELD = os.environ.get("VEO_LITE_DURATION_FIELD", "")
 
 # ─── Image upsample (Flow /v1/flow/upsampleImage) ───────────
 # Ảnh sinh ra chỉ là bản HD (phân giải thấp). Flow cho tải bản phóng to theo tier:

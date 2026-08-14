@@ -87,8 +87,8 @@ def _descendants(node_id: str, edges: list[dict]) -> set[str]:
 
 
 from agent.config import (
-    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_FRAME_DURATIONS, VEO_LITE_DEFAULT_S,
-    VEO_LITE_TIERS,
+    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_FRAME_MODELS, VEO_LITE_FRAME_DURATIONS,
+    VEO_LITE_DEFAULT_S, VEO_LITE_TIERS,
 )
 
 # Friendly aspect tokens used by the node UI → Flow enums.
@@ -843,7 +843,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     start_v, end_v = imgs[0]["media_id"], imgs[1]["media_id"]
                     frame_dur = (dur_v if str(dur_v) in VEO_LITE_FRAME_DURATIONS
                                  else VEO_LITE_DEFAULT_S)
-                    used_model = VEO_LITE_MODELS.get("start_end_frame_2_video")
+                    # Độ dài nằm trong model key (như Omni Flash), không phải field riêng.
+                    used_model = VEO_LITE_FRAME_MODELS.get(str(frame_dur))
                     submit = lambda: client.generate_video_veo_lite(
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
                         start_media_id=start_v, end_media_id=end_v, duration_s=frame_dur,
