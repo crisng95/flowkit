@@ -453,8 +453,8 @@ def prompt_wrap(graph_json: str | None, project: dict) -> dict:
         key = "prompt_header" if t == "promptHeader" else "prompt_footer"
         txt = str((src.get("data") or {}).get("text") or "").strip()
         picked[t].append(txt or str(project.get(key) or "").strip())
-    return {"header": ". ".join(x for x in picked["promptHeader"] if x),
-            "footer": ". ".join(x for x in picked["promptFooter"] if x)}
+    return {"header": brain.join_blocks(*picked["promptHeader"]),
+            "footer": brain.join_blocks(*picked["promptFooter"])}
 
 
 def output_gen_node(graph: dict) -> str | None:
@@ -582,8 +582,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 seen.add(r["media_id"])
         return {"text": text, "references": uniq[:10], "media_id": start, "ext": start_ext,
                 "result": result, "result_ext": result_ext, "result_web": result_web,
-                "header": ". ".join(h for h in heads if h) if heads else None,
-                "footer": ". ".join(f for f in foots if f) if foots else None}
+                "header": brain.join_blocks(*heads) if heads else None,
+                "footer": brain.join_blocks(*foots) if foots else None}
 
     for node in _topo_sort(nodes, edges):
         t = node.get("type")

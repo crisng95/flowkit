@@ -57,6 +57,13 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   `project.prompt_header/footer`. `compose_prompt(..., header=, footer=)` là chỗ phân nhánh.
   Chỉ `image`/`video` nhận bọc — `editImage`/`replacebg` chạy prompt nguyên văn.
   Xem [agent/studio/graph.py](agent/studio/graph.py).
+- **Các khối prompt nối bằng `brain.join_blocks` — mỗi khối một ĐOẠN, cách nhau dòng trống.**
+  Header, style, culture_hint, body, guard khung đơn, footer, câu ngôn ngữ chữ, và mô tả entity
+  vs mẫu sheet: tất cả là khối riêng. Trước đây nối bằng `". "` nên header dài 6 đoạn + style +
+  mô tả + khối JSON 26KB của sheet nhân vật dính thành MỘT dòng, và chỗ nối đẻ ra `".."` khi
+  khối trước đã có dấu chấm — mẫu bible thì lại bảo model đọc "the character description written
+  immediately before this JSON" trong khi ranh giới ấy không nhìn thấy được. Thêm khối mới thì
+  đưa vào `join_blocks`, đừng `f"{a}. {b}"`.
 - **Prompt NGẦM nằm ở một chỗ duy nhất: `brain.PROMPT_DEFAULTS`.** Guard khung đơn, câu ngôn
   ngữ chữ trong ảnh, ba mẫu sheet nhân vật/đạo cụ/bối cảnh, khối CINEMATOGRAPHY và MOTION —
   tất cả đọc qua `brain.prompt_part(project, key)`. Mỗi khoá `k` có cột `project.tpl_<k>`:

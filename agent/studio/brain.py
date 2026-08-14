@@ -291,16 +291,30 @@ _VIDEO_TEXT = (
 )
 
 
+def join_blocks(*parts: str) -> str:
+    """Nối các khối prompt thành các ĐOẠN riêng, cách nhau một dòng trống.
+
+    Trước đây nối bằng `". "`, nên header dài 6 đoạn, style, mô tả nhân vật và khối JSON 26KB
+    dính thành MỘT dòng khổng lồ — model đọc câu style như phần đuôi của câu cuối trong header,
+    và chỗ nối sinh ra `".."` khi khối trước đã có dấu chấm. Mỗi thứ một đoạn thì ranh giới
+    giữa chúng là ranh giới thật, không phải một dấu chấm giữa biển chữ.
+
+    Khối rỗng bị bỏ qua (không để lại dòng trống thừa)."""
+    return "\n\n".join(p for p in (str(x or "").strip() for x in parts) if p)
+
+
 def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
                    single_frame: bool = False,
                    header: str | None = None, footer: str | None = None,
                    media: str = "image") -> str:
     """Assemble the final image/video prompt for a project.
 
-    Order: [prompt_header] → style (always first of the visual terms) + culture_hint →
+    Order: [prompt_header] → style (always first of the visual terms) → culture_hint →
     body → [single-frame guard] → [prompt_footer]. `style` leads so the model anchors on it;
     the culture hint (e.g. "Vietnamese folk tale, traditional Vietnamese architecture") keeps
     imagery faithful to the story's origin instead of defaulting to the style's home culture.
+
+    Mỗi khối là một ĐOẠN riêng (`join_blocks`), không dồn thành một dòng.
 
     `single_frame=True` (shot frames only) appends a guard so the model renders one coherent
     photograph instead of copying the entity reference SHEETS (incl. the 2x2 location grid).
@@ -320,19 +334,16 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
     header = ((project.get("prompt_header") or "") if header is None else header).strip()
     footer = ((project.get("prompt_footer") or "") if footer is None else footer).strip()
     culture = (project.get("culture_hint") or "").strip() if include_culture else ""
-    lead = ", ".join(p for p in (style, culture) if p)
     guard = single_frame_guard(project) if single_frame else ""
-    parts = [header, lead, (body or "").strip(), guard, footer,
-             _text_lang_clause(project, media)]
-    return ". ".join(p for p in parts if p)
+    return join_blocks(header, style, culture, (body or "").strip(), guard, footer,
+                       _text_lang_clause(project, media))
 
 
 def single_frame_guard(project: dict | None) -> str:
     """Guard khung đơn cho ảnh frame + phần phụ về lưới bối cảnh (chỉ khi dùng lưới 4 khung)."""
-    parts = [prompt_part(project, "single_frame")]
-    if location_frames(project) == 4:
-        parts.append(prompt_part(project, "single_frame_grid"))
-    return ". ".join(p for p in parts if p)
+    return join_blocks(prompt_part(project, "single_frame"),
+                       prompt_part(project, "single_frame_grid")
+                       if location_frames(project) == 4 else "")
 
 
 def _text_lang_clause(project: dict, media: str = "image") -> str:
@@ -509,20 +520,21 @@ def ref_image_prompt(entity_type: str, name: str, description: str,
     label happened to mention — a location named "DÂY PHƠI VÀ CON PHỐ LÚC RẠNG SÁNG" came back
     with a clothesline hung across the street even when the description said nothing of the
     sort. The name is only used as the body when there is no description at all.
-    Trailing dots are trimmed so the rule doesn't get glued on after ".." either.
+
+    Mô tả và mẫu sheet là HAI ĐOẠN riêng — mẫu `sheet_character` là khối JSON 26KB, dán nó
+    vào sau mô tả bằng một dấu chấm thì chính nó bảo model đọc "character description written
+    immediately before this JSON" mà ranh giới lại không nhìn thấy được.
 
     Luật theo từng loại (sheet nhân vật / đạo cụ / bối cảnh) là PROMPT NGẦM — chỉnh được
     trong ⚙ Thiết lập dự án. Bối cảnh có hai mẫu: lưới 4 khung hoặc một ảnh.
     """
-    base = ((description or "").strip() or (name or "").strip()).rstrip(" .")
+    base = (description or "").strip() or (name or "").strip()
     key = entity_type
     if entity_type == "location" and location_frames(project) == 1:
         key = "location_one"
     rule = (prompt_part(project, f"sheet_{key}") if f"sheet_{key}" in PROMPT_DEFAULTS
             else "clean reference image")
-    if not rule:
-        return base
-    return f"{base}. {rule}" if base else rule
+    return join_blocks(base, rule) if rule else base
 
 
 # Cinematography spec injected into every shot-creating prompt so each frame's
