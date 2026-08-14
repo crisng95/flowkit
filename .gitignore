@@ -26,3 +26,6 @@ final_beats.json
 output.json
 output_beats.json
 *_beats.json
+
+# Sao lưu dự án (.zip vài trăm MB — không bao giờ đưa vào git)
+backup/
