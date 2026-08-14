@@ -112,6 +112,12 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   face"); chỉ câu xoá/bỏ/không-có mới bị bản dịch nuốt. Xem `response.media[].image
   .generatedImage.prompt` để biết Flow THẬT SỰ nhận được gì — đó là chỗ soi mọi ca "model làm
   ngược ý tôi", đừng đoán từ prompt mình gửi.
+  **Đã sang tiếng Anh rồi thì đừng tinh chỉnh câu chữ nữa — biến còn lại là SEED.** Chạy 4 lượt
+  cùng ảnh, hai cách diễn đạt (một câu gọn vs. liệt kê "no motorbikes, no bicycles… anywhere" +
+  "empty pavement"): xe máy dựng trên vỉa hè còn sót ở CẢ BỐN, và bản liệt kê kỹ hơn có lượt còn
+  sót nhiều hơn bản gọn. `edit_image` dùng `seed = ts % 1000000` (ngẫu nhiên mỗi lượt) nên cùng
+  một prompt ra kết quả khác nhau. Cách đúng là tăng `count` lên 2-4 rồi chọn bản sạch nhất, chứ
+  không phải viết lại prompt lần thứ năm.
 - **`IMAGE_INPUT_TYPE_BASE_IMAGE` không hiện trong danh sách ảnh tham chiếu của Flow UI** — đó là
   CHUYỆN BÌNH THƯỜNG, không phải ảnh chưa được attach. Flow chỉ liệt kê thumbnail cho input kiểu
   `REFERENCE`; ảnh nền của một lượt sửa vẫn được model dùng (kiểm bằng cách đọc
