@@ -93,10 +93,18 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   vì `res["error"]` rỗng; muốn thấy mã lỗi thật thì gửi lại qua `POST /api/flow/generate-image`.
 - **`bind_unreferenced` cho ảnh người dùng CỐ Ý nối vào.** Reference mà prompt không gọi tên chỉ
   đi lên dưới dạng `imageInputs` vô danh và model gần như bỏ qua — kết quả trông như một lượt sinh
-  mới, chẳng liên quan ảnh tham chiếu. Bật ở node `image` và `replacebg` của Node Editor (người
-  dùng kéo dây vào là cố ý). ĐỪNG bật nơi references là kho ứng viên để prompt tự chọn theo tên
-  (candidates, frame storyboard): bind một entity shot không nhắc tới là mời model vẽ thêm nhân
-  vật vào khung.
+  mới, chẳng liên quan ảnh tham chiếu, và trên Flow thì workflow hiện ra "không có ảnh tham chiếu
+  nào". Bật ở node `image`, `editImage` và `replacebg` của Node Editor (người dùng kéo dây vào là
+  cố ý). Với `editImage` nó gần như BẮT BUỘC: prompt sửa ảnh hầu như không ai viết `{token}` ("xoá
+  cái xe đi"), nên không bật là mọi ảnh nối thêm đều bị bỏ qua. ĐỪNG bật nơi references là kho ứng
+  viên để prompt tự chọn theo tên (candidates, frame storyboard): bind một entity shot không nhắc
+  tới là mời model vẽ thêm nhân vật vào khung.
+- **Dựng `structuredPrompt` thì THÊM part, đừng LỌC BỎ part.** Bỏ một reference part nằm GIỮA câu
+  làm hai mảnh text hai bên dính thành hai part text liền kề — đúng kiểu vụn part khiến Flow trả
+  400 (`push_text` chỉ gộp được lúc đang duyệt, không cứu được khâu lọc sau). `edit_image` từng
+  dựng part rồi lọc mọi part của ảnh nền ra; giờ nó đưa ảnh nền vào `_build_structured_parts`
+  cùng các reference khác rồi mới bù ở đầu nếu prompt không nhắc tới. Cùng lý do, mọi đường dùng
+  prompt do NGƯỜI DÙNG viết đều `dedupe=True` — `edit_image` mặc định bật.
 - **Engine video do `project.video_model` quyết định, luật nằm ở `graph.video_engine`.** Một
   chỗ duy nhất đọc cột đó; `api/studio.py._video_engine` gọi lại nó, nên Node Editor và ⚡ tạo
   nhanh không bao giờ chạy hai engine khác nhau. Giá trị: `"4"/"6"/"8"/"10"` → Omni Flash;

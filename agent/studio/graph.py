@@ -727,12 +727,15 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             # The edit prompt is used VERBATIM (no compose_prompt wrapping) — the user's exact
             # instruction edits the source. `exclude=src` skips the echoed input so the result
             # is the edited image, not the original.
+            # bind_unreferenced: prompt sửa ảnh hầu như không viết `{token}` ("xoá cái xe đi"),
+            # nên ảnh kéo vào node mà không bind thì chỉ nằm trong imageInputs và model bỏ qua
+            # — nhìn trên Flow là "không có ảnh tham chiếu nào". Kéo dây vào đây là cố ý.
             mid, web = await _img_gen_retry(lambda: client.edit_image(
                 edit_prompt, src, flow_pid,
                 aspect_ratio=_img_aspect(project, data),
                 user_paygate_tier=project["paygate_tier"],
                 references=extra[:9] or None,
-                base_handle=base_h), pid, exclude=src)
+                base_handle=base_h, bind_unreferenced=True), pid, exclude=src)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "png",
                             "handle": _handle_of(data, "image")}
 

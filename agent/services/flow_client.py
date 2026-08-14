@@ -377,24 +377,7 @@ class FlowClient:
         if references:
             parts = _build_structured_parts(prompt, references, dedupe=dedupe_refs)
             if bind_unreferenced:
-                bound = {p["reference"]["media"]["mediaId"]
-                         for p in parts if "reference" in p}
-                # `bound` lớn dần trong vòng lặp: hai reference cùng mediaId (kho ứng viên hay
-                # gặp) chỉ được thêm MỘT part, không thì chính cái bind bù này lại đẻ ra đúng
-                # kiểu part trùng gây 400.
-                extra: list[dict] = []
-                for r in references:
-                    mid = r.get("media_id")
-                    if not mid or mid in bound:
-                        continue
-                    bound.add(mid)
-                    extra.append({"reference": {"media": {"handle": r.get("handle") or "image",
-                                                          "mediaId": mid}}})
-                if extra:
-                    logger.info("generate_images: bind %d reference chưa được prompt gọi tên (%s)",
-                                len(extra), ", ".join(
-                                    p["reference"]["media"]["handle"] for p in extra))
-                parts = extra + parts
+                parts = _bind_unreferenced(parts, references, "generate_images")
             # imageInputs follow the reference order, de-duplicated.
             ref_ids = list(dict.fromkeys(r["media_id"] for r in references))
         else:
@@ -445,7 +428,9 @@ class FlowClient:
                           user_paygate_tier: str = "PAYGATE_TIER_ONE",
                           character_media_ids: list[str] = None,
                           references: list[dict] = None,
-                          base_handle: str = "base") -> dict:
+                          base_handle: str = "base",
+                          bind_unreferenced: bool = False,
+                          dedupe_refs: bool = True) -> dict:
         """Edit an existing image using IMAGE_INPUT_TYPE_BASE_IMAGE.
 
         If character_media_ids is provided, appends them as IMAGE_INPUT_TYPE_REFERENCE
@@ -457,6 +442,14 @@ class FlowClient:
         instruction such as "thay áo bằng {Áo khoác}" binds that mention to that exact image
         rather than leaving the model to guess which extra input means what. `base_handle`
         names the edited image itself, so the prompt can refer to it too (e.g. "{Ảnh gốc}").
+
+        `bind_unreferenced=True`: reference mà prompt KHÔNG gọi tên vẫn được bind (xem
+        `_bind_unreferenced`). Bắt buộc cho Node Editor — người dùng kéo dây ảnh vào node
+        "Sửa ảnh" là cố ý, mà prompt sửa ảnh thì hiếm khi viết `{token}` ("xoá cái xe đi"),
+        nên không có cờ này thì ảnh chỉ nằm trong `imageInputs` và model bỏ qua.
+
+        `dedupe_refs` mặc định True vì prompt sửa ảnh LUÔN do người dùng viết: gọi `{Áo}` ở
+        hai câu là sinh hai reference part cùng mediaId → Flow trả 400 (xem CLAUDE.md).
         """
         ts = int(time.time() * 1000)
         ctx = self._client_context(project_id, user_paygate_tier)
@@ -475,19 +468,23 @@ class FlowClient:
         # generate_images), not only as a bare BASE_IMAGE input — otherwise the model may not
         # actually condition on the image and the edit comes out as a fresh, unreferenced gen.
         # Named references are then split out of the prompt text the same way.
-        base_part = {"reference": {"media": {"handle": base_handle or "base",
-                                             "mediaId": source_media_id}}}
-        if references:
-            # The base may also be addressed by name; drop the duplicate mention so it isn't
-            # attached twice.
-            body_parts = _build_structured_parts(prompt, references + [
-                {"handle": base_handle or "base", "media_id": source_media_id}])
-            parts = [base_part] + [
-                p for p in body_parts
-                if p.get("reference", {}).get("media", {}).get("mediaId") != source_media_id
-            ]
-        else:
-            parts = [base_part, {"text": prompt}]
+        #
+        # Ảnh nền đi CÙNG các reference khác vào `_build_structured_parts` rồi mới bù ở đầu
+        # nếu prompt không nhắc tới nó. Bản cũ dựng part xong mới LỌC BỎ mọi part của ảnh nền
+        # — mà lọc một reference part ở GIỮA câu thì hai mảnh text hai bên dính vào nhau thành
+        # hai part text liền kề, đúng kiểu vụn part khiến Flow trả 400 (xem CLAUDE.md). Không
+        # lọc gì thì không bao giờ đẻ ra chỗ dính đó.
+        base_ref = {"handle": base_handle or "base", "media_id": source_media_id}
+        parts = _build_structured_parts(prompt, [base_ref] + list(references or []),
+                                        dedupe=dedupe_refs)
+        if bind_unreferenced and references:
+            parts = _bind_unreferenced(parts, references, "edit_image")
+        # Bù ảnh nền SAU cùng để nó đứng đầu: đây là tấm đang được SỬA, không phải một ảnh
+        # tham chiếu ngang hàng. Prompt có gọi tên nó thì để yên ở chỗ prompt đặt.
+        if not any(p.get("reference", {}).get("media", {}).get("mediaId") == source_media_id
+                   for p in parts):
+            parts = [{"reference": {"media": {"handle": base_ref["handle"],
+                                              "mediaId": source_media_id}}}] + parts
 
         request_item = {
             "clientContext": {**ctx, "sessionId": f";{ts}"},
@@ -975,6 +972,33 @@ def _handle_aliases(handle: str) -> list[str]:
         if m.group(2).strip():
             out.append(m.group(2).strip())
     return out
+
+
+def _bind_unreferenced(parts: list[dict], references: list[dict],
+                       who: str = "") -> list[dict]:
+    """Thêm reference part (ở ĐẦU) cho các ảnh mà prompt không gọi tên.
+
+    Ảnh chỉ nằm trong `imageInputs` mà không có part nào trong `structuredPrompt` thì model
+    gần như bỏ qua — kết quả trông như một lượt sinh mới, chẳng liên quan ảnh đưa vào. Chỉ
+    dùng khi người gọi BIẾT ảnh phải được điều kiện hoá (Node Editor kéo dây vào là cố ý);
+    đừng dùng nơi references là kho ứng viên để prompt tự chọn theo tên.
+
+    `bound` lớn dần trong vòng lặp: hai reference cùng mediaId (kho ứng viên hay gặp) chỉ được
+    thêm MỘT part, không thì chính cái bind bù này lại đẻ ra đúng kiểu part trùng gây 400."""
+    bound = {p["reference"]["media"]["mediaId"] for p in parts if "reference" in p}
+    extra: list[dict] = []
+    for r in references or []:
+        mid = r.get("media_id")
+        if not mid or mid in bound:
+            continue
+        bound.add(mid)
+        extra.append({"reference": {"media": {"handle": r.get("handle") or "image",
+                                              "mediaId": mid}}})
+    if extra:
+        logger.info("%s: bind %d reference chưa được prompt gọi tên (%s)",
+                    who or "flow", len(extra),
+                    ", ".join(p["reference"]["media"]["handle"] for p in extra))
+    return extra + parts
 
 
 def _build_structured_parts(prompt: str, references: list[dict],
