@@ -80,8 +80,62 @@ def _extract_json(text: str):
     raise ValueError("unbalanced JSON in agent output")
 
 
+# ─── Không gọi tên hoạ sĩ / hãng phim ───────────────────────
+# Model rất hay "giúp" bằng cách quy phong cách về một cái tên có sẵn ("Makoto Shinkai style",
+# "Ghibli style", "Pixar style"). Prompt sinh ra sẽ đi thẳng lên Flow, nên đó là rủi ro bản
+# quyền chứ không phải chuyện thẩm mỹ — và cũng thừa: style của dự án đã mô tả đầy đủ bằng
+# thuộc tính hình ảnh rồi.
+#
+# Chặn ở HAI đầu vì mỗi đầu đều thủng: dặn model thì nó vẫn quên, còn lọc không thì lần sau ai
+# thêm một cái tên vào danh sách sẽ không hiểu vì sao phải lọc.
+NO_NAMED_STYLE_RULE = (
+    "\n\nNEVER name a real artist, animation studio, film director or franchise as a style "
+    "reference (no \"Ghibli\", \"Makoto Shinkai\", \"Pixar\", \"Disney\", \"Marvel\", "
+    "\"in the style of <person>\", etc.). Describe the look with generic visual attributes "
+    "instead — line quality, shading, palette, lighting, lens, mood."
+)
+
+# Chỉ cắt cụm QUY PHONG CÁCH ("X style", "in the style of X", "X-esque"), không cắt mọi lần
+# nhắc tên: một truyện lấy bối cảnh công viên Disneyland vẫn được phép nhắc tên nơi đó.
+_NAMED = (r"ghibli|studio ghibli|makoto shinkai|shinkai|miyazaki|hayao miyazaki|pixar|disney|"
+          r"dreamworks|marvel|greg rutkowski|artgerm|wlop|moebius|akira toriyama|kyoto animation")
+_NAMED_STYLE_RE = re.compile(
+    rf"(?:\b(?:in|with)\s+(?:the\s+)?(?:style|aesthetic|look)\s+of\s+)?\b(?:{_NAMED})\b"
+    rf"(?:[-\s]*(?:style|styled|aesthetic|look|inspired|esque))?",
+    re.I)
+
+
+def strip_named_styles(text: str) -> str:
+    """Bỏ mọi cụm quy phong cách về tên riêng khỏi một đoạn text do AI sinh."""
+    if not text or not _NAMED_STYLE_RE.search(text):
+        return text
+    out = _NAMED_STYLE_RE.sub("", text)
+    # Dọn dấu câu mồ côi do chỗ cắt để lại — không dọn thì prompt đầy ", ." và " ,".
+    out = re.sub(r"\s+([,.;:])", r"\1", out)       # "Chibi , a" → "Chibi, a"
+    out = re.sub(r",\s*([.;:])", r"\1", out)       # "background, ." → "background."
+    out = re.sub(r"(,\s*){2,}", ", ", out)         # ", , ," → ", "
+    out = re.sub(r"(^|[.;:])\s*,\s*", r"\1 ", out)  # câu mở đầu bằng dấu phẩy
+    out = re.sub(r"\s{2,}", " ", out)
+    return out.strip(" ,;")
+
+
+def _scrub(obj):
+    """Áp strip_named_styles lên MỌI chuỗi trong cây JSON model trả về."""
+    if isinstance(obj, str):
+        return strip_named_styles(obj)
+    if isinstance(obj, list):
+        return [_scrub(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    return obj
+
+
 async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int = 2):
-    """Run the agent and return parsed JSON. Raises HTTPException(502) on failure."""
+    """Run the agent and return parsed JSON. Raises HTTPException(502) on failure.
+
+    Mọi text sinh ra đều đi qua đây, nên đây cũng là chỗ DUY NHẤT lọc tên hoạ sĩ/hãng phim —
+    khỏi phải nhớ thêm luật ở từng hàm dựng prompt."""
+    prompt = prompt + NO_NAMED_STYLE_RULE
     agent, model = await _agent_cfg()
     last_err = None
     for attempt in range(retries + 1):
@@ -92,7 +146,7 @@ async def run_json(prompt: str, *, timeout: float = _AGENT_TIMEOUT, retries: int
             last_err = res.get("stderr") or f"exit {res.get('exit_code')}"
             continue
         try:
-            return _extract_json(res.get("stdout", ""))
+            return _scrub(_extract_json(res.get("stdout", "")))
         except ValueError as e:
             last_err = str(e)
             logger.warning("brain JSON parse failed (try %d): %s", attempt, e)
