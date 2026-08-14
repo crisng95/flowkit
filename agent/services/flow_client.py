@@ -437,28 +437,28 @@ class FlowClient:
             "url": "https://labs.google/fx/api/trpc/flow.createEntity",
             "method": "POST",
             "headers": {"content-type": "application/json", "accept": "*/*"},
-            "body": {"json": {"projectId": project_id, "collectionId": None}},
+            "body": {"json": {"projectId": project_id, "collectionId": ""}},
         }, timeout=30)
         data = entity.get("data") or entity.get("json") or {}
-        entity_id = data.get("entityId") or data.get("id") or ""
+        # Response nests as result.data.json.entityId — walk every dict level
+        entity_id = ""
+        stack = [data]
+        while stack and not entity_id:
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                entity_id = cur.get("entityId") or cur.get("id") or entity_id
+                stack.extend(cur.values())
+            elif isinstance(cur, list):
+                stack.extend(cur)
         if not entity_id:
             return {"error": f"createEntity failed: {str(entity)[:200]}"}
-        copy = await self._send("trpc_request", {
-            "url": "https://labs.google/fx/api/trpc/flow:copyProjectMedia",
-            "method": "POST",
-            "headers": {"content-type": "application/json", "accept": "*/*"},
-            "body": {"json": {
-                "mediaId": media_id,
-                "destinationProjectId": project_id,
-                "destinationMediaContext": {
-                    "entityContext": {
-                        "entityId": entity_id,
-                        "characterSlot": {"imageReferenceIndex": image_reference_index},
-                    }
-                },
-            }},
-        }, timeout=30)
-        return {"entityId": entity_id, "copy": copy}
+        # NOTE (verified 15/08): current Flow UI does NOT use flow:copyProjectMedia /
+        # flow.copyProjectMedia (404 "No mutation-procedure") — it creates the entity via
+        # flow.createEntity, then uploads a fresh image (v1/flow/uploadImage) to attach media.
+        # Entity creation alone is enough to register the character in the project list;
+        # for a character WITH image, upload the image through the UI, or pass an image
+        # media that the UI already references. copy step removed — it only returned 404 noise.
+        return {"entityId": entity_id, "note": "copyProjectMedia removed — not in current UI (404); attach image via UI upload or use existing character"}
 
     async def generate_images(self, prompt: str, project_id: str,
                                aspect_ratio: str = "IMAGE_ASPECT_RATIO_PORTRAIT",
