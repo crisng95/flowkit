@@ -365,16 +365,19 @@ _SHEET = {
                  "reverse angle, BOTTOM-LEFT a high overhead/bird's-eye angle, BOTTOM-RIGHT an "
                  "eye-level closer detail. Consistent architecture, materials, colour and "
                  "lighting across all four panels. The place is COMPLETELY EMPTY — no people, "
-                 "no animals (ignore any people mentioned above). Photoreal, cinematic, deep "
-                 "detail. Do NOT draw any text, captions, labels or watermarks yourself — clean "
-                 "panels only"),
+                 "no animals (ignore any people mentioned above). Cinematic, deep detail, drawn "
+                 "in the SAME visual style stated at the top of this prompt — do NOT switch to "
+                 "photorealism unless that style asks for it. Do NOT draw any text, captions, "
+                 "labels or watermarks yourself — clean panels only"),
     # Biến thể MỘT ẢNH của bối cảnh (`project.location_frames == 1`): một góc máy duy nhất,
     # không lưới → không có nhãn góc để dán, và shot không phải "chọn một ô" nữa.
-    "location_one": ("ONE single establishing photograph of the place from ONE camera angle — "
+    "location_one": ("ONE single establishing view of the place from ONE camera angle — "
                      "a wide, full-frame view that reads the whole space. NOT a grid, NOT a "
                      "2x2 layout, no panels, no split screen, no collage, no multiple angles. "
-                     "Photoreal, cinematic, deep detail, consistent architecture, materials, "
-                     "colour and lighting. The place is COMPLETELY EMPTY — no people, no "
+                     "Cinematic, deep detail, consistent architecture, materials, colour and "
+                     "lighting, drawn in the SAME visual style stated at the top of this "
+                     "prompt — do NOT switch to photorealism unless that style asks for it. "
+                     "The place is COMPLETELY EMPTY — no people, no "
                      "animals (ignore any people mentioned above). Do NOT draw any text, "
                      "captions, labels or watermarks — clean image only"),
 }

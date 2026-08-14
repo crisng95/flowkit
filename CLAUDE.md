@@ -73,6 +73,15 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   là ảnh tham chiếu rồi vẫn bịa biển hiệu tiếng Trung vào các frame sau. Đường không qua đồ
   thị (`_generate_shot_video` fallback, `_chained_video`) bọc bằng `_video_prompt(...)`, tương
   đương node "Tạo video" — đừng gửi thẳng `motion_prompt` cho `_clip_submit`.
+- **Mẫu sheet KHÔNG được tự đặt phong cách — style của dự án là nguồn duy nhất.** `sheet_location`
+  và `sheet_location_one` từng kết thúc bằng "Photoreal, cinematic, deep detail". `compose_prompt`
+  đặt style TRƯỚC rồi mới tới body, nên câu photoreal đứng sau ăn đứt style: dự án anime/comic ra
+  ảnh bối cảnh ẢNH THẬT, trong khi sheet nhân vật/đạo cụ (không có câu đó) vẫn đúng style. Hậu quả
+  nhìn thấy ở storyboard là ba triệu chứng tưởng rời nhau: bối cảnh khung hình khác hẳn ảnh tham
+  chiếu (model không hoà giải nổi anime + ảnh thật nên tự bịa), vài khung tự dưng ra ảnh thật (khi
+  nó bám ảnh tham chiếu), và nhân vật kém ổn định. Đo trên dự án "Hà Nội – Mưa đêm phố cổ": 39/39
+  dự án đều dính, 38 dự án có style không phải photoreal. Thêm câu về chất liệu/độ chân thực vào
+  mẫu sheet là lặp lại đúng lỗi này.
 - **Ảnh bối cảnh: lưới 4 khung hay một ảnh.** `project.location_frames` (4 mặc định | 1) đổi
   ba thứ CÙNG LÚC — mẫu prompt (`sheet_location` vs `sheet_location_one`), việc dán nhãn bốn
   ô lên bản hiển thị (`label_quadrants`, 3 chỗ gọi), và đoạn phụ `single_frame_grid` của guard
