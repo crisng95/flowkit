@@ -99,6 +99,25 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   cái xe đi"), nên không bật là mọi ảnh nối thêm đều bị bỏ qua. ĐỪNG bật nơi references là kho ứng
   viên để prompt tự chọn theo tên (candidates, frame storyboard): bind một entity shot không nhắc
   tới là mời model vẽ thêm nhân vật vào khung.
+- **Flow DỊCH prompt không phải tiếng Anh, và bản dịch đánh rơi câu PHỦ ĐỊNH.** Prompt sửa ảnh
+  phải viết bằng TIẾNG ANH, mô tả KẾT QUẢ mong muốn. Đo trên ảnh phố Hàng Mã thật, cùng một ảnh
+  nguồn, chỉ đổi ngôn ngữ prompt:
+  - `"xoá bỏ người và xe khỏi ảnh {hang ma src}"` → Flow ghi lại thành
+    `"Busy street with festive decorations in first image."` (mất sạch câu lệnh, chỉ còn chú
+    thích tự sinh của ảnh) → ảnh ra có ~60 người, gốc chỉ ~15. **Thêm, không xoá.**
+  - `"Remove every person and every vehicle from this street. No pedestrians… Keep every shop,
+    lantern, tree, building… exactly as they are."` → Flow giữ NGUYÊN VĂN → phố sạch bóng người,
+    hàng quán/đèn/cây y nguyên.
+  Prompt tiếng Việt KHÔNG phủ định thì vẫn sống ("làm sáng khuôn mặt" → "slightly brighten the
+  face"); chỉ câu xoá/bỏ/không-có mới bị bản dịch nuốt. Xem `response.media[].image
+  .generatedImage.prompt` để biết Flow THẬT SỰ nhận được gì — đó là chỗ soi mọi ca "model làm
+  ngược ý tôi", đừng đoán từ prompt mình gửi.
+- **`IMAGE_INPUT_TYPE_BASE_IMAGE` không hiện trong danh sách ảnh tham chiếu của Flow UI** — đó là
+  CHUYỆN BÌNH THƯỜNG, không phải ảnh chưa được attach. Flow chỉ liệt kê thumbnail cho input kiểu
+  `REFERENCE`; ảnh nền của một lượt sửa vẫn được model dùng (kiểm bằng cách đọc
+  `generatedImage.prompt` — Flow chèn chú thích của chính ảnh đó vào). Đừng đổi BASE_IMAGE sang
+  REFERENCE chỉ để thấy thumbnail: đã đối chiếu hai đường trên cùng ảnh + cùng prompt tiếng Anh,
+  BASE_IMAGE cho kết quả sát ảnh gốc hơn.
 - **Dựng `structuredPrompt` thì THÊM part, đừng LỌC BỎ part.** Bỏ một reference part nằm GIỮA câu
   làm hai mảnh text hai bên dính thành hai part text liền kề — đúng kiểu vụn part khiến Flow trả
   400 (`push_text` chỉ gộp được lúc đang duyệt, không cứu được khâu lọc sau). `edit_image` từng

@@ -983,9 +983,24 @@ function ImageNode({ id, data, type }: NodeProps) {
       {/* Sửa ảnh đi thẳng vào Flow, không qua compose_prompt của dự án — nói rõ để khỏi
           tưởng style/culture vẫn được áp như node Tạo ảnh. */}
       {isEdit && (
-        <div className="text-[10px] text-neutral-500">
-          ⓘ prompt dùng nguyên văn — không áp style/culture/header/footer dự án
-        </div>
+        <>
+          <div className="text-[10px] text-neutral-500">
+            ⓘ prompt dùng nguyên văn — không áp style/culture/header/footer dự án
+          </div>
+          {/* Flow DỊCH prompt không phải tiếng Anh, và bản dịch đánh rơi câu phủ định: "xoá bỏ
+              người và xe" từng bị đổi thành "Busy street with festive decorations" rồi model
+              vẽ THÊM người. Đo trên ảnh thật — xem CLAUDE.md. */}
+          <div className="rounded border border-amber-700/50 bg-amber-950/30 p-1.5 text-[10px] leading-relaxed text-amber-300">
+            ⚠ Viết prompt sửa ảnh bằng <b>TIẾNG ANH</b>, mô tả <b>kết quả</b> muốn có. Flow dịch
+            prompt tiếng Việt và <b>đánh rơi câu phủ định</b> — “xoá bỏ người và xe” bị đổi thành
+            mô tả một con phố đông đúc, model vẽ thêm người.
+            <br />
+            <span className="text-amber-200/70">
+              Thay vì “xoá người và xe” → “Remove every person and vehicle. No pedestrians, no
+              motorbikes. Keep every shop, lantern, tree and building exactly as they are.”
+            </span>
+          </div>
+        </>
       )}
       <GenControls id={id} data={d} />
     </Shell>
