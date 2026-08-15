@@ -17,6 +17,15 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
     when: "Mọi ảnh frame. Ép model vẽ MỘT khung ảnh liền mạch thay vì chép lại bố cục sheet " +
       "tham chiếu, và giữ nhân vật đúng danh tính nhưng tự do về tư thế.",
   },
+  scene_physics: {
+    group: "Ảnh frame (storyboard / shot)",
+    title: "Vật lý cảnh",
+    when: "Nối ngay sau guard trên, vào MỌI ảnh frame. Chín bậc theo thứ tự một hoạ sĩ dựng " +
+      "cảnh: mặt đất → ngân sách tỷ lệ theo cỡ cảnh → tỷ lệ so với kiến trúc và đường chân " +
+      "trời → chỗ trống sau lưng chủ thể → che khuất và độ sâu → sáng và bóng đổ → phản chiếu " +
+      "→ thời tiết → tính chất vật thể. Mỗi luật đều kiểm được bằng mắt. Đây là chỗ chữa các " +
+      "lỗi kiểu người khổng lồ, đứng lơ lửng, bóng dưới nước mà không có người, bàn ghế mọc ra.",
+  },
   single_frame_grid: {
     group: "Ảnh frame (storyboard / shot)",
     title: "Guard khung đơn — phần lưới bối cảnh",

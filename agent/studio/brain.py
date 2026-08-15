@@ -313,65 +313,6 @@ _SINGLE_FRAME = (
     "colours, architecture or fittings the reference does not have — 'wooden verandas', "
     "'yellow plaster walls', 'flagstone alley', 'tiled eaves' — are to be IGNORED, not built. "
     "A frame that matches every adjective but shows a street nobody can recognise has failed.\n\n"
-    "Everything in the frame shares ONE scale, and a person's height is read off the place "
-    "around them: a standing adult's head reaches about the top of a shopfront doorway, stays "
-    "well below the awning and the first-floor balcony, is roughly three times the height of a "
-    "plastic stool, and is a little taller than a market stall. Where two or more people share "
-    "the frame, hold their heights in a believable relation to each other as well — one adult "
-    "is not half again the height of another, and a seated person's head sits around a standing "
-    "person's waist. A figure towering over the doorways, or dwarfed by a stool, is wrong even "
-    "when the face and the costume are right.\n\n"
-    "A reflection is an image of something that is REALLY THERE. If a puddle, a window or a "
-    "polished surface shows a person, that person must also be visible in the frame above or "
-    "beside it, at the mirrored position, the right way up and matching in pose, size and "
-    "clothing — reflection and source appear together or not at all. A puddle carrying "
-    "somebody's reflection while the ground above it holds only tables and chairs is "
-    "impossible. The single exception is a camera aimed STRAIGHT DOWN at the water, where the "
-    "subject is genuinely behind the lens; if you want the reflection alone, frame it that way "
-    "and let the water fill the frame. Otherwise reflect only what the frame actually shows: "
-    "the shopfronts, the lights, the furniture standing there.\n\n"
-    "Decide how much of the FRAME HEIGHT the figure may occupy before drawing anything, and "
-    "obey it — this is a counted budget, not a comparison:\n"
-    "  extreme wide — a standing adult is about ONE FIFTH of the frame height or less;\n"
-    "  wide / establishing — about ONE THIRD, never more than half;\n"
-    "  full shot — head to feet with headroom, roughly three quarters;\n"
-    "  medium — waist up; medium close-up — chest up; close-up — head and shoulders.\n"
-    "With two or more people the budget is set by the TALLEST standing one and everyone else "
-    "scales to them; the group as a whole still fits inside it. And the CROP defines the shot: "
-    "in a medium two-shot the frame cuts both figures at the waist — if you can see both of them "
-    "head to toe, that is a full shot, not a medium, and drawing it at medium size is what makes "
-    "two people span the whole width of the street like giants.\n"
-    "A person drawn taller than the shopfront doorway beside them, or two people spanning the "
-    "entire width of a street, means the budget was blown. And the moment a figure is drawn too "
-    "big for a wide frame there is no room left for the real street behind them, so the picture "
-    "starts INVENTING background to fill the gap — a shop window or a wall appearing in the "
-    "middle of the roadway where the street should be receding. If you find yourself needing "
-    "new frontage behind the subject, the subject is too large: shrink them and let the actual "
-    "street run away behind them instead.\n\n"
-    "The one scale test that survives perspective: in an EYE-LEVEL frame the horizon line runs "
-    "through the EYES of every standing adult, however near or far they are — that is what "
-    "eye-level means. Find the horizon first (where the street's receding lines converge, "
-    "roughly the middle of the frame height) and place their eyes ON it. Eyes far above the "
-    "horizon means a giant; eyes far below means a child or a doll. Do not size a figure against "
-    "a doorway near the camera and then stand them halfway down the street — at their OWN depth "
-    "that doorway is much shorter, and they must match the architecture beside THEM, not the "
-    "architecture in front. When the camera is high or low instead, the horizon moves off eye "
-    "height, and then their size comes from the buildings at their own distance.\n\n"
-    "Every figure stands IN the place, never pasted on top of it. Their feet — or paws, or an "
-    "object's base — meet a surface that actually exists in the frame, at a depth where the "
-    "perspective would put a body of that size, and the ground beneath carries the matching "
-    "contact shadow plus a reflection when it is wet. Some location references are shot square "
-    "on to a frontage and show little ground running away from the camera; in those, put the "
-    "figure ON that frontage's pavement — beside a doorway, along the stall line, under the "
-    "awning — instead of hovering in the open middle of the image with nothing underneath them, "
-    "which reads as a cut-out floating in mid-air. They stand only on a surface people actually "
-    "walk on — the pavement, the road, a step, a threshold, a kerb — NEVER on top of a stall, a "
-    "display table, a crate, a bench, a plinth or the goods laid out for sale.\n\n"
-    "Obey the stated weather and time of day physically. In rain, anyone not under an awning, a "
-    "roof or an umbrella is visibly getting wet, and the goods, tables and stools a trader would "
-    "have moved under cover ARE under cover — never leave someone working calmly at a dry table "
-    "in the open during a downpour, and never leave an umbrella raised over someone already "
-    "standing under a roof.\n\n"
     "Add no annotations of your own — no captions, view labels, callouts, subtitles or "
     "watermarks. Text that belongs to the world (shop signs, banners, posters) stays, and is "
     "reproduced faithfully from the location reference"
@@ -458,8 +399,14 @@ def compose_prompt(project: dict, body: str, *, include_culture: bool = True,
 
 
 def single_frame_guard(project: dict | None) -> str:
-    """Guard khung đơn cho ảnh frame + phần phụ về lưới bối cảnh (chỉ khi dùng lưới 4 khung)."""
+    """Guard khung đơn + VẬT LÝ CẢNH + phần phụ lưới bối cảnh (chỉ khi dùng lưới 4 khung).
+
+    Ba khối trả lời ba câu khác nhau, nên để riêng: guard nói "vẽ MỘT khung liền mạch và bám
+    ảnh tham chiếu", `scene_physics` nói "thế giới trong khung phải đứng vững được", còn phần
+    lưới chỉ là chú thích cho kiểu ref 2x2. Gộp chung thành một ô thì người dùng muốn sửa luật
+    vật lý lại phải lội qua cả đoạn nói về layout sheet."""
     return join_blocks(prompt_part(project, "single_frame"),
+                       prompt_part(project, "scene_physics"),
                        prompt_part(project, "single_frame_grid")
                        if location_frames(project) == 4 else "")
 
@@ -1103,6 +1050,85 @@ def _stride(n: int, want: int = 3) -> int:
     return 1
 
 
+# ─── Vật lý cảnh ───────────────────────────────────────────
+#
+# Bảy vòng soi storyboard liên tiếp, mỗi vòng lại lộ ra một lỗi mới, và lần nào cũng là một
+# luật vật lý CƠ BẢN chưa ai viết ra: người cao gấp rưỡi cửa tiệm, chân đứng trên mặt phẳng
+# vô hình, vũng nước hiện bóng một người không có mặt trong khung, dãy bàn ghế mọc ra giữa hai
+# khung liền nhau. Không phải model dốt — đó là những thứ hiển nhiên với người nên chưa ai
+# nghĩ phải nói ra. Vá lẻ từng cái thì mỗi lần vẽ lại chỉ để phát hiện cái tiếp theo.
+#
+# Nên gom vào MỘT khối, sắp theo thứ tự một hoạ sĩ dựng cảnh thật: đặt máy → dựng không gian →
+# đặt người vào → chiếu sáng → thêm thời tiết → kiểm tra vật thể. Thêm luật mới thì thêm vào
+# đúng bậc của nó ở đây, đừng rải sang guard khung đơn: guard trả lời "vẽ một khung liền mạch,
+# bám ảnh tham chiếu", còn khối này trả lời "thế giới trong khung có đứng vững được không".
+_SCENE_PHYSICS = (
+    "SCENE PHYSICS — the frame has to hold together as a real place seen through a real lens. "
+    "Work through it in this order; every rule below is checkable by looking.\n\n"
+    "1. THE GROUND. One continuous surface runs from the bottom of the frame to the horizon, and "
+    "everything touching the ground touches THAT surface: feet, chair legs, table legs, wheels, "
+    "the base of every wall and pole. Trace it back from a person's shoes — it must join the "
+    "ground the background furniture stands on, with no invisible step. A figure on a higher "
+    "plane, with the real floor of the street somewhere below and behind them, reads as standing "
+    "on a rooftop. People stand only on surfaces people walk on — pavement, road, step, "
+    "threshold, kerb — never on a stall, a table, a crate, a bench or the goods for sale.\n\n"
+    "2. SCALE, as a counted budget decided BEFORE drawing. A standing adult occupies about one "
+    "fifth of the frame height in an extreme wide, about one third (never more than half) in a "
+    "wide or establishing shot, roughly three quarters head-to-feet in a full shot; medium is "
+    "waist up, medium close-up chest up, close-up head and shoulders. With two or more people the "
+    "tallest standing one sets the budget, everyone else scales to them, and the group as a whole "
+    "still fits inside it. The crop defines the shot: if both figures are visible head to toe it "
+    "is a FULL shot, not a medium — drawing it at medium size is exactly what makes two people "
+    "span the width of a street like giants.\n\n"
+    "3. SCALE AGAINST THE ARCHITECTURE, at the subject's OWN depth. A standing adult is a little "
+    "shorter than a shopfront doorway, well below the awning and the first-floor balcony, about "
+    "three times the height of a plastic stool, a little taller than a market stall. Measure "
+    "against the building beside THEM, never one nearer the camera — that one is drawn larger by "
+    "perspective. In an eye-level frame there is a second check that survives any distance: the "
+    "horizon line passes through the EYES of every standing adult, near or far, because that is "
+    "what eye-level means; eyes far above it means a giant, far below means a doll. When the "
+    "camera is high or low the horizon leaves eye height and only the architecture check applies. "
+    "Two people share one scale as well: one adult is not half again the height of another, and a "
+    "seated person's head sits around a standing person's waist.\n\n"
+    "4. SPACE BEHIND THE SUBJECT. Draw the subject at the budgeted size FIRST, then let the real "
+    "place run away behind them. If no room is left for the street and you find yourself "
+    "inventing frontage to fill the gap — a shop window or a wall appearing in the middle of the "
+    "roadway where the street should be receding — the subject is too large. Shrink them instead "
+    "of building scenery that is not there.\n\n"
+    "5. OCCLUSION AND DEPTH ORDER. Nearer things cover further things, completely and along a "
+    "clean edge: a person in front of a stall hides the part of it they stand over; a pole in "
+    "front of a sign hides that strip of the sign. Nothing is transparent unless it is glass or "
+    "water, and nothing is drawn on top of something that stands in front of it. Anything nearer "
+    "the lens than the point of focus is softer, and softness grows steadily with distance in "
+    "both directions — never a sharp background behind a soft foreground.\n\n"
+    "6. LIGHT AND SHADOW. Settle which light sources the frame can see and let everything obey "
+    "the SAME ones. Every object standing on the ground casts a shadow that begins exactly where "
+    "it meets the ground and falls away from the light; all shadows run in consistent directions "
+    "and their softness matches the source. A figure with no shadow at their feet looks pasted "
+    "on. On wet ground, lights and bright shapes repeat downward as broken vertical reflections "
+    "directly below whatever they come from.\n\n"
+    "7. REFLECTIONS. A reflection is the image of something that is REALLY THERE. If a puddle, a "
+    "window or a polished surface shows a person, that person is also visible in the frame at the "
+    "mirrored position, the right way up, matching in pose, size and clothing — reflection and "
+    "source appear together or not at all. A puddle carrying somebody's reflection while the "
+    "ground above holds only tables and chairs is impossible. The one exception is a camera aimed "
+    "STRAIGHT DOWN at water, where the subject is genuinely behind the lens; to show the "
+    "reflection alone, frame it that way and let the water fill the frame. Otherwise reflect only "
+    "what the frame actually contains.\n\n"
+    "8. WEATHER, applied to everything at once. Rain falls in one direction across the whole "
+    "frame and at one density, near drops larger and softer than far ones. Anyone not under an "
+    "awning, a roof or an umbrella is visibly getting wet, and the goods, tables and stools a "
+    "trader would have moved under cover ARE under cover. Never leave someone working calmly at a "
+    "dry table in a downpour, and never leave an umbrella raised over someone already standing "
+    "under a roof. Wet ground is wet everywhere it is exposed and dry only where something "
+    "shelters it — and that dry patch has the shape of whatever shelters it.\n\n"
+    "9. OBJECTS KEEP THEIR PROPERTIES. Things hold consistent thickness, weight and material from "
+    "one part of the frame to another; an object held in a hand is gripped rather than floating "
+    "beside it, and a hand on an umbrella meets the shaft. Anything a person carries, wears or "
+    "leans on must be reachable from the pose they are actually in."
+)
+
+
 # Mẫu bọc quanh hình dáng + hai nửa chuyển cảnh đã bốc sẵn. Chỗ trống được `scene_plan()` điền;
 # người dùng sửa được phần luật, còn nội dung hai bảng trên nằm trong code (xem docstring).
 _SCENE_ARC = (
@@ -1211,6 +1237,7 @@ _OMNI_TIMELINE_HEAD = (
 # GET /api/studio/options → `prompt_defaults`.
 PROMPT_DEFAULTS: dict[str, str] = {
     "single_frame": _SINGLE_FRAME,
+    "scene_physics": _SCENE_PHYSICS,
     "single_frame_grid": _SINGLE_FRAME_GRID,
     "image_text": _IMAGE_TEXT,
     "video_text": _VIDEO_TEXT,

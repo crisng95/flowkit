@@ -155,6 +155,7 @@ class UpdateProjectRequest(BaseModel):
     # Ghi đè prompt ngầm — trống = dùng mặc định của code, "-" = tắt khối đó.
     tpl_single_frame: Optional[str] = None
     tpl_single_frame_grid: Optional[str] = None
+    tpl_scene_physics: Optional[str] = None
     tpl_image_text: Optional[str] = None
     tpl_video_text: Optional[str] = None
     tpl_sheet_character: Optional[str] = None

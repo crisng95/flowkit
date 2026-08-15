@@ -54,6 +54,7 @@ export interface Project {
   // Ghi đè các PROMPT NGẦM (xem PROMPT_KEYS): trống = mặc định của agent, "-" = tắt khối đó.
   tpl_single_frame?: string | null;
   tpl_single_frame_grid?: string | null;
+  tpl_scene_physics?: string | null;
   tpl_image_text?: string | null;
   tpl_video_text?: string | null;
   tpl_sheet_character?: string | null;
@@ -75,7 +76,7 @@ export interface Project {
 // Các khối prompt agent CHÈN NGẦM vào mỗi lần chạy. Bản mặc định nằm trong code của agent
 // (GET /api/studio/options → prompt_defaults); dự án ghi đè qua cột `tpl_<key>`.
 export const PROMPT_KEYS = [
-  "single_frame", "single_frame_grid", "image_text", "video_text",
+  "single_frame", "scene_physics", "single_frame_grid", "image_text", "video_text",
   "sheet_character", "sheet_character_one", "sheet_prop",
   "sheet_location", "sheet_location_one",
   "cine", "cine_continuous", "scene_arc", "scene_arc_in", "scene_arc_out",
