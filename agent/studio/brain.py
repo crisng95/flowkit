@@ -492,10 +492,18 @@ _SHEET = {
                       "companion, partner, child or bystander. Even soft studio lighting, no "
                       "scene, no extra props, no ground shadow. Do NOT draw any text, titles, "
                       "captions, labels or watermarks — clean art only"),
+    # Mô tả đạo cụ hầu như luôn kể luôn AI dùng nó và dùng Ở ĐÂU ("vật bất ly thân của Mai",
+    # "món quà của bà cụ bán trà", "treo trước cửa hiệu phố Hàng Mã") — và model vẽ ra đúng
+    # cảnh đó: entity "Ô" từng ra nguyên một cô gái đang cầm ô đi trong mưa. Bối cảnh và nhân
+    # vật đã có câu chặn tương tự trong mẫu của mình; đạo cụ thì thiếu.
     "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
              "object on plain solid white background, no background scene, no shadow, "
-             "studio product reference. Do NOT draw any text, titles, captions, view labels or "
-             "watermarks on the sheet — clean art only"),
+             "studio product reference. The OBJECT ALONE fills this sheet: no people, no "
+             "hands, no character holding, wearing or using it, no shop, street, room, "
+             "weather or setting of any kind — ignore every person, place and time of day "
+             "named in the description above, they belong to other images and are only "
+             "there to say what the object is for. Do NOT draw any text, titles, captions, "
+             "view labels or watermarks on the sheet — clean art only"),
     # ONE image = a 2x2 grid of four angles of the same place, in a FIXED quadrant order so
     # we can overlay correct position labels afterwards (Toàn cảnh / Góc ngược / Trên cao /
     # Cận cảnh). The model must not draw its own text. Shots use the single_frame guard to
