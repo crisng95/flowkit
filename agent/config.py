@@ -174,9 +174,14 @@ UPSAMPLE_VIDEO_DEFAULT = "VIDEO_RESOLUTION_1080P"
 # rải hằng số vào hires.py.
 UPSAMPLE_VIDEO_ORDER = _MODELS.get("upscale_video_order") or [
     "VIDEO_RESOLUTION_1080P", "VIDEO_RESOLUTION_4K"]
-# Omni Flash — r2v đa-độ-dài (4/6/8/10s), key theo số giây (string). Aspect chỉ
-# PORTRAIT/LANDSCAPE (không SQUARE). Dùng chung endpoint r2v.
+# Omni Flash — đa-độ-dài (4/6/8/10s), key theo số giây (string). Aspect chỉ
+# PORTRAIT/LANDSCAPE (không SQUARE).
+# HAI bảng key, chọn theo CÓ ẢNH hay KHÔNG, và mỗi bảng đi một endpoint riêng:
+#   có ảnh tham chiếu → `abra_r2v_*` + generate_video_references
+#   chỉ prompt        → `abra_t2v_*` + generate_video_text
+# Gửi key r2v mà không kèm referenceImages thì Flow trả 400 INVALID_ARGUMENT — đã đo.
 OMNI_FLASH_MODELS = _MODELS.get("omni_flash_models", {})
+OMNI_FLASH_T2V_MODELS = _MODELS.get("omni_flash_t2v_models", {})
 OMNI_FLASH_VALID_ASPECTS = {"VIDEO_ASPECT_RATIO_PORTRAIT", "VIDEO_ASPECT_RATIO_LANDSCAPE"}
 
 # ─── API Endpoints ───────────────────────────────────────────
@@ -185,6 +190,7 @@ ENDPOINTS = {
     "generate_video": "/v1/video:batchAsyncGenerateVideoStartImage",
     "generate_video_start_end": "/v1/video:batchAsyncGenerateVideoStartAndEndImage",
     "generate_video_references": "/v1/video:batchAsyncGenerateVideoReferenceImages",
+    "generate_video_text": "/v1/video:batchAsyncGenerateVideoText",
     "upscale_video": "/v1/video:batchAsyncGenerateVideoUpsampleVideo",
     "upscale_image": "/v1/flow/upsampleImage",
     "upload_image": "/v1/flow/uploadImage",

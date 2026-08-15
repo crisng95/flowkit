@@ -54,6 +54,13 @@
     "8": "abra_r2v_8s",
     "10": "abra_r2v_10s"
   },
+  "_comment_omni_flash_t2v_models": "Omni Flash KHONG co anh tham chieu: endpoint batchAsyncGenerateVideoText + key abra_t2v_*. Chi 10s duoc kiem tren request that cua Flow UI; 4/6/8 suy ra theo doi xung voi bang r2v, sai thi Flow tra 400 INVALID_ARGUMENT.",
+  "omni_flash_t2v_models": {
+    "4": "abra_t2v_4s",
+    "6": "abra_t2v_6s",
+    "8": "abra_t2v_8s",
+    "10": "abra_t2v_10s"
+  },
   "image_models": {
     "NANO_BANANA_PRO": "GEM_PIX_2",
     "NANO_BANANA_2": "NARWHAL"

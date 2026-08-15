@@ -87,7 +87,8 @@ def _descendants(node_id: str, edges: list[dict]) -> set[str]:
 
 
 from agent.config import (
-    OMNI_FLASH_MODELS, VEO_LITE_MODELS, VEO_LITE_FRAME_MODELS, VEO_LITE_FRAME_DURATIONS,
+    OMNI_FLASH_MODELS, OMNI_FLASH_T2V_MODELS,
+    VEO_LITE_MODELS, VEO_LITE_FRAME_MODELS, VEO_LITE_FRAME_DURATIONS,
     VEO_LITE_DEFAULT_S, VEO_LITE_TIERS,
 )
 
@@ -830,13 +831,15 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             dur_v = int(data.get("duration") or 0) or proj_secs or VEO_LITE_DEFAULT_S
             used_model = None
             if kind_v == "omni":
-                # Ảnh tham chiếu là TUỲ CHỌN. Không nối ảnh nào vào thì node chạy như một
-                # lượt text-to-video — chỉ prompt, Flow vẫn nhận. Đừng dựng lại hàng rào
-                # "cần ít nhất 1 ảnh": nó chặn đúng cách dùng đơn giản nhất của node.
+                # Ảnh tham chiếu là TUỲ CHỌN. Không nối ảnh nào vào thì client chuyển sang
+                # đường text-to-video (`abra_t2v_*` + endpoint riêng) — đừng dựng lại hàng
+                # rào "cần ít nhất 1 ảnh", nó chặn đúng cách dùng đơn giản nhất của node.
                 ref_ids = [r["media_id"] for r in inp["references"]]
                 if not ref_ids and inp["media_id"]:
                     ref_ids = [inp["media_id"]]
-                used_model = OMNI_FLASH_MODELS.get(str(dur_v))
+                # Ghi model ĐÃ DÙNG THẬT: hai bảng key khác nhau, không phải cùng một model.
+                used_model = (OMNI_FLASH_MODELS if ref_ids
+                              else OMNI_FLASH_T2V_MODELS).get(str(dur_v))
                 submit = lambda: client.generate_video_omni(
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
                     duration_s=dur_v, aspect_ratio=aspect_v,

@@ -52,7 +52,8 @@ class GenerateVideoRefsRequest(BaseModel):
 class GenerateVideoOmniRequest(BaseModel):
     prompt: str
     project_id: str
-    reference_media_ids: list[str]
+    # Bỏ trống = text-to-video (`abra_t2v_*`), có ảnh = r2v (`abra_r2v_*`) — hai endpoint khác nhau.
+    reference_media_ids: list[str] = []
     duration_s: int = 8                 # 4 | 6 | 8 | 10
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"  # chỉ PORTRAIT/LANDSCAPE
     user_paygate_tier: str = "PAYGATE_TIER_ONE"

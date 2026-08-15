@@ -16,7 +16,7 @@ from urllib.parse import quote
 from agent.config import (
     GOOGLE_FLOW_API, GOOGLE_API_KEY, ENDPOINTS,
     VIDEO_MODELS, UPSCALE_MODELS, IMAGE_MODELS, VIDEO_POLL_TIMEOUT,
-    OMNI_FLASH_MODELS, OMNI_FLASH_VALID_ASPECTS,
+    OMNI_FLASH_MODELS, OMNI_FLASH_T2V_MODELS, OMNI_FLASH_VALID_ASPECTS,
     UPSAMPLE_IMAGE_RESOLUTIONS, UPSAMPLE_IMAGE_DEFAULT, UPSAMPLE_IMAGE_TIMEOUT,
     UPSAMPLE_VIDEO_RESOLUTIONS, UPSAMPLE_VIDEO_DEFAULT,
     VEO_LITE_MODELS, VEO_LITE_TIERS, VEO_LITE_DEFAULT_S, VEO_LITE_FRAME_MODELS,
@@ -652,9 +652,10 @@ class FlowClient:
             "videoModelKey": model_key,
             "metadata": {},
         }
-        # Không ảnh nào ⇒ BỎ HẲN field, đừng gửi mảng rỗng: đây là lượt text-to-video hợp lệ
-        # (Omni Flash không bắt buộc phải có ảnh tham chiếu), mà `"referenceImages": []` là
-        # tự chuốc lấy một cách từ chối không cần thiết.
+        # Không ảnh nào ⇒ bỏ hẳn field thay vì gửi mảng rỗng. Nhưng đừng trông vào đó để làm
+        # text-to-video: model r2v BẮT BUỘC có ảnh, đo trên `abra_r2v_4s` bỏ referenceImages
+        # ra thì Flow trả 400 INVALID_ARGUMENT. Đường chỉ-có-prompt là endpoint + bảng key
+        # khác hẳn, xem `_generate_video_text_omni`.
         if ref_ids:
             request["referenceImages"] = [
                 {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET"}
@@ -688,16 +689,24 @@ class FlowClient:
                                    references: list[dict] = None) -> dict:
         """Generate video with Google's **Omni Flash** model.
 
-        Same r2v endpoint/body as generate_video_from_references, but the model key
-        varies by duration (`abra_r2v_{4,6,8,10}s`). Aspect must be PORTRAIT or LANDSCAPE.
-        Supports `{handle}` references in the prompt (structuredPrompt parts).
+        Aspect must be PORTRAIT or LANDSCAPE. Supports `{handle}` references in the prompt
+        (structuredPrompt parts).
 
-        Ảnh tham chiếu là TUỲ CHỌN: không có ảnh nào thì đây là một lượt text-to-video, và
-        endpoint r2v nhận được — chỉ cần bỏ hẳn `referenceImages` khỏi request.
+        Ảnh tham chiếu là TUỲ CHỌN, nhưng KHÔNG phải "cùng request, bỏ trống ảnh": có ảnh và
+        không ảnh là hai đường khác hẳn nhau.
+          • có ảnh  → `abra_r2v_{4,6,8,10}s` + batchAsyncGenerateVideoReferenceImages
+          • chỉ text → `abra_t2v_{4,6,8,10}s` + batchAsyncGenerateVideoText
+        Gửi key r2v mà bỏ `referenceImages` đi thì Flow trả 400 INVALID_ARGUMENT (đã đo trên
+        `abra_r2v_4s`), nên đừng "sửa" bằng cách thả ảnh ra khỏi request r2v.
         """
         if aspect_ratio not in OMNI_FLASH_VALID_ASPECTS:
             return {"error": f"Omni Flash không hỗ trợ aspect {aspect_ratio} "
                              f"(chỉ PORTRAIT/LANDSCAPE)"}
+        if not (reference_media_ids or references):
+            return await self._generate_video_text_omni(
+                prompt=prompt, project_id=project_id, duration_s=duration_s,
+                aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier)
+
         model_key = OMNI_FLASH_MODELS.get(str(duration_s))
         if not model_key:
             return {"error": f"Omni Flash không có model cho duration={duration_s}s "
@@ -714,6 +723,45 @@ class FlowClient:
             references=references,
             video_model=model_key,
         )
+
+    async def _generate_video_text_omni(self, prompt: str, project_id: str,
+                                        duration_s: int = 8,
+                                        aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
+                                        user_paygate_tier: str = "PAYGATE_TIER_ONE") -> dict:
+        """Omni Flash text-to-video: không ảnh nào, chỉ prompt.
+
+        Endpoint + bảng key riêng (xem generate_video_omni). Body giống r2v trừ việc KHÔNG có
+        `referenceImages`; `structuredPrompt` chỉ một part text — không có ảnh thì cũng không
+        có `{handle}` nào để bind.
+        """
+        model_key = OMNI_FLASH_T2V_MODELS.get(str(duration_s))
+        if not model_key:
+            return {"error": f"Omni Flash (text-to-video) không có model cho "
+                             f"duration={duration_s}s "
+                             f"(hỗ trợ: {', '.join(OMNI_FLASH_T2V_MODELS)})"}
+
+        body = {
+            "mediaGenerationContext": {
+                "batchId": f"{uuid.uuid4()}",
+                "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
+            },
+            "clientContext": self._client_context(project_id, user_paygate_tier),
+            "requests": [{
+                "aspectRatio": aspect_ratio,
+                "textInput": {"structuredPrompt": {"parts": [{"text": prompt}]}},
+                "videoModelKey": model_key,
+                "seed": int(time.time()) % 10000,
+                "metadata": {},
+            }],
+            "useV2ModelConfig": True,
+        }
+        return await self._send("api_request", {
+            "url": self._build_url("generate_video_text"),
+            "method": "POST",
+            "headers": random_headers(),
+            "body": body,
+            "captchaAction": "VIDEO_GENERATION",
+        }, timeout=60)   # Submit only — polling is separate
 
     async def generate_video_veo_lite(self, prompt: str, project_id: str,
                                        scene_id: str = "",
