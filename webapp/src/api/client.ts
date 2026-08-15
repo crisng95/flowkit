@@ -43,6 +43,9 @@ export interface Project {
   // thân chính diện. Bảng sheet bị Flow chú thích là "character design sheet" và câu đó chui
   // vào prompt của mọi shot dùng nhân vật ấy.
   character_one?: number | null;
+  // Cách viết shot trong một scene: 0 = khung RỜI minh hoạ lời đọc (mặc định), 1 = chuỗi
+  // LIÊN TỤC theo ngữ pháp dựng phim — dùng khi đích đến là video.
+  shot_continuity?: number | null;
   // Chế độ music video: playlist `music_track` là tiếng duy nhất và quyết định độ dài video.
   // Sửa qua PATCH /music/settings (không phải updateProject) — xem api.musicSettings.
   music_mode?: number | null;
@@ -59,6 +62,7 @@ export interface Project {
   tpl_sheet_location?: string | null;
   tpl_sheet_location_one?: string | null;
   tpl_cine?: string | null;
+  tpl_cine_continuous?: string | null;
   tpl_motion?: string | null;
   tpl_omni_timeline?: string | null;
   status: string;
@@ -71,7 +75,7 @@ export const PROMPT_KEYS = [
   "single_frame", "single_frame_grid", "image_text", "video_text",
   "sheet_character", "sheet_character_one", "sheet_prop",
   "sheet_location", "sheet_location_one",
-  "cine", "motion", "omni_timeline",
+  "cine", "cine_continuous", "motion", "omni_timeline",
 ] as const;
 export type PromptKey = (typeof PROMPT_KEYS)[number];
 

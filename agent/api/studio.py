@@ -151,6 +151,7 @@ class UpdateProjectRequest(BaseModel):
     culture_hint: Optional[str] = None
     location_frames: Optional[int] = None    # ảnh bối cảnh: 4 = lưới 2x2, 1 = một ảnh
     character_one: Optional[int] = None      # ảnh nhân vật: 0 = bảng sheet, 1 = một ảnh
+    shot_continuity: Optional[int] = None    # shot: 0 = khung rời, 1 = chuỗi liên tục
     # Ghi đè prompt ngầm — trống = dùng mặc định của code, "-" = tắt khối đó.
     tpl_single_frame: Optional[str] = None
     tpl_single_frame_grid: Optional[str] = None
@@ -162,6 +163,7 @@ class UpdateProjectRequest(BaseModel):
     tpl_sheet_location: Optional[str] = None
     tpl_sheet_location_one: Optional[str] = None
     tpl_cine: Optional[str] = None
+    tpl_cine_continuous: Optional[str] = None
     tpl_motion: Optional[str] = None
     tpl_omni_timeline: Optional[str] = None
 
@@ -670,6 +672,8 @@ async def update_project(pid: str, body: UpdateProjectRequest):
         data["location_frames"] = 1 if data["location_frames"] == 1 else 4
     if "character_one" in data:
         data["character_one"] = 1 if data["character_one"] else 0
+    if "shot_continuity" in data:
+        data["shot_continuity"] = 1 if data["shot_continuity"] else 0
     data["updated_at"] = db.now()
     await db.update("project", pid, data)
     return await db.query_one("SELECT * FROM project WHERE id=?", (pid,))

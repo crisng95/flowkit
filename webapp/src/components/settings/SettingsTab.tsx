@@ -63,6 +63,7 @@ export default function SettingsTab({
     Object.fromEntries(PROMPT_KEYS.map((k) => [k, (project as any)[`tpl_${k}`] ?? ""])));
   const [locFrames, setLocFrames] = useState(project.location_frames === 1 ? 1 : 4);
   const [charOne, setCharOne] = useState(!!project.character_one);
+  const [shotCont, setShotCont] = useState(!!project.shot_continuity);
   const [shotDuration, setShotDuration] = useState(project.shot_duration ?? 8);
   const [storytelling, setStorytelling] = useState(!!project.storytelling);
   const [autoHires, setAutoHires] = useState(!!project.auto_hires);
@@ -148,7 +149,7 @@ export default function SettingsTab({
         auto_hires: autoHires, auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
         tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
         tts_edge_pad: ttsEdgePad, seed, location_frames: locFrames,
-        character_one: charOne ? 1 : 0,
+        character_one: charOne ? 1 : 0, shot_continuity: shotCont ? 1 : 0,
         ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
       });
       onSaved(updated);
@@ -234,11 +235,11 @@ export default function SettingsTab({
   const NUM_KEYS = ["shot_duration", "seed", "bgm_volume", "voice_id",
     "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad", "location_frames"] as const;
   const BOOL_KEYS = ["storytelling", "auto_hires", "auto_upscale_video", "bgm_duck",
-    "character_one"] as const;
+    "character_one", "shot_continuity"] as const;
 
   const collectSettings = () => ({
     ...s, ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
-    location_frames: locFrames, character_one: charOne,
+    location_frames: locFrames, character_one: charOne, shot_continuity: shotCont,
     shot_duration: shotDuration, storytelling, auto_hires: autoHires,
     auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
     seed, bgm_volume: bgmVol, bgm_duck: bgmDuck, bgm_path: bgmPath,
@@ -301,6 +302,7 @@ export default function SettingsTab({
       setTpl(Object.fromEntries(PROMPT_KEYS.map((k) => [k, (u as any)[`tpl_${k}`] ?? ""])));
       if (u.location_frames != null) setLocFrames(u.location_frames === 1 ? 1 : 4);
       if (u.character_one != null) setCharOne(!!u.character_one);
+      if (u.shot_continuity != null) setShotCont(!!u.shot_continuity);
       if (u.shot_duration != null) setShotDuration(u.shot_duration);
       if (u.storytelling != null) setStorytelling(!!u.storytelling);
       if (u.auto_hires != null) setAutoHires(!!u.auto_hires);
@@ -473,6 +475,29 @@ export default function SettingsTab({
                       </span>
                     </span>
                   </label>
+
+                  <label className="flex items-start gap-2.5 text-sm text-neutral-300">
+                    <input type="checkbox" checked={shotCont}
+                      onChange={(e) => setShotCont(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-indigo-500" />
+                    <span>
+                      Shot <b>liên tục</b> trong scene (dựng video)
+                      <span className="mt-1 block text-xs leading-relaxed text-neutral-500">
+                        Mặc định, các khung trong một scene được viết như ảnh minh hoạ cho từng
+                        câu lời đọc và bị ép phải KHÁC nhau — hợp kể chuyện, nhưng đem dựng
+                        video thì nhân vật nhảy từ đầu phố xuống cuối phố giữa hai clip. Bật ô
+                        này thì các khung là những lát cắt liên tiếp của MỘT hành động: giữ
+                        đường 180°, đổi cỡ cảnh từng nấc một, vị trí nhân vật tiến dần trong
+                        không gian, ánh sáng và thời tiết giữ nguyên cả scene.
+                      </span>
+                    </span>
+                  </label>
+                  <p className="text-xs leading-relaxed text-neutral-600">
+                    Chỉ ảnh hưởng tới các lượt <b>viết shot</b> SAU (tách shot, autofill
+                    storyboard, đổi góc máy). Shot đã có giữ nguyên — muốn áp thì tách lại
+                    shot của scene đó. Mẫu tương ứng ở nhóm <b>🧩 Prompt ngầm</b>
+                    (“CINEMATOGRAPHY — liên tục”).
+                  </p>
                 </Group>
               </>
             )}

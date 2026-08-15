@@ -200,13 +200,17 @@ _MIGRATIONS = [
     # Ảnh tham chiếu của một NHÂN VẬT: 0 = bảng "Character Production Bible" 13 mục (mặc
     # định), 1 = MỘT ảnh toàn thân chính diện nền trơn. Xem brain.character_one().
     ("project", "character_one", "INTEGER DEFAULT 0"),
+    # Cách viết shot trong một scene: 0 = khung RỜI minh hoạ lời đọc (mặc định, hợp kể
+    # chuyện), 1 = chuỗi LIÊN TỤC theo ngữ pháp dựng phim (hợp khi đích đến là video).
+    # Xem brain.shot_continuity() + hai bản của khối CINEMATOGRAPHY.
+    ("project", "shot_continuity", "INTEGER DEFAULT 0"),
     # Ghi đè các PROMPT NGẦM (brain.PROMPT_DEFAULTS): trống = dùng mặc định trong code,
     # "-" = tắt hẳn khối đó. Mỗi cột ứng với một khoá của PROMPT_DEFAULTS.
     *[("project", f"tpl_{k}", "TEXT") for k in (
         "single_frame", "single_frame_grid", "image_text", "video_text",
         "sheet_character", "sheet_character_one", "sheet_prop",
         "sheet_location", "sheet_location_one",
-        "cine", "motion", "omni_timeline")],
+        "cine", "cine_continuous", "motion", "omni_timeline")],
 ]
 
 

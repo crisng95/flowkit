@@ -656,6 +656,62 @@ _CINE = (
     "volumetric light, particles — whatever sells the scene's emotion."
 )
 
+# Biến thể LIÊN TỤC của khối trên (`project.shot_continuity == 1`).
+#
+# Bản mặc định ở trên sinh shot cho lối KỂ CHUYỆN: mỗi khung là một bức ảnh minh hoạ cho một
+# câu lời đọc, và nó ÉP khung liền kề phải khác nhau. Đem những khung ấy đi dựng video thì mỗi
+# clip là một chỗ khác nhau trong cùng một cảnh — nhân vật nhảy từ đầu phố xuống cuối phố, đổi
+# hướng đi, đổi phía màn hình — nối lại thành phim thì rời rạc.
+#
+# Bản này đảo đúng cái luật đó: các khung trong MỘT scene là các lát cắt liên tiếp của MỘT
+# hành động trong MỘT không gian, cắt theo ngữ pháp dựng phim thật (đường 180°, quy tắc 30°,
+# giao khung ra/vào). Hai bản dùng chung mọi trục kỹ thuật, chỉ khác luật liên khung.
+_CINE_CONTINUOUS = (
+    "CINEMATOGRAPHY — the frames of ONE scene are consecutive slices of ONE continuous action "
+    "in ONE space, cut together as a real film sequence. BOTH the `description` (which "
+    "generates the still image) and the `visual_prompt` MUST explicitly specify ALL of the "
+    "axes below.\n"
+    "CONTINUITY comes first, and it overrides any urge to make neighbouring frames look "
+    "different:\n"
+    "  • Each frame picks up exactly where the previous one left off — same moment of the "
+    "action carried a little further, same time of day, same weather and light, same costume, "
+    "same props in the same hands. Nothing resets between frames.\n"
+    "  • Hold the 180° line: once the action has a screen direction, keep it. A character "
+    "walking left-to-right keeps walking left-to-right in every following frame of the scene; "
+    "if they leave frame right, the next frame has them entering from frame left.\n"
+    "  • The character's position advances THROUGH the space step by step — a few paces "
+    "further along the same street, nearer the same doorway — never teleporting to an "
+    "unrelated part of the location between frames.\n"
+    "  • Change shot size by ONE step at a time (wide → full → medium → close-up, or the "
+    "reverse). Never cut straight from an extreme wide to an extreme close-up.\n"
+    "  • When the angle changes, change it by at least 30° so the cut doesn't jitter, but "
+    "stay on the SAME side of the action line.\n"
+    "  • State in each frame where the subject stands relative to the previous frame, so the "
+    "whole scene reads as one walk, one conversation, one gesture — not a gallery of angles.\n"
+    "Within that discipline, still specify:\n"
+    "  • Shot size / framing: extreme wide, wide/establishing, full, medium, medium close-up, "
+    "close-up, or extreme close-up.\n"
+    "  • Camera angle & height: eye-level, low angle, high angle, overhead/top-down, dutch "
+    "tilt, over-the-shoulder, or POV.\n"
+    "  • Lens / focal length & depth of field: e.g. 24mm wide, 35mm, 50mm, 85mm portrait, "
+    "135mm telephoto — plus shallow depth of field (soft bokeh background) or deep focus. Keep "
+    "one lens language across the scene.\n"
+    "  • Lighting: scheme and direction (key/fill/back, soft vs hard, Rembrandt, rim/back-"
+    "light, silhouette), source (natural daylight, golden hour, moonlight, practical lamps, "
+    "firelight), color temperature (warm/cool) and overall contrast — CONSISTENT across the "
+    "whole scene, since it is one continuous moment.\n"
+    "  • Composition & object layout: where each character and prop sits in frame "
+    "(foreground / midground / background), rule of thirds, leading lines, symmetry/balance, "
+    "headroom and negative space.\n"
+    "  • Pose & body language of EVERY character present: stance or posture, what the hands "
+    "are doing, head turn and gaze direction, facial expression, and — with two or more people "
+    "— how they are placed and turned relative to each other. Let it EVOLVE frame to frame as "
+    "one continuous movement; never reset to a neutral stance and never repeat the previous "
+    "frame's pose unchanged.\n"
+    "  • Mood / color palette and atmosphere: time of day, weather, haze/fog/dust, "
+    "volumetric light, particles — whatever sells the scene's emotion."
+)
+
 # Dynamic spec injected into every motion-generating prompt. The shot's START FRAME is an
 # image-to-video reference that ALREADY locks the static look (shot size, angle, focal
 # length, lighting, composition). So the `motion_prompt` must NOT redefine that look — it
@@ -724,6 +780,7 @@ PROMPT_DEFAULTS: dict[str, str] = {
     "sheet_location": _SHEET["location"],
     "sheet_location_one": _SHEET["location_one"],
     "cine": _CINE,
+    "cine_continuous": _CINE_CONTINUOUS,
     "motion": _MOTION,
     "omni_timeline": _OMNI_TIMELINE_HEAD,
 }
@@ -780,9 +837,23 @@ async def seed_prompt_defaults() -> int:
     return len(rows)
 
 
+def shot_continuity(project: dict | None = None) -> bool:
+    """Shot trong một scene là chuỗi LIÊN TỤC (True) hay các khung rời để minh hoạ (False).
+
+    Mặc định False = lối kể chuyện: mỗi khung minh hoạ một câu lời đọc, và khối CINEMATOGRAPHY
+    ép khung liền kề phải khác nhau cho có nhịp. Đem dựng video thì hỏng — mỗi clip một chỗ
+    khác nhau trong cùng một cảnh, nối lại rời rạc. Bật True khi đích đến là VIDEO."""
+    try:
+        return int((project or {}).get("shot_continuity") or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
 def cine_spec(project: dict | None = None) -> str:
-    """Khối CINEMATOGRAPHY chèn vào mọi prompt SINH SHOT (không phải prompt sinh ảnh)."""
-    return prompt_part(project, "cine")
+    """Khối CINEMATOGRAPHY chèn vào mọi prompt SINH SHOT (không phải prompt sinh ảnh).
+
+    Hai bản: rời (kể chuyện) và liên tục (dựng video) — xem `shot_continuity`."""
+    return prompt_part(project, "cine_continuous" if shot_continuity(project) else "cine")
 
 
 def motion_spec(engine: str = "veo", clip_s: int = 8,

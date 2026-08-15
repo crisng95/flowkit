@@ -66,6 +66,13 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
     when: "Ảnh tham chiếu của entity loại location khi chọn “Một ảnh”. Một góc máy duy nhất, " +
       "không lưới nên cũng không dán nhãn.",
   },
+  cine_continuous: {
+    group: "Prompt gửi cho AI viết shot",
+    title: "CINEMATOGRAPHY — liên tục",
+    when: "Thay cho khối trên khi BẬT “Shot liên tục trong scene” ở nhóm Nội dung. Các khung " +
+      "là lát cắt liên tiếp của MỘT hành động: giữ đường 180°, đổi cỡ cảnh từng nấc, vị trí " +
+      "nhân vật tiến dần trong không gian — để nối clip lại thành phim không bị rời rạc.",
+  },
   cine: {
     group: "Prompt gửi cho AI viết shot",
     title: "CINEMATOGRAPHY",
