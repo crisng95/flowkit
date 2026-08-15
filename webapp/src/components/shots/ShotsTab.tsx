@@ -3,27 +3,31 @@ import { api, storyboard, shots as shotsApi, type Project, type Scene, type Shot
 import type { EditorTarget } from "../nodeeditor/NodeEditor";
 import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
+import type { DownloadChoice } from "../common/DownloadMenu";
 import { useConfirm } from "../common/Confirm";
-import { creditGuard, videoCost } from "../../lib/credits";
+import { creditGuard, upscaleVideoCost, videoCost } from "../../lib/credits";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
 
-// Which file a shot's ⬇ actually saves, and what to call it. The upscale is a SEPARATE file
-// (<media_id>_upsampled.mp4) and is only the right one while it still belongs to the current
-// video — re-rendering the shot leaves a stale upscale behind, which `upscale_media_id` catches.
-const videoDownload = (sh: Shot, sceneIdx: number) => {
-  const upscaled = !!sh.upscale_path && sh.upscale_media_id === sh.video_media_id;
-  const url = (upscaled ? sh.upscale_path : sh.video_path) || null;
-  if (!url) return null;
-  const res = upscaled ? sh.upscale_res?.split("_").pop()?.toLowerCase() : "";
-  return {
-    url,
-    name: `sc${pad3(sceneIdx)}-s${pad3(sh.idx)}-${slugName(sh.title || sh.description || "")}${
-      res ? `-${res}` : ""
-    }.mp4`,
-    title: upscaled ? `Tải video ${res} (bản upscale)` : "Tải video (bản HD)",
-  };
-};
+// 'VIDEO_RESOLUTION_1080P' → '1080p' (hậu tố tên file, giống hires.video_res_label bên server).
+const resTag = (res?: string | null) => (res || "").split("_").pop()?.toLowerCase() || "";
+
+// Nhãn hiển thị: server trả nhãn viết hoa hết ("1080P"), đọc như tên file lỗi.
+const resLabel = (res?: string | null) => (resTag(res) === "4k" ? "4K" : resTag(res));
+
+// Bản upscale là một file RIÊNG (<media_id>_upsampled.mp4) và chỉ còn đúng khi nó thuộc về
+// video hiện tại — render lại shot là bản upscale cũ thành rác, `upscale_media_id` bắt được.
+const currentUpscale = (sh: Shot) =>
+  sh.upscale_path && sh.upscale_media_id === sh.video_media_id ? sh.upscale_path : null;
+
+// Shot chained (beat dài hơn một clip) ghép cục bộ từ nhiều clip → Flow không upscale được;
+// `video_path` của nó không trỏ vào /media/. Cùng luật với hires.video_upscalable.
+const chainedShot = (sh: Shot) => !!sh.video_path && !sh.video_path.startsWith("/media/");
+
+const videoName = (sh: Shot, sceneIdx: number, res?: string | null) =>
+  `sc${pad3(sceneIdx)}-s${pad3(sh.idx)}-${slugName(sh.title || sh.description || "")}${
+    res ? `-${resTag(res)}` : ""
+  }.mp4`;
 
 const parseRefs = (s: string | null): string[] => {
   try {
@@ -50,8 +54,23 @@ export default function ShotsTab({
   const [progress, setProgress] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<Shot | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [upscaling, setUpscaling] = useState<Set<string>>(new Set());
+  // Các mức upscale tier này cho phép (ONE → 1080p; Ultra → 1080p + 4K). Hỏi server một lần
+  // cho cả tab thay vì mỗi thẻ một lượt.
+  const [upChoices, setUpChoices] = useState<{ value: string; label: string }[]>([]);
+  const [upLabel, setUpLabel] = useState("");
   const confirm = useConfirm();
   const { jobFor } = useJobs();
+
+  useEffect(() => {
+    shotsApi
+      .upscaleStatus(project.id)
+      .then((r) => {
+        setUpChoices(r.choices || []);
+        setUpLabel(r.label);
+      })
+      .catch(() => {});
+  }, [project.id]);
 
   const loadShots = async (sid: string) => {
     const r = await storyboard.sceneShots(sid);
@@ -127,6 +146,83 @@ export default function ShotsTab({
     } finally {
       mark(shot.id, false);
     }
+  };
+
+  // Render bản upscale ở MỘT mức cụ thể rồi tải luôn. Mỗi shot chỉ giữ được MỘT bản upscale
+  // (một cột `upscale_path`), nên xin mức khác là thay bản đang có — nói trước cho người dùng
+  // biết. force=true vì server bỏ qua yêu cầu khi bản upscale hiện tại còn đúng video.
+  const makeAndDownload = async (sh: Shot, sceneIdx: number, res: string, label: string) => {
+    const per = upscaleVideoCost(res);
+    const cur = currentUpscale(sh) ? sh.upscale_res : null;
+    const notes = [
+      per
+        ? `Render bản ${label} tốn ~${per} credit (đắt hơn cả một lượt render clip mới).`
+        : `Render bản ${label} không tốn credit, mất khoảng 1 phút.`,
+      cur && cur !== res
+        ? `Bản ${resTag(cur)} đang lưu sẽ bị thay — mỗi shot chỉ giữ một bản upscale.`
+        : "",
+    ].filter(Boolean);
+    if (
+      (per || (cur && cur !== res)) &&
+      !(await confirm({
+        title: `Tải bản ${label}?`,
+        message: notes.join(" "),
+        confirmText: "Render & tải",
+        danger: !!per,
+      }))
+    )
+      return;
+    if (per && !(await creditGuard(confirm, 1, per, `Upscale ${label}`))) return;
+
+    setUpscaling((s) => new Set(s).add(sh.id));
+    setErr(null);
+    try {
+      const up = await shotsApi.upscale(sh.id, true, res);
+      setShot(up);
+      if (up.upscale_path) downloadFile(up.upscale_path, videoName(up, sceneIdx, up.upscale_res));
+      else setErr("Flow không trả bản upscale.");
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setUpscaling((s) => {
+        const n = new Set(s);
+        n.delete(sh.id);
+        return n;
+      });
+    }
+  };
+
+  // Các mốc cho nút ⬇ của một shot: nguyên bản + từng mức upscale tier cho phép. Mức đã có
+  // sẵn thì tải thẳng file; chưa có thì render rồi tải.
+  const downloadChoices = (sh: Shot, sceneIdx: number): DownloadChoice[] => {
+    if (!sh.video_path) return [];
+    const chained = chainedShot(sh);
+    const out: DownloadChoice[] = [
+      {
+        key: "src",
+        label: "Nguyên bản (HD)",
+        hint: "file Flow phát ra, không phải upscale",
+        onSelect: () => downloadFile(sh.video_path!, videoName(sh, sceneIdx)),
+      },
+    ];
+    for (const c of upChoices) {
+      const have = currentUpscale(sh) && sh.upscale_res === c.value;
+      out.push({
+        key: c.value,
+        label: resLabel(c.value),
+        hint: have
+          ? "đã có sẵn"
+          : chained
+            ? "shot ghép từ nhiều clip — Flow không upscale được"
+            : `chưa có — render ~1 phút, ${upscaleVideoCost(c.value) || 0} credit`,
+        disabled: !have && chained,
+        onSelect: () =>
+          have
+            ? downloadFile(sh.upscale_path!, videoName(sh, sceneIdx, sh.upscale_res))
+            : makeAndDownload(sh, sceneIdx, c.value, resLabel(c.value)),
+      });
+    }
+    return out;
   };
 
   // Xoá shot. Hỏi lại khi shot đã có video: một clip đã render là ~20 credit, xoá nhầm là
@@ -208,9 +304,7 @@ export default function ShotsTab({
                 {sc.heading}
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {list.map((sh) => {
-                  const dl = videoDownload(sh, sc.idx);
-                  return (
+                {list.map((sh) => (
                   <MediaCard
                     key={sh.id}
                     imageSrc={sh.image_path}
@@ -218,12 +312,11 @@ export default function ShotsTab({
                     title={sh.title}
                     index={sh.idx}
                     subtitle={sh.video_path ? "▶ video" : sh.status}
-                    downloadUrl={dl?.url}
-                    downloadName={dl?.name}
-                    downloadTitle={dl?.title}
+                    downloadOptions={downloadChoices(sh, sc.idx)}
+                    downloadTitle="Tải video (chọn mốc)"
                     selected={sel?.id === sh.id}
-                    busy={running.has(sh.id)}
-                    busyLabel="Đang render…"
+                    busy={running.has(sh.id) || upscaling.has(sh.id)}
+                    busyLabel={upscaling.has(sh.id) ? "Đang upscale…" : "Đang render…"}
                     onClick={() => setSel(sh)}
                     onPreview={sh.video_path || sh.image_path ? () => setLightbox(sh) : undefined}
                     onEdit={
@@ -293,8 +386,7 @@ export default function ShotsTab({
                       </>
                     }
                   />
-                  );
-                })}
+                ))}
                 <button
                   onClick={async () => {
                     await storyboard.addShot(sc.id);
@@ -320,29 +412,28 @@ export default function ShotsTab({
         <ShotPanel
           shot={sel}
           project={project}
-          sceneIdx={Math.max(0, scenes.findIndex((s) => s.id === sel.scene_id))}
-          running={running.has(sel.id)}
+          upLabel={upLabel}
+          downloads={downloadChoices(sel, Math.max(0, scenes.findIndex((s) => s.id === sel.scene_id)))}
+          running={running.has(sel.id) || upscaling.has(sel.id)}
           onClose={() => setSel(null)}
           onChange={setShot}
           onGenVideo={() => genVideo(sel)}
         />
       )}
-      {lightbox && (() => {
-        const dl = videoDownload(
-          lightbox,
-          Math.max(0, scenes.findIndex((s) => s.id === lightbox.scene_id))
-        );
-        return (
-          <Lightbox
-            imageSrc={lightbox.image_path}
-            videoSrc={lightbox.video_path}
-            title={lightbox.title}
-            downloadUrl={dl?.url}
-            downloadName={dl?.name}
-            onClose={() => setLightbox(null)}
-          />
-        );
-      })()}
+      {lightbox && (
+        // ⬇ trong lightbox phải cho ĐÚNG những mốc như ⬇ trên thẻ — hai nút cùng một chỗ mà
+        // ra hai file khác cỡ là bẫy.
+        <Lightbox
+          imageSrc={lightbox.image_path}
+          videoSrc={lightbox.video_path}
+          title={lightbox.title}
+          downloadOptions={downloadChoices(
+            lightbox,
+            Math.max(0, scenes.findIndex((s) => s.id === lightbox.scene_id))
+          )}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
@@ -350,7 +441,8 @@ export default function ShotsTab({
 function ShotPanel({
   shot,
   project,
-  sceneIdx,
+  upLabel,
+  downloads,
   running,
   onClose,
   onChange,
@@ -358,7 +450,9 @@ function ShotPanel({
 }: {
   shot: Shot;
   project: Project;
-  sceneIdx: number;
+  // Trần upscale phụ thuộc tier (ONE → 1080p, TWO → 4K) — nhãn do tab hỏi server, không cứng "4K".
+  upLabel: string;
+  downloads: DownloadChoice[];
   running: boolean;
   onClose: () => void;
   onChange: (s: Shot) => void;
@@ -369,8 +463,6 @@ function ShotPanel({
   const [aiBusy, setAiBusy] = useState(false);
   const [upBusy, setUpBusy] = useState(false);
   const [upErr, setUpErr] = useState<string | null>(null);
-  // Trần upscale phụ thuộc tier (ONE → 1080p, TWO → 4K) → hỏi server thay vì cứng "4K".
-  const [upLabel, setUpLabel] = useState("");
 
   useEffect(() => {
     setVisual(shot.visual_prompt ?? "");
@@ -378,13 +470,8 @@ function ShotPanel({
     setUpErr(null);
   }, [shot.id]);
 
-  useEffect(() => {
-    shotsApi.upscaleStatus(project.id).then((r) => setUpLabel(r.label)).catch(() => {});
-  }, [project.id]);
-
-  // Video ghép cục bộ từ nhiều clip (chained) không upscale được — Flow chỉ nhận một media.
-  const chained = !!shot.video_path && !shot.video_path.startsWith("/media/");
-  const upscaled = !!shot.upscale_path && shot.upscale_media_id === shot.video_media_id;
+  const chained = chainedShot(shot);
+  const upscaled = !!currentUpscale(shot);
 
   const save = async () =>
     onChange(await storyboard.updateShot(shot.id, { visual_prompt: visual, motion_prompt: motion }));
@@ -469,18 +556,19 @@ function ShotPanel({
         </button>
         {shot.video_path && (
           <>
-            {(() => {
-              const dl = videoDownload(shot, sceneIdx);
-              return dl ? (
-                <button
-                  onClick={() => downloadFile(dl.url, dl.name)}
-                  title={`${dl.title} → ${dl.name}`}
-                  className="w-full rounded-lg border border-emerald-800/70 py-2 text-sm text-emerald-300 hover:bg-emerald-950/40"
-                >
-                  ⬇ {dl.title}
-                </button>
-              ) : null;
-            })()}
+            {/* Mỗi mốc một nút: trong panel rộng rãi thì bày thẳng ra dễ đọc hơn menu xổ. */}
+            {downloads.map((d) => (
+              <button
+                key={d.key}
+                onClick={() => d.onSelect()}
+                disabled={d.disabled || running}
+                title={d.hint}
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-emerald-800/70 px-3 py-2 text-sm text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                <span>⬇ {d.label}</span>
+                {d.hint && <span className="truncate text-xs text-neutral-500">{d.hint}</span>}
+              </button>
+            ))}
             <button
               onClick={upscale}
               disabled={upBusy || chained}

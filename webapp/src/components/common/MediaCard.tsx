@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Thumb from "../Thumb";
+import DownloadMenu, { type DownloadChoice } from "./DownloadMenu";
 import { downloadFile } from "../../lib/download";
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
   downloadUrl?: string | null;
   downloadName?: string;
   downloadTitle?: string;
+  // Nhiều mốc để chọn (nguyên bản / 1080p / 4K) — có thì ⬇ mở menu, `downloadUrl` bị bỏ qua.
+  downloadOptions?: DownloadChoice[];
   onClick?: () => void;
   onPreview?: () => void;
   onEdit?: () => void;
@@ -36,10 +39,14 @@ export default function MediaCard({
   downloadUrl,
   downloadName,
   downloadTitle,
+  downloadOptions,
   onClick,
   onPreview,
   onEdit,
 }: Props) {
+  // Hàng nút chỉ hiện khi hover; menu ⬇ đang mở thì phải ghim lại, không thì rê chuột
+  // xuống chọn mốc là cả cụm tắt mất.
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
       className={`group overflow-hidden rounded-xl border bg-neutral-900/50 transition ${
@@ -72,7 +79,11 @@ export default function MediaCard({
           </div>
         )}
 
-        <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition group-hover:opacity-100">
+        <div
+          className={`absolute right-1.5 top-1.5 flex gap-1 transition ${
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
           {onPreview && (
             <button
               onClick={(e) => {
@@ -97,7 +108,14 @@ export default function MediaCard({
               ✎
             </button>
           )}
-          {downloadUrl && (
+          {downloadOptions?.length ? (
+            <DownloadMenu
+              choices={downloadOptions}
+              title={downloadTitle || "Tải về máy"}
+              onOpenChange={setMenuOpen}
+            />
+          ) : null}
+          {!downloadOptions?.length && downloadUrl && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

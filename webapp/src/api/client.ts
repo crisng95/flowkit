@@ -621,9 +621,14 @@ export const shots = {
   // Kéo về lượt render ĐÃ submit nhưng hết giờ chờ (shot.operation_json). Không submit gì
   // mới ⇒ không tốn thêm credit.
   resumeVideo: (sid: string) => req<Shot>(`/shots/${sid}/video/resume`, { method: "POST" }),
-  // Bỏ trống resolution → server lấy theo tier (ONE → 1080p, TWO → 4K).
-  upscale: (sid: string, force = false) =>
-    req<Shot>(`/shots/${sid}/upscale?force=${force}`, { method: "POST" }),
+  // Bỏ trống resolution → server lấy theo tier (ONE → 1080p, TWO → 4K). Xin một mức KHÁC
+  // mức đang có phải kèm force: không force thì server thấy bản upscale còn đúng video hiện
+  // tại là trả shot về nguyên trạng, chẳng render gì.
+  upscale: (sid: string, force = false, resolution?: string) =>
+    req<Shot>(
+      `/shots/${sid}/upscale?force=${force}${resolution ? `&resolution=${encodeURIComponent(resolution)}` : ""}`,
+      { method: "POST" }
+    ),
   upscaleStatus: (pid: string) =>
     req<{ tier: string; resolution: string; label: string; total: number; done: number;
           missing: number; skipped_chained: number;

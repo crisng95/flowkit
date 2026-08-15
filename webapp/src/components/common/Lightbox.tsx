@@ -1,3 +1,4 @@
+import DownloadMenu, { type DownloadChoice } from "./DownloadMenu";
 import { downloadFile, slugName } from "../../lib/download";
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   // (chỉ server mới biết file trả về là bản 2K hay 4K) — đừng bịa tên đè lên.
   downloadUrl?: string | null;
   downloadName?: string;
+  // Nhiều mốc (nguyên bản / 1080p / 4K) — ⬇ ở đây phải cho ĐÚNG những lựa chọn như ⬇ trên thẻ.
+  downloadOptions?: DownloadChoice[];
   onClose: () => void;
 }
 
@@ -19,6 +22,7 @@ export default function Lightbox({
   title,
   downloadUrl,
   downloadName,
+  downloadOptions,
   onClose,
 }: Props) {
   const src = downloadUrl || videoSrc || imageSrc;
@@ -41,7 +45,8 @@ export default function Lightbox({
         {title && <div className="mt-2 text-center text-sm text-neutral-300">{title}</div>}
       </div>
       <div className="absolute right-5 top-5 flex gap-2" onClick={(e) => e.stopPropagation()}>
-        {src && (
+        {downloadOptions?.length ? <DownloadMenu choices={downloadOptions} round /> : null}
+        {!downloadOptions?.length && src && (
           <button
             onClick={() => downloadFile(src, name)}
             title={name ? `Tải về → ${name}` : "Tải về (bản độ phân giải cao nhất)"}
