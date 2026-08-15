@@ -922,6 +922,23 @@ async def script_chat(pid: str, body: ScriptChatRequest):
 
 # ─── Assets (entities) ──────────────────────────────────────
 
+def _entity_aspect(entity_type: str, project: dict) -> str:
+    """Tỉ lệ khung cho ẢNH THAM CHIẾU của một entity — khác tỉ lệ của dự án.
+
+    Người và đồ vật CAO hơn rộng, nên khung ngang phí gần một nửa ảnh vào nền trắng hai bên
+    và bóp nhân vật lại nhỏ hơn hẳn. Ít điểm ảnh trên khuôn mặt kéo theo một lỗi khác: model
+    bỏ bớt nét, mắt to kiểu anime trôi dần về mắt nhỏ tả thực — đúng thứ nhìn thấy khi đem ref
+    đi vẽ storyboard. Khung DỌC cho cùng một lượt sinh nhiều điểm ảnh hơn trên đúng phần cần.
+
+    Bối cảnh thì ngược lại: nó là con phố, phải rộng, và còn phải ăn khớp với khung hình của
+    video nên giữ NGANG. Entity kiểu khác thì theo tỉ lệ dự án."""
+    if entity_type in ("character", "prop"):
+        return "IMAGE_ASPECT_RATIO_PORTRAIT"
+    if entity_type == "location":
+        return "IMAGE_ASPECT_RATIO_LANDSCAPE"
+    return _to_image_aspect(project["aspect_ratio"])
+
+
 def _to_image_aspect(video_aspect: str) -> str:
     return (video_aspect or "").replace("VIDEO_ASPECT_RATIO_", "IMAGE_ASPECT_RATIO_") \
         or "IMAGE_ASPECT_RATIO_LANDSCAPE"
@@ -1163,8 +1180,7 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
         entity.get("description") or entity.get("ref_prompt") or "", project)
     prompt = brain.compose_prompt(project, body,
                                   **graph_mod.prompt_wrap(entity.get("graph_json"), project))
-    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
-              else _to_image_aspect(project["aspect_ratio"]))
+    aspect = _entity_aspect(entity["type"], project)
     model = await _resolve_image_model(project)
     tier = await _current_tier()
     row = await _generate_image_verified(
@@ -4078,8 +4094,7 @@ async def entity_candidates(eid: str, body: CandidatesRequest):
         entity["type"], entity["name"],
         entity.get("description") or entity.get("ref_prompt") or "", project)
     prompt = brain.compose_prompt(project, body_text)
-    aspect = ("IMAGE_ASPECT_RATIO_LANDSCAPE" if entity["type"] in ("character", "prop", "location")
-              else _to_image_aspect(project["aspect_ratio"]))
+    aspect = _entity_aspect(entity["type"], project)
     model = await _resolve_image_model(project)
     tier = await _current_tier()
     cands = await _gen_candidates(

@@ -47,6 +47,9 @@ export interface EditorTarget {
   kind: "shot" | "entity";
   id: string;
   title: string;
+  // Chỉ với kind "entity": quyết định tỉ lệ khung của node tạo ảnh trong đồ thị mặc định —
+  // người và đồ vật lấy khung DỌC, bối cảnh lấy khung NGANG. Xem _entity_aspect() bên agent.
+  entityType?: string;
   // What this edit produces: an image (storyboard frame / asset art) or a video (shot).
   goal?: "image" | "video";
   prompt?: string | null;
@@ -1498,8 +1501,16 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
       media_id: s.media_id, web: s.web, label: s.label,
     }));
   });
+  // Ảnh tham chiếu người/đồ vật đi khung DỌC: chúng cao hơn rộng, khung ngang phí gần nửa ảnh
+  // vào nền trắng hai bên và bóp nhỏ chủ thể — ít điểm ảnh trên khuôn mặt thì model lược nét,
+  // mắt to kiểu anime trôi về mắt nhỏ tả thực. Bối cảnh giữ khung NGANG (nó là con phố, và
+  // phải khớp khung hình video). Khớp với _entity_aspect() bên agent, đừng để hai bên lệch.
+  const refAspect =
+    seed.kind === "entity" && ["character", "prop"].includes(seed.entityType || "")
+      ? "9:16"
+      : "16:9";
   nodes.push(
-    mk("i", "image", 340, 80, { aspect: "16:9", model: "", count: 1, _result: seed.imageSrc || "" })
+    mk("i", "image", 340, 80, { aspect: refAspect, model: "", count: 1, _result: seed.imageSrc || "" })
   );
   nodes.push(mk("o", "output", 660, 110, { _result: seed.imageSrc || "" }));
   edges.push({ id: "ep", source: "p", target: "i" }, { id: "eo", source: "i", target: "o" });
@@ -1512,6 +1523,11 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
 // node nằm im không tác dụng gì — xem agent/studio/graph.py.
 const WRAP_TYPES = ["promptHeader", "promptFooter"] as const;
 const WRAP_TARGETS = ["image", "video"];
+
+// Đồ thị lưu từ bản editor này mang `v`. Đồ thị KHÔNG có `v` là bản cũ, lưu từ trước khi
+// header/footer tách thành node — chỉ những đồ thị ấy mới được `ensurePromptWrap` vá thêm
+// node. Tăng số này khi lại có một lần vá tự động kiểu đó nữa.
+const GRAPH_V = 2;
 
 // ─── Editor ─────────────────────────────────────────────────
 // Độ dài clip mà ⚙ Cấu hình dự án đặt được — chỉ Omni Flash mới có ("10" / "abra_r2v_10s"
@@ -2055,7 +2071,14 @@ function Editor({
     // được chèn ngầm vào mọi prompt; giờ chỉ chèn khi có node, nên graph đã lưu mà thiếu
     // node sẽ mất phần bọc. Gắn vào MỌI node tạo ảnh/tạo video chưa có, giữ nguyên hành vi.
     // Node để text rỗng ⇒ chạy theo ⚙ Thiết lập dự án, y như cơ chế cũ.
-    const ensurePromptWrap = (nodes: Node[], edges: Edge[]) => {
+    const ensurePromptWrap = (nodes: Node[], edges: Edge[], legacy: boolean) => {
+      // CHỈ vá đồ thị cũ. Đồ thị do editor hiện tại lưu (có `v`) là cố ý, kể cả khi nó không
+      // có node nào — người dùng gỡ dây hoặc xoá node là muốn prompt chạy trần.
+      if (!legacy) return;
+      // Và kể cả với đồ thị cũ: đã có sẵn node bọc thì thôi, đừng đẻ thêm cái thứ hai. Trước
+      // đây chỉ kiểm theo id `ph-<gen>`, trong khi đồ thị mặc định đặt tên node là `ph`/`pf`,
+      // nên gỡ DÂY (giữ node) là lần mở sau lại mọc ra một node header mới nối thẳng vào.
+      if (nodes.some((n) => WRAP_TYPES.includes(n.type as any))) return;
       const gens = nodes.filter((n) => WRAP_TARGETS.includes(n.type!));
       for (const gen of gens) {
         const feeding = new Set(
@@ -2149,7 +2172,7 @@ function Editor({
         }
       }
       ensureRefSources(nodes, edges);
-      ensurePromptWrap(nodes, edges);
+      ensurePromptWrap(nodes, edges, !(g as any).v);
       if (cancelled) return;       // a newer load supersedes this one — don't clobber it
       setNodes(nodes);
       setEdges(edges);
@@ -2364,6 +2387,11 @@ function Editor({
 
   // Drop transient preview fields; keep durable ones (locked + result_* so locks persist).
   const serializeGraph = (ns: Node[], es: Edge[]) => ({
+    // `v` = đồ thị này do BẢN EDITOR NÀY lưu, nên hình dạng của nó là CỐ Ý. Không có `v` là
+    // đồ thị lưu từ trước khi có node prompt header/footer, và chỉ đồ thị ấy mới được vá
+    // thêm node. Thiếu dấu này thì "thiếu node" và "người dùng đã xoá node" trông y hệt nhau,
+    // nên bản vá cứ chạy lại mỗi lần mở và dựng lại đúng thứ vừa bị xoá — xem GRAPH_V.
+    v: GRAPH_V,
     nodes: ns.map((n) => {
       const { _result, _ext, preview, ...rest } = n.data as any;
       return { id: n.id, type: n.type, data: rest, position: n.position };

@@ -238,6 +238,7 @@ export default function AssetsTab({
                             kind: "entity",
                             id: e.id,
                             title: e.name,
+                            entityType: e.type,
                             prompt: e.description || e.ref_prompt || e.name,
                             imageSrc: e.image_path,
                           })
