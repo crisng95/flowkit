@@ -7,6 +7,7 @@ Retries once on parse failure. See video-app.md §6.
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 from pathlib import Path
@@ -724,9 +725,9 @@ _CINE_CONTINUOUS = (
 # Nên việc chọn nằm ở CODE: bốc sẵn một hình dáng theo `scene_idx` rồi đưa THẲNG hình dáng đó
 # vào prompt. Hai scene liền nhau không bao giờ trùng, và cả phim đi hết bảng trước khi lặp.
 #
-# Số phần tử của hai bảng và bước nhảy phải NGUYÊN TỐ CÙNG NHAU với nhau (8 hình dáng, bước 1;
-# 8 kiểu chuyển, bước 3) để mỗi bảng quét hết mọi phần tử rồi mới quay vòng, và để hình dáng
-# với kiểu chuyển không đi lồng bước — thêm/bớt phần tử thì kiểm lại điều kiện này.
+# Bảng dài thì KHÔNG tốn gì cả: mỗi lượt gọi AI chỉ nhận đúng MỘT mục, phần còn lại không đi
+# lên model. Nên cứ thêm mục mới khi nghĩ ra — dài hơn thì phim lâu lặp lại hơn, thế thôi.
+# Thêm thoải mái: `_stride` tự lo điều kiện quét hết bảng, không phải sửa gì thêm.
 _SCENE_SHAPES: tuple[tuple[str, str], ...] = (
     ("Detail out",
      "open on the SMALLEST thing in the scene filling the whole frame — a texture, a hand, an "
@@ -764,6 +765,31 @@ _SCENE_SHAPES: tuple[tuple[str, str], ...] = (
      "closing back on the two-shot or on the listener's face. If only one figure is present, "
      "make the place the second party — alternate between the subject and the thing they are "
      "looking at, shot and point-of-view reverse"),
+    ("Rise",
+     "the mirror of a descent: start at ground level — feet, a kerb, water running between "
+     "cobbles — and step the camera UP frame by frame, ending high and wide looking out over "
+     "the whole place"),
+    ("Orbit",
+     "the camera arcs steadily around the subject across the scene, each frame a further "
+     "30–40° round the SAME circle at roughly the same radius, so the background rotates "
+     "behind them while they hold the centre of frame"),
+    ("Depth stack",
+     "keep the camera in ONE position and change which PLANE of the frame the action lives in: "
+     "the subject is deep in the background in the first frame, midground in the next, and "
+     "right up against the lens by the last — they come toward the camera through the scene "
+     "instead of the camera going to them"),
+    ("Insert-punctuated",
+     "alternate strictly between wider frames carrying the action and TIGHT INSERTS of what the "
+     "hands touch or the eyes land on — an object, a fastening, a coin, a surface. Every other "
+     "frame is an insert, and each insert is motivated by the frame before it"),
+    ("Off-centre",
+     "compose every frame with the subject SMALL and pushed hard to one edge, the place filling "
+     "the rest — held consistently to the same side. Only the final frame gives them the centre "
+     "of the image"),
+    ("Frame within a frame",
+     "every shot is composed through something that encloses it — a doorway, an archway, the "
+     "gap between hanging goods, a window, a gate, the edge of an umbrella. The enclosing frame "
+     "CHANGES each cut but is never absent, and it tightens as the scene goes on"),
 )
 
 # Mỗi kiểu chuyển cảnh là MỘT CẶP: `out` cho khung CUỐI scene trước, `in` cho khung ĐẦU scene
@@ -774,13 +800,51 @@ _SCENE_SHAPES: tuple[tuple[str, str], ...] = (
 # trong ẢNH TĨNH của shot đầu scene sau. Viết ngược lại thì Flow vẽ vũng nước làm khung cuối rồi
 # clip chẳng bao giờ tới đó.
 _SCENE_TRANSITIONS: tuple[tuple[str, str, str], ...] = (
-    ("Reflection tilt",
-     "the final seconds tilt DOWN off the subject into water on the ground until the world "
-     "exists only as a rippled, half-legible reflection filling the frame — nothing but water, "
-     "light and ripple at the end",
-     "water on the ground fills the frame and the new place is readable only as a blurred "
-     "reflection in it; the clip tilts UP off the water to reveal the place directly, "
-     "continuing the previous scene's downward tilt as one unbroken move"),
+    ("Clean exit / clean entry",
+     "the subject walks fully OUT of frame past one clearly stated edge and the clip holds a "
+     "beat on the emptied street after they have gone",
+     "the opening frame is the new place EMPTY, composed and waiting at the same shot size as "
+     "the frame that emptied at the end of the previous scene; the subject then walks in from "
+     "the OPPOSITE edge with the same gait and the same screen direction"),
+    ("Threshold cross",
+     "the camera moves with the subject toward a gate, archway, doorway or hanging curtain until "
+     "that opening fills the frame and its far side is unreadably dark",
+     "the opening frame is the FAR side of that same threshold looking back at it, the subject "
+     "coming through into the new place; the camera retreats ahead of them and the threshold "
+     "leaves frame"),
+    ("Invisible cut behind a mass",
+     "the camera tracks steadily sideways and a near foreground mass — a pillar, a tree trunk, a "
+     "shuttered stall — slides across the lens and fills the frame completely",
+     "the opening frame is filled by an equivalent near mass in the new place; the camera keeps "
+     "tracking the SAME direction at the same speed and slides out from behind it into the "
+     "scene, so the two clips read as one unbroken move"),
+    ("Baton pass",
+     "something leaves the frame under its own power in the last seconds — a leaf lifted off, a "
+     "drop falling out of frame, smoke drifting off the top edge, a bird crossing out",
+     "the opening frame catches a like object ARRIVING in the new place — landing, settling, "
+     "drifting in from the same edge it left by — before the camera moves off it into the scene"),
+    ("Eyeline turn",
+     "the subject turns their head sharply toward a clearly stated off-screen direction, the "
+     "clip ending on that look with the thing they are looking at still unseen",
+     "the opening frame is what they turned toward, seen from their vantage and on the SAME "
+     "side of the line, revealed to be in the new place; the camera then settles out of the "
+     "point-of-view into a normal frame"),
+    ("Scale nest",
+     "the camera pushes INTO one small motif until it fills the frame and loses its scale — a "
+     "painted flower, a woven pattern, lettering, a grain of a surface",
+     "the opening frame is that SAME motif rendered huge in the new place — the same pattern on "
+     "a shopfront, a banner, a wall — and the camera pulls back off it until the new place "
+     "resolves around it"),
+    ("Overhead lift-off",
+     "the camera cranes straight UP off the subject, the clip ending with them a small figure in "
+     "the pattern of the wet street seen from far above",
+     "the opening frame looks straight DOWN on the new place from that same height, the street "
+     "reading as pattern; the camera descends into it until it reaches human scale"),
+    ("Ground-plane handoff",
+     "the camera tilts DOWN off the subject onto the ground itself — cobbles, wet stone, worn "
+     "steps — until the surface and its texture fill the whole frame",
+     "the opening frame is that same kind of ground surface in the new place, filling the frame "
+     "at the same angle; the camera tilts UP off it to reveal where we now are"),
     ("Graphic match",
      "the last frame settles on ONE simple bold shape held large and centred — a round lamp, a "
      "circle of light on wet stone, the dome of an umbrella, the arc of a roof — and holds it",
@@ -821,7 +885,54 @@ _SCENE_TRANSITIONS: tuple[tuple[str, str, str], ...] = (
      "soft round bokeh of coloured light",
      "the opening frame is that same field of soft round coloured bokeh, the subject unreadable; "
      "focus racks the other way until the new place sharpens into position"),
+    ("Silhouette match",
+     "the light behind the subject builds until they are reduced to a flat black silhouette "
+     "against a bright field, all detail gone",
+     "the opening frame is a DIFFERENT black silhouette in the same position and at the same "
+     "size against the same bright field — a lamppost, a gate, another figure — and the light "
+     "level then comes down to reveal the new place around it"),
+    ("Colour flood",
+     "one dominant colour overwhelms the frame in the final second — light through a red lantern, "
+     "a wash of green from a sign, a lamp's amber — until the image is that colour and little "
+     "else",
+     "the opening frame is saturated in that SAME colour; it recedes as the camera moves, and "
+     "the new place emerges with the colour surviving only in one motivated source"),
+    ("Crowd swallow",
+     "a flow of moving people — a press of umbrellas, a crowd crossing — closes over the subject "
+     "until they are no longer findable in the frame",
+     "the opening frame is that same flow of umbrellas and bodies filling the frame in the new "
+     "place; it thins and the subject emerges out of it, facing the same screen direction"),
+    ("Glass layering",
+     "the camera moves behind glass so the frame carries TWO images at once — what is beyond the "
+     "pane and the street reflected on it — with the reflection growing stronger to the end",
+     "the opening frame carries that same doubled image in the new place; the reflected layer "
+     "fades and the layer beyond the glass becomes the real scene"),
+    ("Rain-curtain wipe",
+     "a sheet of water crosses the frame in the last second — rain sluicing off an awning, a "
+     "wave thrown up by a wheel, a shutter of downpour — and the image goes to broken water",
+     "the opening frame is that same sheet of water still falling across the lens; it drops away "
+     "and the new place is left clean behind it"),
+    ("Reflection tilt",
+     "the final seconds tilt DOWN off the subject into water on the ground until the world "
+     "exists only as a rippled, half-legible reflection filling the frame — nothing but water, "
+     "light and ripple at the end",
+     "water on the ground fills the frame and the new place is readable only as a blurred "
+     "reflection in it; the clip tilts UP off the water to reveal the place directly, "
+     "continuing the previous scene's downward tilt as one unbroken move"),
 )
+
+def _stride(n: int, want: int = 3) -> int:
+    """Bước nhảy để đi qua bảng `n` mục mà QUÉT HẾT rồi mới quay vòng — tức phải nguyên tố
+    cùng nhau với `n`. Trả bước nhỏ nhất từ `want` trở lên thoả điều kiện.
+
+    Tính chứ không chép cứng, vì chép cứng thì thêm một mục vào bảng là hỏng âm thầm: bảng 21
+    mục với bước 3 chỉ ghé 7 mục rồi lặp lại từ đầu, nên scene 1 và scene 8 dùng chung một cú
+    chuyển cảnh — đúng cái đơn điệu mà cả cơ chế này sinh ra để tránh, và không có gì báo lỗi."""
+    for d in range(max(2, want), max(2, want) + n):
+        if math.gcd(d, n) == 1:
+            return d
+    return 1
+
 
 # Mẫu bọc quanh hình dáng + hai nửa chuyển cảnh đã bốc sẵn. Chỗ trống được `scene_plan()` điền;
 # người dùng sửa được phần luật, còn nội dung hai bảng trên nằm trong code (xem docstring).
@@ -1043,7 +1154,7 @@ def scene_arc(project: dict | None, scene_idx: int, n_scenes: int,
     shape_name, shape = _SCENE_SHAPES[scene_idx % len(_SCENE_SHAPES)]
 
     def _trans(k: int) -> tuple[str, str, str]:
-        return _SCENE_TRANSITIONS[(k * 3) % len(_SCENE_TRANSITIONS)]
+        return _SCENE_TRANSITIONS[(k * _stride(len(_SCENE_TRANSITIONS))) % len(_SCENE_TRANSITIONS)]
 
     blocks = []
     if prev_heading:
