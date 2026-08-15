@@ -415,6 +415,14 @@ def entity_extract_prompt(script: str) -> str:
     return (
         "Extract every distinct ENTITY from this screenplay for an asset library.\n"
         "Three types: 'character' (people/animals), 'location' (places), 'prop' (key objects).\n"
+        # Quần áo đang MẶC là một phần của nhân vật, không phải một entity riêng. Tách ra thì
+        # sinh hai ảnh tham chiếu cho cùng một thứ — sheet nhân vật đã mặc áo dài, lại thêm
+        # một sheet đạo cụ "Áo dài trắng" — và shot nào gọi cả hai thì model dễ vẽ thừa một
+        # bộ nữa hoặc vẽ bộ đồ lơ lửng. Đo được: 19 prop là trang phục trên các dự án hiện có.
+        "Clothing, footwear and accessories that a character WEARS are part of that "
+        "character's own description — never emit them as separate 'prop' entities, even when "
+        "the screenplay dwells on them. Only make a prop for an object that is handled, "
+        "carried, exchanged, or that appears on its own away from the person wearing it.\n"
         "A 'character' is ONE SINGLE individual — never a group. If the screenplay refers to "
         "several people with one collective term (a couple, the pair, the parents, the twins, "
         "the children, a family, a crowd, a gang, a team), do NOT make one entity for it: emit "
