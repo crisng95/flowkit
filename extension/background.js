@@ -277,12 +277,10 @@ async function _identityFromSession() {
 /** Cùng endpoint, nhưng fetch TỪ TRONG tab Flow: request cùng origin nên cookie phiên chắc
  *  chắn được gửi kèm — dùng khi fetch từ service worker về rỗng (cookie SameSite). */
 async function _identityFromFlowTab() {
-  const tabs = await chrome.tabs.query({
-    url: ['https://labs.google/fx/tools/flow*', 'https://labs.google/fx/*/tools/flow*'],
-  });
-  if (!tabs.length) return null;
+  const tab = await pickFlowTab();          // tab đã bị Chrome discard thì chạy script trong đó
+  if (!tab) return null;                    // cũng hỏng — xem pickFlowTab()
   const [res] = await chrome.scripting.executeScript({
-    target: { tabId: tabs[0].id },
+    target: { tabId: tab.id },
     func: async () => {
       try {
         const r = await fetch('/fx/api/auth/session', { headers: { accept: 'application/json' } });
@@ -512,10 +510,43 @@ async function requestCaptchaFromTab(tabId, requestId, pageAction) {
   }
 }
 
+const FLOW_TAB_URLS = [
+  'https://labs.google/fx/tools/flow*',
+  'https://labs.google/fx/*/tools/flow*',
+];
+
+/**
+ * Chọn tab Flow ĐANG SỐNG để hỏi reCAPTCHA, và đánh thức nó nếu cần.
+ *
+ * Trước đây lấy thẳng `tabs[0]`. Chrome tự DISCARD tab nền để tiết kiệm bộ nhớ: tab vẫn nằm
+ * trên thanh tab, vẫn khớp truy vấn url, nhưng content script đã bị gỡ khỏi bộ nhớ nên
+ * `sendMessage` không ai trả lời → hết 30s → CAPTCHA_TIMEOUT. Nhìn từ phía người dùng thì
+ * "tab Flow vẫn mở" mà mọi lượt sinh đều hỏng, và hỏng thành cụm liền nhau đúng lúc máy rảnh.
+ * Cũng vì vậy mà mở nhiều tab Flow lại hại: tabs[0] có thể là cái đã bị discard.
+ *
+ * Thứ tự ưu tiên: tab đang hiện (active) → tab còn sống → tab đã discard nhưng reload lại được.
+ */
+async function pickFlowTab() {
+  const tabs = await chrome.tabs.query({ url: FLOW_TAB_URLS });
+  if (!tabs.length) return null;
+  const alive = tabs.filter((t) => !t.discarded);
+  const best =
+    alive.find((t) => t.active) || alive[0] || tabs[0];
+  if (best.discarded) {
+    // Đánh thức rồi chờ load xong — reload trả về ngay, content script chưa kịp gắn lại.
+    await chrome.tabs.reload(best.id);
+    for (let i = 0; i < 25; i++) {
+      await sleep(400);
+      const t = await chrome.tabs.get(best.id).catch(() => null);
+      if (t && !t.discarded && t.status === 'complete') break;
+    }
+  }
+  return best;
+}
+
 async function solveCaptcha(requestId, captchaAction) {
-  const tabs = await chrome.tabs.query({
-    url: ['https://labs.google/fx/tools/flow*', 'https://labs.google/fx/*/tools/flow*'],
-  });
+  const live = await pickFlowTab();
+  const tabs = live ? [live] : [];
 
   if (!tabs.length) {
     // Auto-open Flow tab and wait briefly before returning error
