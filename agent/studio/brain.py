@@ -423,6 +423,13 @@ def entity_extract_prompt(script: str) -> str:
         "character's own description — never emit them as separate 'prop' entities, even when "
         "the screenplay dwells on them. Only make a prop for an object that is handled, "
         "carried, exchanged, or that appears on its own away from the person wearing it.\n"
+        # Cùng luật, chiều bối cảnh: đồ trang trí/hàng hoá làm nên cái nơi ấy đã nằm sẵn
+        # trong ảnh bối cảnh. Tách thành prop rồi gọi tên trong shot là đưa cho model MỘT
+        # cái đèn lồng anh hùng để dựng vào tiền cảnh một con phố vốn đã treo hàng trăm cái.
+        "In the same way, scenery and merchandise that simply FURNISH a place — the lanterns "
+        "strung along a lantern street, the tables of a café, the wares on a market stall — "
+        "belong to that location's description, not to a prop of their own. A prop earns its "
+        "own entity only when a character interacts with it or the story singles it out.\n"
         "A 'character' is ONE SINGLE individual — never a group. If the screenplay refers to "
         "several people with one collective term (a couple, the pair, the parents, the twins, "
         "the children, a family, a crowd, a gang, a team), do NOT make one entity for it: emit "
