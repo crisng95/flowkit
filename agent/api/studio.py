@@ -1777,7 +1777,31 @@ async def _scene_arc(scene: dict, project: dict) -> str:
     return brain.scene_arc(
         project, pos, len(rows),
         prev_heading=(rows[pos - 1]["heading"] if pos > 0 else None),
-        next_heading=(rows[pos + 1]["heading"] if pos + 1 < len(rows) else None))
+        next_heading=(rows[pos + 1]["heading"] if pos + 1 < len(rows) else None),
+        prev_tail=(await _edge_shot(rows[pos - 1]["id"], last=True) if pos > 0 else ""),
+        next_head=(await _edge_shot(rows[pos + 1]["id"], last=False)
+                   if pos + 1 < len(rows) else ""))
+
+
+async def _edge_shot(scene_id: str, last: bool) -> str:
+    """Khung ĐẦU hoặc CUỐI của một scene, dạng chữ, để đưa cho lượt viết scene bên cạnh.
+
+    Cú chuyển cảnh nào dùng được là chuyện HÌNH HỌC — nhân vật đứng đâu, quay hướng nào, máy
+    vừa đi thế nào, chỗ đó có gì — mà chỉ đọc khung thật mới biết. Chọn kiểu chuyển thì code
+    làm được (để hai scene liền nhau khỏi trùng), còn thẩm định nó có khả thi không thì phải
+    là model. Nên khung thật đi kèm vào prompt; xem `brain.scene_arc`.
+
+    Kèm cả `motion_prompt` vì nửa `out` của cú chuyển nằm ở đó: khung tĩnh chỉ cho biết clip
+    BẮT ĐẦU ra sao, còn cảnh sau cần biết clip trước KẾT THÚC ra sao."""
+    rows = await db.query_all(
+        "SELECT description, motion_prompt FROM shot WHERE scene_id=? ORDER BY idx", (scene_id,))
+    if not rows:
+        return ""
+    s = rows[-1] if last else rows[0]
+    parts = [(s.get("description") or "").strip()[:600]]
+    if s.get("motion_prompt"):
+        parts.append("Motion: " + s["motion_prompt"].strip()[:400])
+    return "\n".join(p for p in parts if p)
 
 
 @router.post("/scenes/{sid}/storyboard/autofill")

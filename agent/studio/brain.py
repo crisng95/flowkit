@@ -949,23 +949,39 @@ _SCENE_ARC = (
 )
 
 _SCENE_ARC_IN = (
-    "SCENE ENTRY — this scene follows \"{prev}\". The two are joined by a {name} transition, so "
-    "the FIRST shot of this scene must complete it. Put the hand-off in the `description` and "
-    "`visual_prompt` — i.e. IN THE STILL IMAGE ITSELF, because that still is the clip's opening "
-    "frame — then let the `motion_prompt` move out of it into the scene within the first two "
-    "seconds:\n"
+    "SCENE ENTRY — this scene follows \"{prev}\", which ends on exactly this frame:\n"
+    "{prev_tail}\n"
+    "The FIRST shot of this scene must pick that frame up and complete the hand-off. The "
+    "SUGGESTED device for this join is {name}:\n"
     "  ▸ {text}.\n"
-    "After those two seconds the shot plays as a normal frame of this scene and obeys the shape "
-    "above."
+    "JUDGE IT AGAINST THE FRAME QUOTED ABOVE before using it, because the device only works if "
+    "the geometry allows it — where the subject actually is in that frame and which way they "
+    "face, where the camera is and which way it was moving, whether the subject is even present "
+    "or moving at all, and what the place physically contains. A hand-off that needs the subject "
+    "to walk out of frame is wrong if they are standing still in close-up; one that needs open "
+    "sky is wrong under an arcade; one that needs a look off-screen is wrong if nobody is on "
+    "screen. If it does not fit, SAY SO in one short clause at the start of the first shot's "
+    "`description` and use a device that does fit that frame — matching whatever the previous "
+    "frame genuinely leaves you: its last movement, its screen direction, its dominant shape, "
+    "its light, or an object it ends on.\n"
+    "Whatever device you end up with, the hand-off goes in the `description` and `visual_prompt` "
+    "— i.e. IN THE STILL IMAGE ITSELF, because that still is the clip's opening frame — and the "
+    "`motion_prompt` moves out of it into the scene within the first two seconds. After that the "
+    "shot plays as a normal frame of this scene and obeys the shape above."
 )
 
 _SCENE_ARC_OUT = (
-    "SCENE EXIT — this scene is followed by \"{next}\". The two are joined by a {name} "
-    "transition, so the LAST shot of this scene must set it up. Put the hand-off in the "
-    "`motion_prompt` ONLY, as the final two seconds of that clip — do NOT put it in the "
-    "`description`, because the description generates the clip's FIRST frame and the hand-off "
-    "belongs at the end:\n"
-    "  ▸ {text}."
+    "SCENE EXIT — this scene is followed by \"{next}\"{next_head}. The LAST shot of this scene "
+    "must set up the hand-off into it. The SUGGESTED device for this join is {name}:\n"
+    "  ▸ {text}.\n"
+    "Again, judge it against where your own last shot actually leaves the subject and the camera "
+    "— its shot size, the subject's position and facing, whether they are moving, what is within "
+    "reach in the frame. Do not bend the scene to fit the device: if the last shot lands "
+    "somewhere that cannot support it, use a device that grows naturally out of that frame "
+    "instead, and make sure it is one the NEXT scene can answer in its own opening frame.\n"
+    "Whatever device you end up with, the hand-off goes in the `motion_prompt` ONLY, as the "
+    "final two seconds of that clip — NOT in the `description`, because the description "
+    "generates the clip's FIRST frame and the hand-off belongs at the end."
 )
 
 # Dynamic spec injected into every motion-generating prompt. The shot's START FRAME is an
@@ -1134,7 +1150,8 @@ def frame_change_rule(project: dict | None = None) -> str:
 
 
 def scene_arc(project: dict | None, scene_idx: int, n_scenes: int,
-               prev_heading: str | None = None, next_heading: str | None = None) -> str:
+              prev_heading: str | None = None, next_heading: str | None = None,
+              prev_tail: str = "", next_head: str = "") -> str:
     """Khối HÌNH DÁNG SCENE + CHUYỂN CẢNH cho đúng một scene, bốc sẵn theo `scene_idx`.
 
     Chỉ có tác dụng khi bật `shot_continuity` — ở lối kể chuyện mỗi khung là một ảnh minh hoạ
@@ -1145,10 +1162,21 @@ def scene_arc(project: dict | None, scene_idx: int, n_scenes: int,
     theo idx thì hai scene liền nhau chắc chắn khác nhau, và chạy lại cho ra đúng kết quả cũ
     (không phụ thuộc seed) — sửa một scene không làm lệch những scene còn lại.
 
-    Kiểu chuyển đánh số theo RANH GIỚI: `_trans_idx(k)` là ranh giới giữa scene k và k+1. Nên
-    lối RA của scene k và lối VÀO của scene k+1 luôn đọc trúng cùng một mục — hai nửa của một
-    cú cắt phải khớp nhau, nếu tính lệch thì scene trước nhoè xuống nước còn scene sau lại mở
-    bằng vệt whip-pan."""
+    Nhưng mục bốc ra chỉ là ĐỀ XUẤT, không phải lệnh. Một cú chuyển có dùng được hay không phụ
+    thuộc hình học của khung: nhân vật đang đứng ở đâu, quay mặt hướng nào, máy đang ở đâu và
+    vừa di chuyển ra sao, nơi chốn có cái gì. "Đi khuất mép khung" vô nghĩa nếu nhân vật đang
+    đứng yên trong cảnh cận; "cẩu vọt lên cao" vô nghĩa dưới mái hiên; "quay theo ánh nhìn" vô
+    nghĩa khi trong khung không có ai. Code không biết mấy điều đó — chỉ model, khi đọc khung
+    thật, mới biết. Nên `prev_tail` đưa NGUYÊN VĂN khung cuối của scene trước vào prompt và mẫu
+    bảo model tự thẩm định rồi đổi sang cú chuyển hợp hơn nếu cần.
+
+    `prev_tail` đọc được là nhờ revary chạy TUẦN TỰ theo thứ tự scene (job batch_size=1): tới
+    lượt scene k+1 thì scene k đã viết lại xong, nên đó là khung MỚI chứ không phải khung cũ.
+
+    Kiểu chuyển đánh số theo RANH GIỚI: mục `k` là ranh giới giữa scene k và k+1. Nên lối RA
+    của scene k và lối VÀO của scene k+1 luôn đọc trúng cùng một mục — hai nửa của một cú cắt
+    phải khớp nhau, nếu tính lệch thì scene trước nhoè xuống nước còn scene sau lại mở bằng
+    vệt whip-pan."""
     if not shot_continuity(project):
         return ""
     shape_name, shape = _SCENE_SHAPES[scene_idx % len(_SCENE_SHAPES)]
@@ -1159,12 +1187,16 @@ def scene_arc(project: dict | None, scene_idx: int, n_scenes: int,
     blocks = []
     if prev_heading:
         name, _out, _in = _trans(scene_idx - 1)
-        blocks.append(prompt_part(project, "scene_arc_in",
-                                  prev=prev_heading, name=name, text=_in))
+        blocks.append(prompt_part(
+            project, "scene_arc_in", prev=prev_heading, name=name, text=_in,
+            prev_tail=(prev_tail.strip() or "(that scene's last frame is not written yet — infer "
+                       "a plausible ending frame for it from its heading and hand off from that)")))
     if next_heading:
         name, _out, _in = _trans(scene_idx)
-        blocks.append(prompt_part(project, "scene_arc_out",
-                                  next=next_heading, name=name, text=_out))
+        blocks.append(prompt_part(
+            project, "scene_arc_out", next=next_heading, name=name, text=_out,
+            next_head=(f", which opens on: {next_head.strip().rstrip('.')}"
+                       if next_head.strip() else "")))
     return prompt_part(project, "scene_arc",
                        i=scene_idx + 1, n=n_scenes,
                        shape_name=shape_name, shape=shape,
