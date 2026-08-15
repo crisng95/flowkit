@@ -830,11 +830,12 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
             dur_v = int(data.get("duration") or 0) or proj_secs or VEO_LITE_DEFAULT_S
             used_model = None
             if kind_v == "omni":
+                # Ảnh tham chiếu là TUỲ CHỌN. Không nối ảnh nào vào thì node chạy như một
+                # lượt text-to-video — chỉ prompt, Flow vẫn nhận. Đừng dựng lại hàng rào
+                # "cần ít nhất 1 ảnh": nó chặn đúng cách dùng đơn giản nhất của node.
                 ref_ids = [r["media_id"] for r in inp["references"]]
                 if not ref_ids and inp["media_id"]:
                     ref_ids = [inp["media_id"]]
-                if not ref_ids:
-                    raise GraphError("Omni Flash cần ít nhất 1 ảnh tham chiếu/nguồn")
                 used_model = OMNI_FLASH_MODELS.get(str(dur_v))
                 submit = lambda: client.generate_video_omni(
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,

@@ -650,12 +650,16 @@ class FlowClient:
             "seed": int(time.time()) % 10000,
             "textInput": {"structuredPrompt": {"parts": parts}},
             "videoModelKey": model_key,
-            "referenceImages": [
-                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET"}
-                for mid in ref_ids
-            ],
             "metadata": {},
         }
+        # Không ảnh nào ⇒ BỎ HẲN field, đừng gửi mảng rỗng: đây là lượt text-to-video hợp lệ
+        # (Omni Flash không bắt buộc phải có ảnh tham chiếu), mà `"referenceImages": []` là
+        # tự chuốc lấy một cách từ chối không cần thiết.
+        if ref_ids:
+            request["referenceImages"] = [
+                {"mediaId": mid, "imageUsageType": "IMAGE_USAGE_TYPE_ASSET"}
+                for mid in ref_ids
+            ]
 
         body = {
             "mediaGenerationContext": {
@@ -685,15 +689,15 @@ class FlowClient:
         """Generate video with Google's **Omni Flash** model.
 
         Same r2v endpoint/body as generate_video_from_references, but the model key
-        varies by duration (`abra_r2v_{4,6,8,10}s`). Omni is reference-conditioned, so
-        at least one reference image is required; aspect must be PORTRAIT or LANDSCAPE.
+        varies by duration (`abra_r2v_{4,6,8,10}s`). Aspect must be PORTRAIT or LANDSCAPE.
         Supports `{handle}` references in the prompt (structuredPrompt parts).
+
+        Ảnh tham chiếu là TUỲ CHỌN: không có ảnh nào thì đây là một lượt text-to-video, và
+        endpoint r2v nhận được — chỉ cần bỏ hẳn `referenceImages` khỏi request.
         """
         if aspect_ratio not in OMNI_FLASH_VALID_ASPECTS:
             return {"error": f"Omni Flash không hỗ trợ aspect {aspect_ratio} "
                              f"(chỉ PORTRAIT/LANDSCAPE)"}
-        if not (reference_media_ids or references):
-            return {"error": "Omni Flash cần ít nhất 1 reference image"}
         model_key = OMNI_FLASH_MODELS.get(str(duration_s))
         if not model_key:
             return {"error": f"Omni Flash không có model cho duration={duration_s}s "
