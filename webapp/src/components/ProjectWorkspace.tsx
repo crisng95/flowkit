@@ -77,9 +77,20 @@ export default function ProjectWorkspace({
 
   // Plain function (not a component) so the child element keeps its identity across
   // renders — only its visibility toggles. Unvisited tabs aren't rendered yet.
+  // Làm mới TỪNG TAB. Trước đây muốn thấy ảnh vừa sinh lại phải tải lại cả trang, rồi bấm
+  // mấy lượt và cuộn lại mới về đúng chỗ. Vì `pane` giữ mọi tab đã mở trong DOM (để job nền
+  // sống qua các lần chuyển tab), chỉ cần đổi `key` của riêng tab đang xem là React tháo rồi
+  // gắn lại đúng nhánh đó — mọi useEffect tải dữ liệu của nó chạy lại, còn các tab khác giữ
+  // nguyên trạng thái lẫn vị trí cuộn.
+  const [nonce, setNonce] = useState<Record<string, number>>({});
+  const refreshTab = (t: Tab) => {
+    setNonce((n) => ({ ...n, [t]: (n[t] ?? 0) + 1 }));
+    setReload((r) => r + 1);          // entity dùng chung cả workspace → nạp lại luôn
+  };
+
   const pane = (t: Tab, node: ReactNode) =>
     visited.has(t) ? (
-      <div key={t} className={tab === t ? "h-full" : "hidden"}>
+      <div key={`${t}:${nonce[t] ?? 0}`} className={tab === t ? "h-full" : "hidden"}>
         {node}
       </div>
     ) : null;
@@ -96,26 +107,44 @@ export default function ProjectWorkspace({
           }`}
         >
           {TABS.map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              title={railed ? `${i + 1}. ${t}` : undefined}
-              className={`flex items-center rounded-lg text-sm transition ${
-                railed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3 py-2"
-              } ${
-                tab === t
-                  ? "bg-neutral-700 text-white"
-                  : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
-              }`}
-            >
-              <span className="text-base leading-none">{TAB_ICON[t]}</span>
-              {!railed && (
-                <>
-                  <span className="text-xs text-neutral-500">{i + 1}.</span>
-                  <span className="truncate">{t}</span>
-                </>
+            // Hàng = nút chuyển tab + nút làm mới. Nút lồng trong nút là HTML không hợp lệ,
+            // nên bọc ngoài bằng div thay vì nhét ⟳ vào trong nút tab.
+            <div key={t} className="group/tab relative flex items-center">
+              <button
+                onClick={() => setTab(t)}
+                title={railed ? `${i + 1}. ${t}` : undefined}
+                className={`flex flex-1 items-center rounded-lg text-sm transition ${
+                  railed ? "justify-center px-0 py-2.5" : "gap-2.5 px-3 py-2"
+                } ${
+                  tab === t
+                    ? "bg-neutral-700 text-white"
+                    : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                }`}
+              >
+                <span className="text-base leading-none">{TAB_ICON[t]}</span>
+                {!railed && (
+                  <>
+                    <span className="text-xs text-neutral-500">{i + 1}.</span>
+                    <span className="truncate">{t}</span>
+                  </>
+                )}
+              </button>
+              {/* Chỉ tab ĐANG XEM mới có nút này: làm mới một tab đang ẩn thì chẳng để làm gì,
+                  mà lại tháo/gắn lại nhánh đó và mất trạng thái người dùng để dở trong nó. */}
+              {tab === t && (
+                <button
+                  onClick={() => refreshTab(t)}
+                  title={`Làm mới tab ${t} (không tải lại cả trang, giữ nguyên các tab khác)`}
+                  className={`shrink-0 rounded-lg text-neutral-400 transition hover:bg-neutral-600 hover:text-white ${
+                    railed
+                      ? "absolute right-0 top-0 bg-neutral-700/90 px-1 py-0.5 text-[10px]"
+                      : "ml-1 px-2 py-2 text-sm"
+                  }`}
+                >
+                  ⟳
+                </button>
               )}
-            </button>
+            </div>
           ))}
           <button
             onClick={() => setRailed((r) => !r)}
