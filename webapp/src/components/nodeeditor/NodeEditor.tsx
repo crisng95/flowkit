@@ -15,6 +15,7 @@ import {
   Controls,
   MiniMap,
   Handle,
+  NodeResizer,
   Position,
   addEdge,
   reconnectEdge,
@@ -217,6 +218,33 @@ const handleStyle = (color: string) => ({
   boxShadow: "0 0 0 1px rgba(255,255,255,0.15)",
 });
 
+// Bề ngang mặc định của mọi node. Node kéo giãn được ghi đè bằng `data.w`.
+const NODE_W = 228;
+
+/**
+ * Tay kéo giãn cho các node chứa prompt dài.
+ *
+ * Kích thước ghi vào `data.w/h` chứ KHÔNG để React Flow giữ ở `node.width/height`:
+ * `serializeGraph` chỉ lưu `{id, type, data, position}`, nên cỡ nằm ngoài `data` là mất
+ * sạch sau mỗi lần lưu/mở lại đồ thị.
+ *
+ * Đặt NGOÀI `Shell` (anh em, không phải con) vì Shell bật `overflow-hidden` khi node không
+ * mở menu — nằm trong thì bốn vạch kéo bị cắt mất.
+ */
+function SizeGrip({ id, visible, minH }: { id: string; visible: boolean; minH: number }) {
+  const { update } = useContext(NodeOps);
+  return (
+    <NodeResizer
+      isVisible={visible}
+      minWidth={NODE_W}
+      minHeight={minH}
+      lineClassName="!border-indigo-400/70"
+      handleClassName="!h-2.5 !w-2.5 !rounded-sm !border-indigo-300 !bg-indigo-500"
+      onResize={(_, p) => update(id, { w: Math.round(p.width), h: Math.round(p.height) })}
+    />
+  );
+}
+
 // The node's "định danh": the token a downstream prompt uses to give this picture a role.
 // Left blank it falls back to `autoHandle` (shown as the placeholder), which is what the
 // backend does too — so an untouched graph behaves exactly as before.
@@ -283,6 +311,8 @@ function Shell({
   inputs = true,
   outputs = true,
   clip = true,
+  width,
+  height,
 }: {
   type: string;
   id?: string;
@@ -293,15 +323,19 @@ function Shell({
   // Nodes that pop a menu out past their own edge (the prompt autocomplete) must not clip,
   // otherwise the list is sliced off at the node border and only its first row shows.
   clip?: boolean;
+  // Node kéo giãn được truyền kích thước vào đây (px). Có `height` thì thân node chuyển sang
+  // flex dọc để ô nội dung ăn hết chỗ thừa — không thì kéo cao ra chỉ được khoảng trống.
+  width?: number;
+  height?: number;
 }) {
   const { remove, duplicate } = useContext(NodeOps);
   const m = META[type] || META.output;
   return (
     <div
-      className={`w-[228px] rounded-xl border border-neutral-700/80 bg-[#0e1411] shadow-xl ${
+      className={`rounded-xl border border-neutral-700/80 bg-[#0e1411] shadow-xl ${
         clip ? "overflow-hidden" : ""
-      }`}
-      style={{ borderTopColor: m.color, borderTopWidth: 3 }}
+      } ${height ? "flex flex-col" : ""}`}
+      style={{ borderTopColor: m.color, borderTopWidth: 3, width: width ?? NODE_W, height }}
     >
       <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-300">
         <span style={{ color: m.color }}>{m.icon}</span>
@@ -326,7 +360,9 @@ function Shell({
         )}
       </div>
       {id && data && HANDLE_TYPES.has(type) && <HandleField id={id} type={type} data={data} />}
-      <div className="space-y-2 px-3 pb-3">{children}</div>
+      <div className={`space-y-2 px-3 pb-3 ${height ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+        {children}
+      </div>
       {inputs && <Handle type="target" position={Position.Left} style={handleStyle(m.color)} />}
       {outputs && <Handle type="source" position={Position.Right} style={handleStyle(m.color)} />}
     </div>
@@ -547,9 +583,11 @@ function SourceNode({ id, data }: NodeProps) {
   );
 }
 
-function PromptNode({ id, data }: NodeProps) {
+function PromptNode({ id, data, selected }: NodeProps) {
   const { update, entities, bindEntitySource, bindNodeSource, handles } = useContext(NodeOps);
   const d = data as any;
+  // Kéo giãn được: prompt shot dài vài đoạn, xem qua khe 228×96 thì phải cuộn mò từng dòng.
+  const grown = !!d.h;
   // Local state for the textarea so typing updates synchronously and the caret stays put.
   // Binding `value` straight to node data round-trips through React Flow's store, which
   // reverts the value for a frame on each keystroke and jumps the cursor to the end.
@@ -681,8 +719,10 @@ function PromptNode({ id, data }: NodeProps) {
   };
 
   return (
-    <Shell type="prompt" id={id} inputs={false} clip={!menu && !active}>
-      <div className="relative">
+    <>
+      <SizeGrip id={id} visible={!!selected} minH={160} />
+      <Shell type="prompt" id={id} inputs={false} clip={!menu && !active} width={d.w} height={d.h}>
+      <div className={`relative ${grown ? "flex min-h-0 flex-1 flex-col" : ""}`}>
         {/* Lớp nền: cùng hộp, cùng font, cùng cách xuống dòng với textarea, nhưng CHỮ TRONG
             SUỐT — chỉ vẽ nền cho token. Chữ thật vẫn là của textarea nằm trên (nền của nó đặt
             trong suốt bằng style inline, vì fieldCls cũng có bg-neutral-900 và hai class cùng
@@ -728,7 +768,9 @@ function PromptNode({ id, data }: NodeProps) {
         </div>
         <textarea
           ref={taRef}
-          className={`${fieldCls} nowheel relative h-24 resize-none leading-snug`}
+          className={`${fieldCls} nowheel relative resize-none leading-snug ${
+            grown ? "min-h-0 flex-1" : "h-24"
+          }`}
           style={{ backgroundColor: "transparent", scrollbarGutter: "stable" }}
           value={text}
           placeholder="Nhập prompt…"
@@ -832,10 +874,11 @@ function PromptNode({ id, data }: NodeProps) {
           </div>
         )}
       </div>
-      <div className="text-[10px] text-neutral-500">
+      <div className="shrink-0 text-[10px] text-neutral-500">
         {'ⓘ gõ "{" để gọi đích danh một ảnh (định danh); bấm vào token đã tô nền để đổi ảnh hoặc xoá'}
       </div>
-    </Shell>
+      </Shell>
+    </>
   );
 }
 
@@ -1349,28 +1392,35 @@ function ReplaceBgNode({ id, data }: NodeProps) {
 // Bọc ngoài prompt của node tạo ảnh/video mà nó nối tới. Trước đây header/footer của ⚙ Cấu
 // hình dự án được chèn ngầm vào MỌI prompt; giờ trong node editor nó chỉ vào khi có node này
 // trên canvas, nên nhìn đồ thị là biết prompt thật sự gồm những gì.
-function PromptWrapNode({ id, data, type }: NodeProps) {
+function PromptWrapNode({ id, data, type, selected }: NodeProps) {
   const { update, projectHeader, projectFooter } = useContext(NodeOps);
   const d = data as any;
   const isHeader = type === "promptHeader";
   // Bỏ trống = dùng giá trị của dự án (sửa ở Thiết lập là mọi graph ăn theo).
   const fallback = (isHeader ? projectHeader : projectFooter) || "";
+  // Header của dự án dài tới sáu đoạn — cùng lý do với node Prompt, cho kéo giãn.
+  const grown = !!d.h;
   return (
-    <Shell type={type} id={id} outputs>
+    <>
+      <SizeGrip id={id} visible={!!selected} minH={140} />
+      <Shell type={type} id={id} outputs width={d.w} height={d.h}>
       <textarea
-        className={`${fieldCls} nowheel h-20 resize-y leading-snug`}
+        className={`${fieldCls} nowheel leading-snug ${
+          grown ? "min-h-0 flex-1 resize-none" : "h-20 resize-y"
+        }`}
         value={d.text ?? ""}
         placeholder={fallback ? `(theo dự án) ${fallback}` : "Bỏ trống = theo ⚙ Thiết lập dự án"}
         onChange={(e) => update(id, { text: e.target.value })}
       />
-      <div className="text-[10px] text-neutral-500">
+      <div className="shrink-0 text-[10px] text-neutral-500">
         {d.text?.trim()
           ? isHeader ? "ⓘ chèn vào ĐẦU prompt" : "ⓘ chèn vào CUỐI prompt"
           : fallback
             ? "ⓘ đang dùng giá trị của dự án"
             : "⚠ dự án chưa đặt — node này không chèn gì"}
       </div>
-    </Shell>
+      </Shell>
+    </>
   );
 }
 
