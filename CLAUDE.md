@@ -107,6 +107,24 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   vụn ra hàng chục mảnh và cũng 400. Đừng đổ cho prompt dài — 9306 ký tự chạy tốt, 6078 ký tự vẫn
   hỏng khi part bị vụn. Triệu chứng đánh lừa: agent báo *"Flow không trả media (có thể bị chặn)"*
   vì `res["error"]` rỗng; muốn thấy mã lỗi thật thì gửi lại qua `POST /api/flow/generate-image`.
+- **Flow thay reference part bằng CHÚ THÍCH TỰ SINH của ảnh đó — nên ảnh ref là bảng sheet thì
+  model được bảo vẽ một bảng sheet.** Tên handle KHÔNG đi lên model: đo trên cùng hai ảnh, handle
+  `{Mai}`/`{Phố Hàng Mã}` và handle vô nghĩa `{nhan vat}`/`{boi canh}` cho prompt tới Flow **giống
+  hệt nhau từng ký tự** — `"Character design sheet for a woman walking down a street, in the style
+  of the first image. The street is a rainy street market with lanterns, as seen in the second
+  image."` Sheet 13 mục của nhân vật bị chú thích thành *"Character design sheet"*, và câu ấy đứng
+  ĐẦU prompt: 3/3 biến thể ra lại một bảng 13 mục có tiêu đề + bảng màu + ô chất liệu, hoặc người
+  cao bằng cả khung kèm panel chi tiết dán bên cạnh — thứ trông như "lỗi tỷ lệ" thật ra là layout
+  sheet còn sót. Hệ quả: **ảnh ref nên là ảnh mà chú thích tự nhiên của nó ĐÚNG là thứ ta muốn nói**
+  (một con người, một con phố). Bật `project.character_one` để ảnh nhân vật là một ảnh toàn thân
+  thay vì bảng. Kèm theo, guard khung đơn bật cho MỌI node ảnh có ref, không chỉ shot
+  ([graph.py](agent/studio/graph.py)). Muốn biết model thật sự nhận gì thì đọc
+  `response.media[].image.generatedImage.prompt` — đừng đoán từ prompt mình gửi.
+  Cũng ở đó: prompt tiếng Việt nhắc lại tên entity bằng chữ (do `dedupe_refs` hạ lần nhắc thứ hai
+  xuống chữ thường) làm bản dịch **rụng mất hai mệnh đề trỏ ảnh** "in the style of the first image"
+  / "as seen in the second image", chỉ còn mô tả bằng lời → model tự bịa một bối cảnh khớp mô tả.
+  Prompt tiếng Anh mô tả KẾT QUẢ (kèm mốc neo tỷ lệ: "her head reaches the height of the shop
+  doorways, she occupies one third of the frame height") giữ nguyên văn và ra đúng 4/4 lượt.
 - **`bind_unreferenced` cho ảnh người dùng CỐ Ý nối vào.** Reference mà prompt không gọi tên chỉ
   đi lên dưới dạng `imageInputs` vô danh và model gần như bỏ qua — kết quả trông như một lượt sinh
   mới, chẳng liên quan ảnh tham chiếu, và trên Flow thì workflow hiện ra "không có ảnh tham chiếu
