@@ -856,6 +856,24 @@ def cine_spec(project: dict | None = None) -> str:
     return prompt_part(project, "cine_continuous" if shot_continuity(project) else "cine")
 
 
+def frame_change_rule(project: dict | None = None) -> str:
+    """Luật LIÊN KHUNG, nhúng vào phần mô tả `description` của các prompt viết shot.
+
+    Ba prompt (autofill storyboard, tách beat, đổi góc máy) trước đây chép cứng câu "khung sau
+    PHẢI KHÁC khung trước" ngay trong phần hướng dẫn từng trường, ngoài khối CINEMATOGRAPHY.
+    Bật `shot_continuity` mà không đổi luôn mấy câu này thì prompt tự mâu thuẫn: khối lớn bảo
+    nối tiếp, câu nhỏ bảo phải khác — và câu nhỏ đứng ngay cạnh tên trường nên thường thắng."""
+    if shot_continuity(project):
+        return ("It must CONTINUE the previous frame instead of contrasting with it: hold the "
+                "same screen direction and stay on the same side of the 180° line, carry the "
+                "subject a few steps further through the SAME space, and step the shot size by "
+                "ONE notch (wide → full → medium → close, or the reverse) with at least a 30° "
+                "change of angle — so the frames cut together as one continuous action")
+    return ("The shot size AND angle MUST DIFFER from the previous frame's (alternate wide / "
+            "medium / close and change the angle/height) so consecutive frames cut together "
+            "with rhythm instead of looking like the same shot repeated")
+
+
 def motion_spec(engine: str = "veo", clip_s: int = 8,
                 project: dict | None = None) -> str:
     """Khối hướng dẫn viết `motion_prompt`, có thêm phần mốc thời gian khi engine là Omni.
@@ -908,9 +926,7 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "- `description`: a vivid image-generator prompt that MUST begin by naming the "
         "location, then a SPECIFIC shot size + camera angle/height for THIS frame, then the "
         "action — e.g. \"At {Khu rừng}, low-angle medium close-up, {Mai} opens the wooden "
-        "door...\". The shot size AND angle MUST DIFFER from the previous frame's (alternate "
-        "wide / medium / close and change the angle/height) so consecutive frames cut together "
-        "with rhythm instead of looking like the same shot repeated.\n"
+        "door...\". " + frame_change_rule(project) + ".\n"
         "- `visual_prompt`: the full camera setup + what is on screen for an image-to-video "
         "model — keep the SAME entity references.\n"
         "- `motion_prompt`: the camera move + the concrete action that happens during the "
@@ -1208,9 +1224,8 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
         "- `text`: the verbatim voiceover slice for this beat.\n"
         "- `beat_action`: the concrete action happening on screen.\n"
         "- `description`: image prompt beginning with the location then a SPECIFIC shot size + "
-        "camera angle/height (which MUST DIFFER from the previous beat's — alternate "
-        "wide/medium/close and change the angle so beats don't look like one repeated shot), "
-        "then the action, e.g. \"At {Làng}, low-angle wide shot, {Tấm} scrubs the porch...\".\n"
+        "camera angle/height, then the action, e.g. \"At {Làng}, low-angle wide shot, {Tấm} "
+        "scrubs the porch...\". " + frame_change_rule(project) + ".\n"
         "- `visual_prompt`: the full camera setup + what is on screen (same entity refs).\n"
         "- `motion_prompt`: camera move + action during the clip (same entity refs).\n"
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"
@@ -1265,17 +1280,18 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
     return (
         f"An existing storyboard scene has {len(shots)} shots, in order, listed below by their "
         "action. Keep the story, the ORDER, the NUMBER of shots and each shot's action EXACTLY "
-        "as is — change ONLY the camera so consecutive shots no longer share the same framing.\n"
+        "as is — change ONLY the camera.\n"
         f"{loc_line}\n"
         "For EACH shot (same index, same order) return a NEW `description` (image prompt: begin "
-        "with the location, then a SPECIFIC shot size + camera angle/height that DIFFERS from the "
-        "previous shot, then the SAME action), plus a matching `visual_prompt` and `motion_prompt`. "
+        "with the location, then a SPECIFIC shot size + camera angle/height, then the SAME "
+        "action; " + frame_change_rule(project) + "), plus a matching `visual_prompt` and "
+        "`motion_prompt`. "
         "Wrap EVERY character/location/prop name in curly braces exactly as listed so it binds to "
         "its reference image (a character that acts in the shot MUST be wrapped and present).\n"
         f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
         f"Visual style: {style}.\n\nAVAILABLE ENTITIES:\n{roster}\n\nSHOTS (in order):\n{listing}\n\n"
         "Return ONLY a JSON array with EXACTLY one object per shot, in order: "
-        "[{\"idx\":0,\"description\":\"At {Loc}, <distinct shot size+angle>, <same action> {Entity}...\","
+        "[{\"idx\":0,\"description\":\"At {Loc}, <shot size+angle>, <same action> {Entity}...\","
         "\"visual_prompt\":\"...\",\"motion_prompt\":\"...\"}]"
     )
 
