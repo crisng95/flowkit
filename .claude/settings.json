@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit*)",
+      "Bash(objdump -d *)",
+      "Bash(curl -s http://127.0.0.1:8100/health*)",
+      "Bash(curl -s http://127.0.0.1:8100/api/flow/credits*)",
+      "mcp__blender-bridge__blender_screenshot",
+      "mcp__blender-bridge__blender_status",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ]
+  }
+}

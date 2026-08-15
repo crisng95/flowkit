@@ -463,10 +463,24 @@ _SHEET = {
     # ta muốn nói về nhân vật. Ép luôn TOÀN THÂN + chính diện + nền trơn: đó là ảnh mang nhiều
     # thông tin nhận dạng nhất trong một khung (mặt, dáng, trang phục, giày), và nền trơn để
     # chú thích không lẫn bối cảnh vào.
-    "character_one": ("ONE single full-body reference image of the character, standing "
-                      "front-facing in a relaxed neutral pose, head to feet fully visible, "
-                      "looking at the camera with a neutral expression, on a plain solid "
-                      "white background. The background is EMPTY WHITE — no street, no "
+    "character_one": ("ONE single full-body reference image of the character, front-facing in "
+                      "a relaxed neutral pose, the whole body fully visible, looking at the "
+                      "camera with a neutral expression, on a plain solid white background. "
+                      # `character` gồm CẢ người mọi lứa tuổi LẪN động vật (xem
+                      # entity_extract_prompt), nên mẫu không được mặc định là một người trẻ:
+                      # câu "adolescent proportions … She stands" từng biến entity Mèo thành
+                      # một cô gái và trẻ hoá entity Bà cụ. Tuổi/loài LUÔN lấy từ mô tả, phần
+                      # chống chibi chỉ áp cho người.
+                      "Species, age and body come from the description above and nothing "
+                      "else: an animal is drawn as that animal with its own natural anatomy "
+                      "on all fours if that is how it stands, an elderly person is elderly, a "
+                      "child is a child. Never turn an animal into a person or a person into "
+                      "an animal, and never make the subject younger or older than described. "
+                      "When the subject IS human, use realistic human proportions — roughly "
+                      "seven to seven and a half heads tall, the head small relative to the "
+                      "body — never a chibi, super-deformed, mascot or doll figure, never an "
+                      "oversized head, a head as wide as the shoulders or stubby limbs. "
+                      "The background is EMPTY WHITE — no street, no "
                       "buildings, no shopfronts, no vehicles, no furniture, no landscape, no "
                       "scenery of any kind, however strongly the text above describes a "
                       "place; any setting mentioned earlier belongs to other images, not to "
