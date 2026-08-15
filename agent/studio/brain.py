@@ -614,14 +614,17 @@ _SHEET = {
 #
 # Đọc lỗi (thiếu file, JSON hỏng) → rơi về mẫu một-sheet cũ ở `_SHEET["character"]` thay vì
 # làm sập cả agent: một sheet nhân vật kém đẹp còn hơn không sinh được ảnh nào.
-_BIBLE_FILE = Path(__file__).parent.parent.parent / "presets" / "character-sheet-prompt.json"
+# Bible nhân vật ở dạng VĂN XUÔI. Trước đây là JSON thô 22KB nhét thẳng vào prompt, trong
+# khi mọi khối ngầm khác đều là văn xuôi — và chính nó bảo model đọc "the character
+# description written immediately before this JSON", một ranh giới không nhìn thấy được khi
+# các khối đã nối thành đoạn văn. Bản .txt sinh ra bằng máy từ file JSON cũ (khoá lồng nhau
+# thành đề mục đánh số, mảng thành câu ngăn bằng dấu chấm phẩy) nên nội dung y nguyên.
+_BIBLE_FILE = Path(__file__).parent.parent.parent / "presets" / "character-sheet-prompt.txt"
 
 
 def _character_bible() -> str:
     try:
-        text = _BIBLE_FILE.read_text(encoding="utf-8").strip()
-        json.loads(text)          # chỉ để chắc file không hỏng; gửi đi là bản THÔ
-        return text
+        return _BIBLE_FILE.read_text(encoding="utf-8").strip()
     except (OSError, ValueError) as e:
         logger.warning("Không đọc được %s (%s) — dùng mẫu sheet nhân vật cũ",
                        _BIBLE_FILE.name, e)
