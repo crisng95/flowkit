@@ -262,9 +262,19 @@ export default function ShotsTab({
                   />
                   );
                 })}
+                <button
+                  onClick={async () => {
+                    await storyboard.addShot(sc.id);
+                    loadShots(sc.id);
+                  }}
+                  title="Thêm shot vào cuối scene"
+                  className="aspect-video rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                >
+                  +
+                </button>
                 {!list.length && (
-                  <div className="col-span-full rounded-xl border border-dashed border-neutral-800 py-6 text-center text-xs text-neutral-600">
-                    Chưa có frame — làm Storyboard trước.
+                  <div className="col-span-full text-xs text-neutral-600">
+                    Chưa có frame — làm Storyboard trước, hoặc bấm + để tự thêm shot.
                   </div>
                 )}
               </div>
