@@ -548,7 +548,7 @@ function PickCard({
       className="group overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50 text-left transition hover:border-indigo-500 disabled:opacity-50"
     >
       <div className="relative">
-        <Thumb src={src} alt={title} rounded="rounded-none" className="aspect-video w-full" />
+        <Thumb src={src} alt={title} rounded="rounded-none" crop={false} className="aspect-video w-full" />
         <div className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/50">
           <span className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
             {busy ? "Đang xử lý…" : actionLabel}
