@@ -129,6 +129,29 @@ export default function ShotsTab({
     }
   };
 
+  // Xoá shot. Hỏi lại khi shot đã có video: một clip đã render là ~20 credit, xoá nhầm là
+  // mất tiền thật — shot rỗng thì xoá thẳng, đừng bắt bấm hai lần vô ích.
+  const delShot = async (sh: Shot) => {
+    if (
+      sh.video_path &&
+      !(await confirm({
+        title: "Xoá shot?",
+        message: `"${sh.title || `Shot ${sh.idx + 1}`}" đã có video render — xoá là mất luôn clip đó.`,
+        confirmText: "Xoá",
+        danger: true,
+      }))
+    )
+      return;
+    setErr(null);
+    try {
+      await storyboard.deleteShot(sh.id);
+      if (sel?.id === sh.id) setSel(null);
+      await loadShots(sh.scene_id);
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+
   // Render all shots (have image, no video) as a server-side background job (§9):
   // survives tab close, throttled + verified server-side, streams to the banner.
   const genAll = async () => {
@@ -256,6 +279,16 @@ export default function ShotsTab({
                           className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-indigo-600"
                         >
                           ⚡
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            delShot(sh);
+                          }}
+                          title="Xoá shot"
+                          className="grid h-7 w-7 place-items-center rounded-md bg-neutral-900/80 text-sm hover:bg-rose-600"
+                        >
+                          🗑
                         </button>
                       </>
                     }
