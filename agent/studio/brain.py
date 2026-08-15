@@ -238,25 +238,38 @@ def parse_scenes(script: str) -> list[dict]:
 # turnarounds + expression rows, prop multi-angle sheets). Without this, the model copies
 # that sheet layout into the frame. This forces a single coherent photograph. Used only on
 # the frame path, never when generating the reference art itself.
+#
+# Luật tách theo LOẠI ref, vì hai loại cần hai thứ NGƯỢC NHAU: ref nhân vật/đạo cụ chỉ khoá
+# danh tính và phải bỏ qua tư thế/khung hình, còn ref bối cảnh thì CHÍNH LÀ nơi chốn, phải
+# chép lại trung thành. Bản cũ gộp làm một nên câu "ignore its framing" và nhất là câu "do
+# not reproduce any text/labels that appear in the references" (viết để chặn nhãn "Nhìn
+# thẳng / Góc 3/4" của sheet) đọc thành luật chung: model được lệnh ĐỔI biển hiệu của con
+# phố, và nó đổi — "HIỆU ĐÈN LỒNG HÀNG MÃ" ra thành "PHỞ GIA TRUYỀN", "CÀ PHÊ SỮA ĐÁ" ở 2/3
+# lượt đo. Chữ TRONG THẾ GIỚI khác chữ CHÚ THÍCH của bảng sheet; đừng cấm chung.
 _SINGLE_FRAME = (
     "Render ONE single unified cinematic frame from a SINGLE camera angle — one continuous "
-    "photographic moment, not a composite. The attached reference images (character turnaround "
-    "& expression sheets, prop multi-angle sheets, a location establishing shot) are there ONLY "
-    "to keep identity, costume, architecture, materials, colour and lighting consistent. Do NOT "
-    "reproduce any reference-sheet layout: no grid, no 2x2, no multi-panel or split screen, no "
-    "collage, no turnaround row, no side-by-side angles, no plain white reference backdrop. "
-    "Each named character must match its OWN reference image in IDENTITY ONLY — face, hair, "
-    "skin, build, age and costume — never swap, blend or mix up faces, hair or costumes between "
-    "characters, and do NOT add any extra people who are not named in this shot. The reference "
-    "does NOT dictate POSE: ignore its A-pose/stance, its expression, its gaze direction, its "
-    "body orientation, its framing, and — when a reference happens to show more than one person "
-    "— the way those people are arranged relative to each other. Pose, angle and spacing must be "
-    "invented FRESH for THIS shot's action and camera setup, and must differ from other shots; "
-    "characters interact with the scene and each other as the action demands. Never paste a "
-    "character in as a rigid cut-out standing the way the reference sheet shows. Compose THIS "
-    "shot at its own specified shot size and camera angle. Render NO text, labels, captions, "
-    "annotations, callouts or watermarks, and do not reproduce any text/labels that appear in "
-    "the references"
+    "photographic moment, not a composite. Do NOT reproduce any reference-sheet layout: no "
+    "grid, no 2x2, no multi-panel or split screen, no collage, no turnaround row, no side-by-"
+    "side angles, no plain white reference backdrop.\n\n"
+    "CHARACTER and PROP references fix IDENTITY ONLY — face, hair, skin, build, age, costume, "
+    "an object's shape and materials. Never swap, blend or mix up faces, hair or costumes "
+    "between characters, and do NOT add any extra people who are not named in this shot. They "
+    "do NOT dictate POSE: ignore the A-pose/stance, the expression, the gaze direction, the "
+    "body orientation, the framing, and — when a reference happens to show more than one "
+    "person — the way those people are arranged relative to each other. Pose, angle and "
+    "spacing must be invented FRESH for THIS shot's action and camera setup, and must differ "
+    "from other shots; characters interact with the scene and each other as the action "
+    "demands. Never paste a character in as a rigid cut-out standing the way the reference "
+    "shows.\n\n"
+    "A LOCATION reference is the opposite: it IS the place, not a mood board. Reproduce it "
+    "faithfully — the same buildings, shopfronts, awnings, goods on display, street furniture, "
+    "parked vehicles, foliage, lighting and their arrangement, and the SAME wording on every "
+    "sign and banner, spelled the same way. Only the camera angle, the framing and the people "
+    "in it may change; never redesign the street, rename the shops or swap in different "
+    "businesses.\n\n"
+    "Add no annotations of your own — no captions, view labels, callouts, subtitles or "
+    "watermarks. Text that belongs to the world (shop signs, banners, posters) stays, and is "
+    "reproduced faithfully from the location reference"
 )
 
 # Phần PHỤ của guard trên, CHỈ chèn khi bối cảnh của dự án dùng lưới 4 khung
