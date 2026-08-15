@@ -441,6 +441,26 @@ _SHEET = {
                   "include no companion, partner, child or bystander. No scene, no extra props, "
                   "no ground shadow, studio reference. Do NOT draw any text, titles, captions, "
                   "view labels or watermarks on the sheet — clean art only"),
+    # Biến thể MỘT ẢNH của nhân vật (`project.character_one == 1`): KHÔNG bảng, KHÔNG panel.
+    #
+    # Lý do tồn tại: Flow thay mỗi reference part bằng CHÚ THÍCH TỰ SINH của ảnh đó, nên ảnh
+    # ref là bảng sheet thì mọi shot dùng nhân vật ấy đều mở đầu bằng "Character design sheet
+    # for a woman ..." — model được bảo vẽ một cái bảng và nó vẽ đúng thế. Ảnh ref là một
+    # người đứng trên nền trơn thì chú thích ấy là "a woman in a white ao dai", tức đúng thứ
+    # ta muốn nói về nhân vật. Ép luôn TOÀN THÂN + chính diện + nền trơn: đó là ảnh mang nhiều
+    # thông tin nhận dạng nhất trong một khung (mặt, dáng, trang phục, giày), và nền trơn để
+    # chú thích không lẫn bối cảnh vào.
+    "character_one": ("ONE single full-body reference image of the character, standing "
+                      "front-facing in a relaxed neutral pose, head to feet fully visible, "
+                      "looking at the camera with a neutral expression, on a plain solid "
+                      "white background. NOT a sheet, NOT a grid, no panels, no multi-view "
+                      "turnaround, no expression row, no collage, no inset detail boxes. "
+                      "EXACTLY ONE individual — never two or more people, never a couple, "
+                      "pair, family or group, even if the description above mentions other "
+                      "people (they are separate entities with their own images); include no "
+                      "companion, partner, child or bystander. Even soft studio lighting, no "
+                      "scene, no extra props, no ground shadow. Do NOT draw any text, titles, "
+                      "captions, labels or watermarks — clean art only"),
     "prop": ("object design sheet, multiple angles (front, 3/4, side, top), single isolated "
              "object on plain solid white background, no background scene, no shadow, "
              "studio product reference. Do NOT draw any text, titles, captions, view labels or "
@@ -499,6 +519,18 @@ def _character_bible() -> str:
 LOCATION_GRID_LABELS = ["Toàn cảnh", "Góc ngược", "Trên cao", "Cận cảnh"]
 
 
+def character_one(project: dict | None) -> bool:
+    """Ảnh tham chiếu của một NHÂN VẬT là MỘT ẢNH (True) hay bảng sheet nhiều mục (False).
+
+    Mặc định False = giữ bảng "Character Production Bible" 13 mục. Bật lên khi shot bị lây
+    layout bảng: chú thích tự sinh của ảnh ref chui vào prompt shot, mà chú thích của một cái
+    bảng thì là "character design sheet" — xem `_SHEET["character_one"]`."""
+    try:
+        return int((project or {}).get("character_one") or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
 def location_frames(project: dict | None) -> int:
     """Ảnh tham chiếu của một bối cảnh là LƯỚI 4 GÓC MÁY (4, mặc định) hay MỘT ẢNH (1).
 
@@ -532,6 +564,8 @@ def ref_image_prompt(entity_type: str, name: str, description: str,
     key = entity_type
     if entity_type == "location" and location_frames(project) == 1:
         key = "location_one"
+    elif entity_type == "character" and character_one(project):
+        key = "character_one"
     rule = (prompt_part(project, f"sheet_{key}") if f"sheet_{key}" in PROMPT_DEFAULTS
             else "clean reference image")
     return join_blocks(base, rule) if rule else base
@@ -631,6 +665,7 @@ PROMPT_DEFAULTS: dict[str, str] = {
     "video_text": _VIDEO_TEXT,
     # Bible 13 mục nếu đọc được file preset, không thì mẫu một-sheet cũ.
     "sheet_character": _character_bible() or _SHEET["character"],
+    "sheet_character_one": _SHEET["character_one"],
     "sheet_prop": _SHEET["prop"],
     "sheet_location": _SHEET["location"],
     "sheet_location_one": _SHEET["location_one"],

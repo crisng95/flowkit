@@ -62,6 +62,7 @@ export default function SettingsTab({
   const [tpl, setTpl] = useState<Record<string, string>>(() =>
     Object.fromEntries(PROMPT_KEYS.map((k) => [k, (project as any)[`tpl_${k}`] ?? ""])));
   const [locFrames, setLocFrames] = useState(project.location_frames === 1 ? 1 : 4);
+  const [charOne, setCharOne] = useState(!!project.character_one);
   const [shotDuration, setShotDuration] = useState(project.shot_duration ?? 8);
   const [storytelling, setStorytelling] = useState(!!project.storytelling);
   const [autoHires, setAutoHires] = useState(!!project.auto_hires);
@@ -147,6 +148,7 @@ export default function SettingsTab({
         auto_hires: autoHires, auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
         tts_speed: ttsSpeed, tts_gap: ttsGap, tts_sentence_gap: ttsSentenceGap,
         tts_edge_pad: ttsEdgePad, seed, location_frames: locFrames,
+        character_one: charOne ? 1 : 0,
         ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
       });
       onSaved(updated);
@@ -231,11 +233,12 @@ export default function SettingsTab({
     ...PROMPT_KEYS.map((k) => `tpl_${k}`)] as const;
   const NUM_KEYS = ["shot_duration", "seed", "bgm_volume", "voice_id",
     "tts_speed", "tts_gap", "tts_sentence_gap", "tts_edge_pad", "location_frames"] as const;
-  const BOOL_KEYS = ["storytelling", "auto_hires", "auto_upscale_video", "bgm_duck"] as const;
+  const BOOL_KEYS = ["storytelling", "auto_hires", "auto_upscale_video", "bgm_duck",
+    "character_one"] as const;
 
   const collectSettings = () => ({
     ...s, ...Object.fromEntries(PROMPT_KEYS.map((k) => [`tpl_${k}`, tpl[k] ?? ""])),
-    location_frames: locFrames,
+    location_frames: locFrames, character_one: charOne,
     shot_duration: shotDuration, storytelling, auto_hires: autoHires,
     auto_upscale_video: autoUpVideo, upscale_res: upscaleRes,
     seed, bgm_volume: bgmVol, bgm_duck: bgmDuck, bgm_path: bgmPath,
@@ -297,6 +300,7 @@ export default function SettingsTab({
       }));
       setTpl(Object.fromEntries(PROMPT_KEYS.map((k) => [k, (u as any)[`tpl_${k}`] ?? ""])));
       if (u.location_frames != null) setLocFrames(u.location_frames === 1 ? 1 : 4);
+      if (u.character_one != null) setCharOne(!!u.character_one);
       if (u.shot_duration != null) setShotDuration(u.shot_duration);
       if (u.storytelling != null) setStorytelling(!!u.storytelling);
       if (u.auto_hires != null) setAutoHires(!!u.auto_hires);
@@ -535,6 +539,32 @@ export default function SettingsTab({
                       {(opts?.image_models || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </Field>
+                </Group>
+
+                <Group
+                  title="Ảnh tham chiếu nhân vật"
+                  hint="Áp dụng cho các lần sinh ảnh nhân vật SAU. Ảnh cũ giữ nguyên — muốn đổi thì tạo lại ảnh của entity đó."
+                >
+                  <label className="flex items-start gap-2.5 text-sm text-neutral-300">
+                    <input type="checkbox" checked={charOne}
+                      onChange={(e) => setCharOne(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-indigo-500" />
+                    <span>
+                      Tạo ảnh tham chiếu <b>đơn</b> cho nhân vật
+                      <span className="mt-1 block text-xs leading-relaxed text-neutral-500">
+                        Một ảnh toàn thân chính diện trên nền trơn, thay cho bảng sheet nhiều
+                        mục. Flow mô tả ảnh tham chiếu bằng lời rồi ghép mô tả đó vào prompt của
+                        shot — bảng sheet bị nó gọi là “character design sheet”, nên shot hay ra
+                        lại một cái bảng hoặc người cao bằng cả khung kèm panel chi tiết. Ảnh đơn
+                        thì được gọi đúng là một con người.
+                      </span>
+                    </span>
+                  </label>
+                  <p className="text-xs leading-relaxed text-neutral-600">
+                    Đổi lại: mất các góc nghiêng/sau và dải biểu cảm, nên khung quay lưng hay
+                    nhìn nghiêng model phải tự suy ra. Mẫu prompt tương ứng ở nhóm{" "}
+                    <b>🧩 Prompt ngầm</b> (“Nhân vật — một ảnh”).
+                  </p>
                 </Group>
 
                 <Group

@@ -39,6 +39,10 @@ export interface Project {
   upscale_res?: string | null;
   // Ảnh tham chiếu của một BỐI CẢNH: 4 = lưới 2x2 bốn góc máy (mặc định), 1 = một ảnh.
   location_frames?: number | null;
+  // Ảnh tham chiếu của một NHÂN VẬT: 0 = bảng sheet nhiều mục (mặc định), 1 = một ảnh toàn
+  // thân chính diện. Bảng sheet bị Flow chú thích là "character design sheet" và câu đó chui
+  // vào prompt của mọi shot dùng nhân vật ấy.
+  character_one?: number | null;
   // Chế độ music video: playlist `music_track` là tiếng duy nhất và quyết định độ dài video.
   // Sửa qua PATCH /music/settings (không phải updateProject) — xem api.musicSettings.
   music_mode?: number | null;
@@ -50,6 +54,7 @@ export interface Project {
   tpl_image_text?: string | null;
   tpl_video_text?: string | null;
   tpl_sheet_character?: string | null;
+  tpl_sheet_character_one?: string | null;
   tpl_sheet_prop?: string | null;
   tpl_sheet_location?: string | null;
   tpl_sheet_location_one?: string | null;
@@ -64,7 +69,8 @@ export interface Project {
 // (GET /api/studio/options → prompt_defaults); dự án ghi đè qua cột `tpl_<key>`.
 export const PROMPT_KEYS = [
   "single_frame", "single_frame_grid", "image_text", "video_text",
-  "sheet_character", "sheet_prop", "sheet_location", "sheet_location_one",
+  "sheet_character", "sheet_character_one", "sheet_prop",
+  "sheet_location", "sheet_location_one",
   "cine", "motion", "omni_timeline",
 ] as const;
 export type PromptKey = (typeof PROMPT_KEYS)[number];

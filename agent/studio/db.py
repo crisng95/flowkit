@@ -197,11 +197,15 @@ _MIGRATIONS = [
     # Toàn cảnh/Góc ngược/Trên cao/Cận cảnh lên bản hiển thị), 1 = một ảnh một góc máy
     # (không lưới, không dán nhãn). Xem brain.location_frames().
     ("project", "location_frames", "INTEGER DEFAULT 4"),
+    # Ảnh tham chiếu của một NHÂN VẬT: 0 = bảng "Character Production Bible" 13 mục (mặc
+    # định), 1 = MỘT ảnh toàn thân chính diện nền trơn. Xem brain.character_one().
+    ("project", "character_one", "INTEGER DEFAULT 0"),
     # Ghi đè các PROMPT NGẦM (brain.PROMPT_DEFAULTS): trống = dùng mặc định trong code,
     # "-" = tắt hẳn khối đó. Mỗi cột ứng với một khoá của PROMPT_DEFAULTS.
     *[("project", f"tpl_{k}", "TEXT") for k in (
         "single_frame", "single_frame_grid", "image_text", "video_text",
-        "sheet_character", "sheet_prop", "sheet_location", "sheet_location_one",
+        "sheet_character", "sheet_character_one", "sheet_prop",
+        "sheet_location", "sheet_location_one",
         "cine", "motion", "omni_timeline")],
 ]
 

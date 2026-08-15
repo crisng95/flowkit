@@ -37,9 +37,17 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
   },
   sheet_character: {
     group: "Ảnh tham chiếu (asset)",
-    title: "Sheet nhân vật",
-    when: "Ảnh tham chiếu của entity loại character: turnaround + hàng biểu cảm, nền trắng, " +
+    title: "Nhân vật — bảng sheet",
+    when: "Ảnh tham chiếu của entity loại character khi KHÔNG bật “ảnh tham chiếu đơn”: " +
+      "bảng nhiều mục (turnaround, biểu cảm, chi tiết trang phục, chất liệu), nền trắng, " +
       "đúng MỘT người trên sheet.",
+  },
+  sheet_character_one: {
+    group: "Ảnh tham chiếu (asset)",
+    title: "Nhân vật — một ảnh",
+    when: "Ảnh tham chiếu của entity loại character khi BẬT “ảnh tham chiếu đơn”: một ảnh " +
+      "toàn thân chính diện, nền trơn, không bảng không panel — để Flow chú thích ảnh này " +
+      "là một con người chứ không phải “character design sheet”.",
   },
   sheet_prop: {
     group: "Ảnh tham chiếu (asset)",

@@ -669,10 +669,21 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 img_prompt = brain.compose_prompt(project, brain.ref_image_prompt(
                     target["type"], target.get("name") or "", body, project), **wrap)
             else:
-                # Shot frame: single-frame guard (don't copy the location grid layout) so a
-                # node-built frame matches the storyboard table.
-                img_prompt = brain.compose_prompt(project, body, single_frame=(kind == "shot"),
-                                                  **wrap)
+                # Guard khung đơn: bật cho shot, VÀ cho mọi node ảnh có ảnh nối vào.
+                #
+                # Flow thay mỗi reference part bằng CHÚ THÍCH TỰ SINH của chính ảnh đó, nên một
+                # ảnh tham chiếu vốn là bảng sheet được nó mô tả thành "Character design sheet
+                # for a woman" — và câu ấy đứng ĐẦU prompt mà model nhận. Đo trên node ảnh rời,
+                # ref = sheet nhân vật + ảnh phố, prompt "{Mai} đang đi dạo dọc {Phố Hàng Mã}":
+                # 3/3 biến thể ra lại một BẢNG 13 mục (có tiêu đề, bảng màu, ô phân tích chất
+                # liệu) hoặc người cao bằng cả khung kèm panel chi tiết dán bên cạnh — chứ
+                # không phải một khung hình. Guard nói thẳng "no grid, no multi-panel, no
+                # turnaround row" nên nó chặn đúng thứ đó; trước đây chỉ shot mới được bọc.
+                # Node ảnh KHÔNG có ref thì không bọc: không có sheet nào để chép, mà guard còn
+                # nói về "ảnh tham chiếu đính kèm" — thừa và gây nhiễu.
+                img_prompt = brain.compose_prompt(
+                    project, body,
+                    single_frame=(kind == "shot" or bool(inp["references"])), **wrap)
             # Ảnh nối vào node này là ảnh người dùng CỐ Ý đưa vào, nên phải được bind vào
             # structuredPrompt kể cả khi prompt không gọi tên nó — không thì Flow chỉ nhận nó
             # như một imageInput vô danh và trả về ảnh chẳng liên quan gì tới ảnh tham chiếu.
