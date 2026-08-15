@@ -63,6 +63,9 @@ export interface Project {
   tpl_sheet_location_one?: string | null;
   tpl_cine?: string | null;
   tpl_cine_continuous?: string | null;
+  tpl_scene_arc?: string | null;
+  tpl_scene_arc_in?: string | null;
+  tpl_scene_arc_out?: string | null;
   tpl_motion?: string | null;
   tpl_omni_timeline?: string | null;
   status: string;
@@ -75,7 +78,8 @@ export const PROMPT_KEYS = [
   "single_frame", "single_frame_grid", "image_text", "video_text",
   "sheet_character", "sheet_character_one", "sheet_prop",
   "sheet_location", "sheet_location_one",
-  "cine", "cine_continuous", "motion", "omni_timeline",
+  "cine", "cine_continuous", "scene_arc", "scene_arc_in", "scene_arc_out",
+  "motion", "omni_timeline",
 ] as const;
 export type PromptKey = (typeof PROMPT_KEYS)[number];
 

@@ -73,6 +73,30 @@ const META: Record<PromptKey, { title: string; when: string; group: string }> = 
       "là lát cắt liên tiếp của MỘT hành động: giữ đường 180°, đổi cỡ cảnh từng nấc, vị trí " +
       "nhân vật tiến dần trong không gian — để nối clip lại thành phim không bị rời rạc.",
   },
+  scene_arc: {
+    group: "Prompt gửi cho AI viết shot",
+    title: "Hình dáng scene",
+    when: "Chỉ khi BẬT “Shot liên tục trong scene”. Mỗi scene được gán SẴN một cách dựng khác " +
+      "nhau (mở từ chi tiết rồi mở rộng, đi theo nhân vật, hạ dần từ trên cao, chơi phản " +
+      "chiếu…) theo vị trí của nó, nên hai scene liền nhau không bao giờ trùng công thức. " +
+      "Bảng 8 cách dựng nằm trong code (brain._SCENE_SHAPES) — ô này là phần luật bọc quanh, " +
+      "{shape_name}/{shape} là chỗ điền cách đã bốc, {i}/{n} là scene thứ mấy trên tổng.",
+  },
+  scene_arc_in: {
+    group: "Prompt gửi cho AI viết shot",
+    title: "Chuyển cảnh — khung VÀO",
+    when: "Nối vào khối trên cho scene có cảnh đứng trước. Khung ĐẦU scene hoàn tất cú chuyển " +
+      "(ngẩng lên khỏi vũng nước, vệt whip-pan tan dần, khối đen quét qua…). Cú chuyển phải nằm " +
+      "trong ẢNH TĨNH vì ảnh tĩnh chính là khung đầu clip. {prev} = cảnh trước, {name}/{text} = " +
+      "kiểu chuyển đã bốc.",
+  },
+  scene_arc_out: {
+    group: "Prompt gửi cho AI viết shot",
+    title: "Chuyển cảnh — khung RA",
+    when: "Khung CUỐI scene dựng bàn đạp cho cú chuyển. Ngược với khối trên, cú chuyển phải nằm " +
+      "trong `motion_prompt` (hai giây cuối clip) chứ KHÔNG nằm trong mô tả ảnh — mô tả sinh ra " +
+      "khung ĐẦU clip, để ở đó thì Flow vẽ vũng nước ngay từ giây 0. {next} = cảnh sau.",
+  },
   cine: {
     group: "Prompt gửi cho AI viết shot",
     title: "CINEMATOGRAPHY",

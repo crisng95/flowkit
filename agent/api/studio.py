@@ -164,6 +164,9 @@ class UpdateProjectRequest(BaseModel):
     tpl_sheet_location_one: Optional[str] = None
     tpl_cine: Optional[str] = None
     tpl_cine_continuous: Optional[str] = None
+    tpl_scene_arc: Optional[str] = None
+    tpl_scene_arc_in: Optional[str] = None
+    tpl_scene_arc_out: Optional[str] = None
     tpl_motion: Optional[str] = None
     tpl_omni_timeline: Optional[str] = None
 
@@ -1752,6 +1755,31 @@ def _resolve_shot_refs(text: str, ref_names, by_name: dict, scene_loc_id: Option
     return ([scene_loc_id] if scene_loc_id else []) + other_ids
 
 
+async def _scene_arc(scene: dict, project: dict) -> str:
+    """Khối HÌNH DÁNG SCENE + CHUYỂN CẢNH cho scene này, bốc theo VỊ TRÍ của nó trong dự án.
+
+    Ba đường viết shot (autofill storyboard, tách beat, đổi góc máy) đều chạy MỖI SCENE MỘT
+    LƯỢT GỌI AI riêng, và lượt đó chỉ nhìn thấy đúng scene của nó. Nên cả hai thứ ở đây đều
+    phải bơm từ ngoài vào: model không tự biết 11 scene khác đã dùng công thức nào (→ scene
+    nào cũng ra wide→full→medium→close), cũng không biết cảnh trước kết thúc bằng hình gì để
+    mà nối tiếp. Xem `brain.scene_arc`.
+
+    Lấy VỊ TRÍ trong danh sách đã sắp xếp chứ không lấy `scene.idx`: idx có thể thủng lỗ sau
+    khi xoá scene, mà lối RA của scene k phải trỏ đúng cùng một mục với lối VÀO của scene k+1
+    — lệch một nấc là hai nửa của cùng một cú cắt không khớp nhau nữa."""
+    if not brain.shot_continuity(project):
+        return ""
+    rows = await db.query_all(
+        "SELECT id, heading FROM scene WHERE project_id=? ORDER BY idx", (project["id"],))
+    pos = next((i for i, r in enumerate(rows) if r["id"] == scene["id"]), None)
+    if pos is None:
+        return ""
+    return brain.scene_arc(
+        project, pos, len(rows),
+        prev_heading=(rows[pos - 1]["heading"] if pos > 0 else None),
+        next_heading=(rows[pos + 1]["heading"] if pos + 1 < len(rows) else None))
+
+
 @router.post("/scenes/{sid}/storyboard/autofill")
 async def autofill_storyboard(sid: str, body: AutofillRequest):
     scene = await _scene_or_404(sid)
@@ -1765,6 +1793,7 @@ async def autofill_storyboard(sid: str, body: AutofillRequest):
     frames = await brain.run_json(brain.storyboard_autofill_prompt(
         scene["heading"], scene.get("action") or "", erows, project["style"], body.n_frames,
         location=(scene_loc["name"] if scene_loc else None),
+        arc=await _scene_arc(scene, project),
         **_engine_kw(project)))
     if not isinstance(frames, list):
         raise HTTPException(502, "AI không trả về danh sách frame")
@@ -2413,6 +2442,7 @@ async def build_scene_beats(sid: str, body: BuildBeatsRequest):
             brain.scene_segment_prompt(
                 voiceover, erows, project["style"],
                 location=loc_name, target_beats=target_beats, plan=plan,
+                arc=await _scene_arc(scene, project),
                 **_engine_kw(project)),
             lambda d: isinstance(d, list) and len(d) > 0 and all(isinstance(x, dict) for x in d),
             label=f"Tách beat ({scene.get('heading') or sid})")
@@ -2622,11 +2652,12 @@ async def _revary_scene(sid: str) -> int:
     # Retry the AI step until we get a usable list (covers agent errors, bad JSON AND a
     # valid-but-wrong-shape reply, which run_json's own retry doesn't catch).
     out = None
+    arc = await _scene_arc(scene, project)
     for attempt in range(3):
         try:
             cand = await brain.run_json(brain.revary_shots_prompt(
                 shots, erows, project["style"],
-                location=(scene_loc["name"] if scene_loc else None),
+                location=(scene_loc["name"] if scene_loc else None), arc=arc,
                 **_engine_kw(project)))
             if isinstance(cand, list) and cand:
                 out = cand

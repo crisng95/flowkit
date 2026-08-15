@@ -210,7 +210,8 @@ _MIGRATIONS = [
         "single_frame", "single_frame_grid", "image_text", "video_text",
         "sheet_character", "sheet_character_one", "sheet_prop",
         "sheet_location", "sheet_location_one",
-        "cine", "cine_continuous", "motion", "omni_timeline")],
+        "cine", "cine_continuous", "scene_arc", "scene_arc_in", "scene_arc_out",
+        "motion", "omni_timeline")],
 ]
 
 

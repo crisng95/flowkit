@@ -712,6 +712,151 @@ _CINE_CONTINUOUS = (
     "volumetric light, particles — whatever sells the scene's emotion."
 )
 
+# ─── Hình dáng scene + chuyển cảnh (chỉ khi bật `shot_continuity`) ──────────
+#
+# `_CINE_CONTINUOUS` nối các khung TRONG một scene, nhưng không nói gì về việc scene này phải
+# KHÁC scene kia. Mà revary / autofill / tách beat đều chạy MỖI SCENE MỘT LƯỢT GỌI AI riêng:
+# lượt viết scene 5 không hề nhìn thấy scene 4 đã dựng ra sao. Nên mỗi lượt model lại chọn đúng
+# một công thức an toàn nhất — wide → full → medium → close — và 12 scene liền nhau ra y hệt
+# nhau. Thêm câu "hãy đa dạng" vào prompt KHÔNG chữa được, vì cái model thiếu là thông tin chứ
+# không phải lời nhắc.
+#
+# Nên việc chọn nằm ở CODE: bốc sẵn một hình dáng theo `scene_idx` rồi đưa THẲNG hình dáng đó
+# vào prompt. Hai scene liền nhau không bao giờ trùng, và cả phim đi hết bảng trước khi lặp.
+#
+# Số phần tử của hai bảng và bước nhảy phải NGUYÊN TỐ CÙNG NHAU với nhau (8 hình dáng, bước 1;
+# 8 kiểu chuyển, bước 3) để mỗi bảng quét hết mọi phần tử rồi mới quay vòng, và để hình dáng
+# với kiểu chuyển không đi lồng bước — thêm/bớt phần tử thì kiểm lại điều kiện này.
+_SCENE_SHAPES: tuple[tuple[str, str], ...] = (
+    ("Detail out",
+     "open on the SMALLEST thing in the scene filling the whole frame — a texture, a hand, an "
+     "object, water running off an edge — and open up one notch per cut until the last frames "
+     "hold the whole place. The widest frame of this scene is its LAST one, not its first"),
+    ("Establish in",
+     "open on the widest frame of the whole scene and close in one notch per cut, so the "
+     "tightest frame lands on the emotional beat and the scene ends there"),
+    ("Reveal behind foreground",
+     "keep something in the NEAR foreground between lens and subject in every frame — hanging "
+     "goods, a rain-blurred awning, passers-by, the edge of a doorway. The subject starts "
+     "partly hidden and the foreground clears a little more each cut until the final frame "
+     "sees them plainly"),
+    ("Travelling follow",
+     "hold ONE shot size for most of the scene and travel WITH the subject. The change between "
+     "frames comes from what enters and leaves the frame around them and from the camera "
+     "drifting 30–45° around them per cut — not from cutting closer. Only the final frame "
+     "changes shot size"),
+    ("Descend",
+     "start high above the action — a rooftop, an upper-floor window, straight down on the wet "
+     "street — and step the camera DOWN the building line frame by frame until it reaches "
+     "street level, ending at eye level or below"),
+    ("Reflection first",
+     "play the opening frames in a reflective surface — a rain puddle, shop glass, a metal "
+     "tray, a sheet of tin, a lacquered table. The subject exists ONLY as a reflection until "
+     "the middle of the scene, where the camera lifts or turns to the direct view for the "
+     "closing frames"),
+    ("Static frame, moving world",
+     "lock ONE wide composition and let the subject move THROUGH it — enter one side, cross, "
+     "stop, leave. Two or three frames of this scene keep the EXACT same locked composition at "
+     "different moments of that crossing; only the final frame moves in for the reaction"),
+    ("Two-hander",
+     "build the scene on the relationship between two subjects: open on a two-shot holding "
+     "both, then alternate over-the-shoulder singles across the SAME side of the 180° line, "
+     "closing back on the two-shot or on the listener's face. If only one figure is present, "
+     "make the place the second party — alternate between the subject and the thing they are "
+     "looking at, shot and point-of-view reverse"),
+)
+
+# Mỗi kiểu chuyển cảnh là MỘT CẶP: `out` cho khung CUỐI scene trước, `in` cho khung ĐẦU scene
+# sau. Hai nửa phải khớp nhau thì cắt mới liền — nên chúng nằm chung một mục, đừng tách bảng.
+#
+# Chú ý kỹ thuật, đây là chỗ dễ làm sai: ảnh tĩnh của shot là KHUNG ĐẦU của clip (image-to-video).
+# Nên nửa `out` phải nằm trong `motion_prompt` (mấy giây cuối clip), còn nửa `in` phải nằm ngay
+# trong ẢNH TĨNH của shot đầu scene sau. Viết ngược lại thì Flow vẽ vũng nước làm khung cuối rồi
+# clip chẳng bao giờ tới đó.
+_SCENE_TRANSITIONS: tuple[tuple[str, str, str], ...] = (
+    ("Reflection tilt",
+     "the final seconds tilt DOWN off the subject into water on the ground until the world "
+     "exists only as a rippled, half-legible reflection filling the frame — nothing but water, "
+     "light and ripple at the end",
+     "water on the ground fills the frame and the new place is readable only as a blurred "
+     "reflection in it; the clip tilts UP off the water to reveal the place directly, "
+     "continuing the previous scene's downward tilt as one unbroken move"),
+    ("Graphic match",
+     "the last frame settles on ONE simple bold shape held large and centred — a round lamp, a "
+     "circle of light on wet stone, the dome of an umbrella, the arc of a roof — and holds it",
+     "a DIFFERENT object of the SAME shape, at the same size and the same position in frame as "
+     "the shape that closed the previous scene, fills the opening frame; the clip then moves "
+     "off it into the new place"),
+    ("Object wipe",
+     "a solid mass sweeps INTO the lens from one clearly stated side and blacks the frame out "
+     "in the final second — a passing vehicle, a hanging bolt of cloth, a wall, someone else's "
+     "umbrella crossing close to camera",
+     "that same dark mass fills the opening frame edge to edge; it clears the frame in the SAME "
+     "direction it entered, wiping the new place into view"),
+    ("Push through",
+     "the camera pushes FORWARD into something opaque until it fills the frame — a curtain of "
+     "rain, steam off a pot, the black mouth of an archway, a beaded doorway, a hanging sheet",
+     "the opening frame is inside that same opaque material, close enough to read its texture; "
+     "the camera emerges FORWARD out of it into the new place, still moving the same direction"),
+    ("Match on action",
+     "the clip ends MID-GESTURE, the movement deliberately unfinished — an umbrella half-"
+     "raised, a head half-turned, a foot leaving the kerb — with the body at a clearly stated "
+     "angle and screen position",
+     "the opening frame shows that IDENTICAL gesture at the same body angle, same screen "
+     "position and same shot size as the frame that ended the previous scene, now COMPLETING "
+     "in the new place"),
+    ("Light blow-out",
+     "a hard light source sweeps across the lens in the final second and washes the frame out "
+     "— a headlight, lightning on wet stone, a sign flaring — until detail is lost",
+     "the opening frame is still blown out by that glare, the new place only just emerging from "
+     "it; the flare slides out of frame and the place resolves"),
+    ("Whip pan",
+     "the clip ends mid-whip-pan in one clearly stated direction, the whole frame streaked into "
+     "horizontal smears of light",
+     "the opening frame is the tail of that same whip — everything smeared in the SAME "
+     "direction — settling onto the new place as the pan comes to rest"),
+    ("Focus handoff",
+     "the clip ends by racking focus OFF the subject onto something in the near foreground — a "
+     "raindrop on glass, a strand of hair, a wet railing — until the background is nothing but "
+     "soft round bokeh of coloured light",
+     "the opening frame is that same field of soft round coloured bokeh, the subject unreadable; "
+     "focus racks the other way until the new place sharpens into position"),
+)
+
+# Mẫu bọc quanh hình dáng + hai nửa chuyển cảnh đã bốc sẵn. Chỗ trống được `scene_plan()` điền;
+# người dùng sửa được phần luật, còn nội dung hai bảng trên nằm trong code (xem docstring).
+_SCENE_ARC = (
+    "SCENE SHAPE — this is scene {i} of {n}, and each scene of this film is deliberately built "
+    "on a DIFFERENT camera idea so the finished cut does not repeat one formula twelve times. "
+    "The shape for THIS scene has already been chosen; use it and no other:\n"
+    "  ▸ {shape_name}: {shape}.\n"
+    "Apply it ON TOP of the continuity rules above, never against them — the shape decides the "
+    "ARC of the scene (where it starts, how it develops, where it lands), while continuity still "
+    "governs every individual cut: same screen direction, same side of the 180° line, the "
+    "subject advancing through the space, no jump between unrelated parts of the location.\n"
+    "\n{transitions}"
+)
+
+_SCENE_ARC_IN = (
+    "SCENE ENTRY — this scene follows \"{prev}\". The two are joined by a {name} transition, so "
+    "the FIRST shot of this scene must complete it. Put the hand-off in the `description` and "
+    "`visual_prompt` — i.e. IN THE STILL IMAGE ITSELF, because that still is the clip's opening "
+    "frame — then let the `motion_prompt` move out of it into the scene within the first two "
+    "seconds:\n"
+    "  ▸ {text}.\n"
+    "After those two seconds the shot plays as a normal frame of this scene and obeys the shape "
+    "above."
+)
+
+_SCENE_ARC_OUT = (
+    "SCENE EXIT — this scene is followed by \"{next}\". The two are joined by a {name} "
+    "transition, so the LAST shot of this scene must set it up. Put the hand-off in the "
+    "`motion_prompt` ONLY, as the final two seconds of that clip — do NOT put it in the "
+    "`description`, because the description generates the clip's FIRST frame and the hand-off "
+    "belongs at the end:\n"
+    "  ▸ {text}."
+)
+
 # Dynamic spec injected into every motion-generating prompt. The shot's START FRAME is an
 # image-to-video reference that ALREADY locks the static look (shot size, angle, focal
 # length, lighting, composition). So the `motion_prompt` must NOT redefine that look — it
@@ -781,6 +926,9 @@ PROMPT_DEFAULTS: dict[str, str] = {
     "sheet_location_one": _SHEET["location_one"],
     "cine": _CINE,
     "cine_continuous": _CINE_CONTINUOUS,
+    "scene_arc": _SCENE_ARC,
+    "scene_arc_in": _SCENE_ARC_IN,
+    "scene_arc_out": _SCENE_ARC_OUT,
     "motion": _MOTION,
     "omni_timeline": _OMNI_TIMELINE_HEAD,
 }
@@ -874,6 +1022,44 @@ def frame_change_rule(project: dict | None = None) -> str:
             "with rhythm instead of looking like the same shot repeated")
 
 
+def scene_arc(project: dict | None, scene_idx: int, n_scenes: int,
+               prev_heading: str | None = None, next_heading: str | None = None) -> str:
+    """Khối HÌNH DÁNG SCENE + CHUYỂN CẢNH cho đúng một scene, bốc sẵn theo `scene_idx`.
+
+    Chỉ có tác dụng khi bật `shot_continuity` — ở lối kể chuyện mỗi khung là một ảnh minh hoạ
+    cho một câu lời đọc, ép khung cuối scene thành vũng nước là phá lời đọc.
+
+    Vì sao bốc ở code chứ không nhờ AI đa dạng: mỗi scene là MỘT lượt gọi AI riêng, lượt này
+    không thấy lượt kia, nên "hãy làm khác các scene khác" là một câu vô nghĩa với model. Bốc
+    theo idx thì hai scene liền nhau chắc chắn khác nhau, và chạy lại cho ra đúng kết quả cũ
+    (không phụ thuộc seed) — sửa một scene không làm lệch những scene còn lại.
+
+    Kiểu chuyển đánh số theo RANH GIỚI: `_trans_idx(k)` là ranh giới giữa scene k và k+1. Nên
+    lối RA của scene k và lối VÀO của scene k+1 luôn đọc trúng cùng một mục — hai nửa của một
+    cú cắt phải khớp nhau, nếu tính lệch thì scene trước nhoè xuống nước còn scene sau lại mở
+    bằng vệt whip-pan."""
+    if not shot_continuity(project):
+        return ""
+    shape_name, shape = _SCENE_SHAPES[scene_idx % len(_SCENE_SHAPES)]
+
+    def _trans(k: int) -> tuple[str, str, str]:
+        return _SCENE_TRANSITIONS[(k * 3) % len(_SCENE_TRANSITIONS)]
+
+    blocks = []
+    if prev_heading:
+        name, _out, _in = _trans(scene_idx - 1)
+        blocks.append(prompt_part(project, "scene_arc_in",
+                                  prev=prev_heading, name=name, text=_in))
+    if next_heading:
+        name, _out, _in = _trans(scene_idx)
+        blocks.append(prompt_part(project, "scene_arc_out",
+                                  next=next_heading, name=name, text=_out))
+    return prompt_part(project, "scene_arc",
+                       i=scene_idx + 1, n=n_scenes,
+                       shape_name=shape_name, shape=shape,
+                       transitions=join_blocks(*blocks))
+
+
 def motion_spec(engine: str = "veo", clip_s: int = 8,
                 project: dict | None = None) -> str:
     """Khối hướng dẫn viết `motion_prompt`, có thêm phần mốc thời gian khi engine là Omni.
@@ -893,7 +1079,7 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
                                n_frames: int | None = None,
                                location: str | None = None,
                                engine: str = "veo", clip_s: int = 8,
-                               project: dict | None = None) -> str:
+                               project: dict | None = None, arc: str = "") -> str:
     roster = "\n".join(
         f"- {{{e['name']}}} ({e['type']}): {e.get('description') or ''}" for e in entities
     ) or "(none)"
@@ -933,7 +1119,7 @@ def storyboard_autofill_prompt(scene_heading: str, scene_body: str,
         "clip, referencing the SAME entities.\n"
         "- `ref_entity_names`: every entity used in the frame (names WITHOUT braces), and it "
         "MUST include the scene's location.\n"
-        f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
+        f"\n{join_blocks(cine_spec(project), arc, motion_spec(engine, clip_s, project))}\n\n"
         "IMPORTANT: whenever a known entity (character/location/prop) appears in ANY prompt, "
         "wrap its name in curly braces exactly as listed (e.g. {Mai}) so it binds to its "
         "reference image.\n"
@@ -1161,7 +1347,7 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
                          location: str | None = None, target_beats: int | None = None,
                          plan: dict | None = None,
                          engine: str = "veo", clip_s: int = 8,
-                         project: dict | None = None) -> str:
+                         project: dict | None = None, arc: str = "") -> str:
     """Split an ALREADY-WRITTEN scene voiceover into visual BEATS. Each beat's `text` is a
     verbatim CONTIGUOUS slice of the voiceover (in order, concatenating back to the whole),
     so each beat's share of the audio time can be derived from its word count. Also pick the
@@ -1231,7 +1417,7 @@ def scene_segment_prompt(voiceover: str, entities: list[dict], style: str,
         "- `ref_entity_names`: entity names WITHOUT braces, MUST include the location.\n"
         "- `key_phrases`: 1–3 SHORT punchy phrases taken VERBATIM from this beat's `text` "
         "(the words worth flashing on screen as captions); [] if none.\n\n"
-        f"{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
+        f"{join_blocks(cine_spec(project), arc, motion_spec(engine, clip_s, project))}\n\n"
         f"Wrap known entity names in curly braces. Visual style: {style}.\n\n"
         f"AVAILABLE ENTITIES:\n{roster}\n\nVOICEOVER:\n{voiceover}\n\n"
         "Return ONLY JSON array: [{\"text\":\"...\",\"beat_action\":\"...\","
@@ -1262,7 +1448,7 @@ def beat_parts_prompt(beat_action: str, motion_prompt: str, n_parts: int,
 def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
                         location: str | None = None,
                         engine: str = "veo", clip_s: int = 8,
-                        project: dict | None = None) -> str:
+                        project: dict | None = None, arc: str = "") -> str:
     """Rewrite the CAMERA work of EXISTING shots without changing the story, order, count or
     per-shot action — only pick fresh, distinct angles so consecutive shots differ. Fast path
     to fix monotonous framing (and the location) without re-segmenting or re-running TTS."""
@@ -1288,7 +1474,7 @@ def revary_shots_prompt(shots: list[dict], entities: list[dict], style: str,
         "`motion_prompt`. "
         "Wrap EVERY character/location/prop name in curly braces exactly as listed so it binds to "
         "its reference image (a character that acts in the shot MUST be wrapped and present).\n"
-        f"\n{cine_spec(project)}\n\n{motion_spec(engine, clip_s, project)}\n\n"
+        f"\n{join_blocks(cine_spec(project), arc, motion_spec(engine, clip_s, project))}\n\n"
         f"Visual style: {style}.\n\nAVAILABLE ENTITIES:\n{roster}\n\nSHOTS (in order):\n{listing}\n\n"
         "Return ONLY a JSON array with EXACTLY one object per shot, in order: "
         "[{\"idx\":0,\"description\":\"At {Loc}, <shot size+angle>, <same action> {Entity}...\","
