@@ -1468,7 +1468,13 @@ const NODE_TYPES = {
 // Built from the target's goal (image vs video) + its seeded sources, so storyboard
 // edits open on an image graph and shot edits on a video graph. Each reference entity
 // becomes its own "Nguồn ảnh" (source) node, pre-filled with that entity's image.
-function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; edges: Edge[] } {
+function defaultGraph(
+  seed: EditorTarget,
+  entities: Entity[],
+  // Engine + tỷ lệ của ⚙ Cấu hình dự án — node video của đồ thị mặc định phải khởi đầu
+  // bằng chính chúng, không phải hằng số "veo_lite"/"16:9".
+  proj: { engine: string; aspect: string }
+): { nodes: Node[]; edges: Edge[] } {
   const mk = (id: string, type: string, x: number, y: number, data: any = {}): Node => ({
     id,
     type,
@@ -1516,7 +1522,7 @@ function defaultGraph(seed: EditorTarget, entities: Entity[]): { nodes: Node[]; 
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
-        model: "veo_lite", lite_mode: "inference", aspect: "16:9", count: 1,
+        model: proj.engine, lite_mode: "inference", aspect: proj.aspect, count: 1,
         _result: seed.videoSrc || "",
       })
     );
@@ -1590,11 +1596,29 @@ const omniDuration = (videoModel?: string | null): number | null => {
   return [4, 6, 8, 10].includes(n) ? n : null;
 };
 
+// Engine mà ⚙ Cấu hình dự án đang chọn, theo đúng giá trị ô "Model" của node video.
+// Mirrors video_engine() in agent/studio/graph.py — ô rỗng KHÔNG có nghĩa là Veo: mặc định
+// của tài khoản Ultra (PAYGATE_TIER_TWO) là Veo Lite. Hai bên lệch nhau thì node hiện một
+// engine còn server chạy một engine khác, mà đó đúng là thứ tính tiền.
+const projectEngine = (videoModel?: string | null, tier?: string | null): string => {
+  const raw = String(videoModel || "").trim();
+  if (omniDuration(raw) != null) return "omni";
+  if (raw.startsWith("veo_lite")) return "veo_lite";
+  if (raw === "veo") return "veo";
+  return tier === "PAYGATE_TIER_TWO" ? "veo_lite" : "veo";
+};
+
+// VIDEO_ASPECT_RATIO_* của dự án → nhãn tỷ lệ trên node.
+const projectAspect = (aspect?: string | null): string =>
+  String(aspect || "").includes("PORTRAIT") ? "9:16" : "16:9";
+
 function Editor({
   target,
   entities,
   projectId,
   videoModel,
+  videoAspect,
+  paygateTier,
   projectHeader: headerProp,
   projectFooter: footerProp,
   onClose,
@@ -1604,12 +1628,20 @@ function Editor({
   entities: Entity[];
   projectId: string;
   videoModel?: string | null;
+  videoAspect?: string | null;
+  paygateTier?: string | null;
   projectHeader?: string | null;
   projectFooter?: string | null;
   onClose: () => void;
   onApplied: (r: any) => void;
 }) {
   const projDur = useMemo(() => omniDuration(videoModel), [videoModel]);
+  // Giá trị khởi đầu cho node video MỚI (xem NODE_DEFAULTS): lấy theo ⚙ Cấu hình dự án chứ
+  // không cứng "veo_lite" + "16:9" — dự án đặt Omni Flash / khung dọc mà node mới hiện Veo
+  // Lite ngang là đọc sai ngay từ lúc kéo node ra.
+  const projEngine = useMemo(
+    () => projectEngine(videoModel, paygateTier), [videoModel, paygateTier]);
+  const projAspect = useMemo(() => projectAspect(videoAspect), [videoAspect]);
   // Cột DB cho phép NULL → chuẩn hoá về "" một lần, node không phải tự lo.
   const projectHeader = headerProp ?? "";
   const projectFooter = footerProp ?? "";
@@ -2229,8 +2261,11 @@ function Editor({
     };
     graphApi
       .get(target.kind, target.id, goal)
-      .then((r) => apply(r.graph && r.graph.nodes?.length ? r.graph : defaultGraph(target, entities)))
-      .catch(() => apply(defaultGraph(target, entities)));
+      .then((r) => apply(r.graph && r.graph.nodes?.length
+        ? r.graph
+        : defaultGraph(target, entities, { engine: projEngine, aspect: projAspect })))
+      .catch(() => apply(defaultGraph(target, entities,
+        { engine: projEngine, aspect: projAspect })));
     return () => { cancelled = true; };
   }, [target.id, entities, goal]);
 
@@ -2280,9 +2315,11 @@ function Editor({
     collage: { cols: 0, gap: 8, bg: "#000000" },
     watermark: { position: "bottom-right", scale: 0.18, opacity: 0.85 },
     note: { text: "" },
+    // Model + tỷ lệ lấy theo ⚙ Cấu hình dự án làm giá trị khởi đầu (đổi trên node sau vẫn
+    // được — đây là điểm xuất phát, không phải ràng buộc).
     // No `duration`: a fresh video node follows ⚙ Cấu hình dự án (VideoNode shows the
     // effective value, the backend falls back the same way).
-    video: { aspect: "16:9", model: "veo_lite", lite_mode: "inference", count: 1 },
+    video: { aspect: projAspect, model: projEngine, lite_mode: "inference", count: 1 },
     filter: { brightness: 1, contrast: 1, saturation: 1, sharpness: 1, blur: 0, rotate: 0 },
     text: { text: "", anchor: "bottom", color: "#ffffff", font_scale: 0.06, stroke: true },
     upscale: { scale: 2, sharpen: true },
@@ -2297,7 +2334,9 @@ function Editor({
       const position = pos || { x: 80 + Math.random() * 160, y: 80 + Math.random() * 200 };
       setNodes((ns) => [...ns, { id, type, position, data }]);
     },
-    [setNodes]
+    // projEngine/projAspect nằm trong NODE_DEFAULTS — thiếu ở deps thì callback giữ mãi bản
+    // dựng ở lần render đầu và node video mới lại ra giá trị cũ.
+    [setNodes, projEngine, projAspect]
   );
 
   // Drag a palette chip / an image file onto the canvas → create a node at the drop point.
@@ -3018,6 +3057,8 @@ export default function NodeEditor(props: {
   entities: Entity[];
   projectId: string;
   videoModel?: string | null;
+  videoAspect?: string | null;
+  paygateTier?: string | null;
   projectHeader?: string | null;
   projectFooter?: string | null;
   onClose: () => void;
