@@ -1171,8 +1171,14 @@ async def _save_node_outputs(kind: str, row_id: str, col: str,
     await db.update(table, row_id, {col: json.dumps(graph)})
 
 
-async def _generate_entity_image(entity: dict, project: dict) -> dict:
-    out = await _gen_via_graph("entity", entity, project)
+async def _generate_entity_image(entity: dict, project: dict, batch_id: str = None) -> dict:
+    """Sinh ảnh tham chiếu cho MỘT asset.
+
+    `batch_id` giống hệt `_generate_frame_image`: có nó thì lượt gọi nhập vào batch Flow
+    chung và đi KHÔNG qua khoá single-flight (serialize=False), nhờ vậy một nhóm asset bắn
+    cùng lúc mới thật sự chồng lên nhau. Bỏ trống = một mình một lượt như cũ.
+    """
+    out = await _gen_via_graph("entity", entity, project, batch_id=batch_id)
     if out:
         return await _commit_entity_media(entity, project, out["media_id"], out.get("path"))
     client = _require_extension()
@@ -1187,7 +1193,8 @@ async def _generate_entity_image(entity: dict, project: dict) -> dict:
     row = await _generate_image_verified(
         gen_call=lambda: client.generate_images(
             prompt=prompt, project_id=project["flow_project_id"], aspect_ratio=aspect,
-            user_paygate_tier=tier, image_model=model, seed=project.get("seed")),
+            user_paygate_tier=tier, image_model=model, seed=project.get("seed"),
+            batch_id=batch_id, serialize=batch_id is None),
         store_call=lambda info: _store_media_on_entity(
             entity, project, info, f"{entity['type']}_{entity['name']}"),
         label_for_err=f"asset {entity['name']}")
@@ -1457,17 +1464,26 @@ async def set_entity_image(eid: str, body: SetMediaRequest):
 
 @router.post("/projects/{pid}/assets/generate-all")
 async def generate_all_assets(pid: str, force: bool = False):
-    """✦ Auto gen ảnh cho asset CHƯA có ảnh → job nền (§9). Trả job_id ngay."""
+    """✦ Auto gen ảnh cho asset CHƯA có ảnh → job nền (§9). Trả job_id ngay.
+
+    Chạy theo BATCH y như storyboard: mỗi nhóm IMAGE_BATCH_SIZE asset bắn song song trong
+    một batch id của Flow, giãn nhau bằng stagger rồi nghỉ cooldown giữa các nhóm. Trước
+    đây job này đi tuần tự kèm 2-6s chờ giữa mỗi asset, nên 20 asset mất hàng chục phút
+    trong khi ảnh storyboard cùng cỡ đã xong từ lâu — cùng một loại việc, không có lý do
+    để hai bên chạy hai tốc độ.
+    """
     project = await _project_or_404(pid)
     rows = await db.query_all("SELECT * FROM entity WHERE project_id=?", (pid,))
     todo = [e for e in rows if force or not e.get("image_path")]
 
-    async def _worker(e):
-        await _generate_entity_image(e, project)
+    async def _worker(e, batch_id):
+        await _generate_entity_image(e, project, batch_id=batch_id)
 
     job = get_job_manager().start(
         project_id=pid, type_="assets", items=todo, worker=_worker,
-        label=f"Sinh ảnh asset ({len(todo)})", throttle=(2, 6),
+        label=f"Sinh ảnh asset ({len(todo)})",
+        throttle=IMAGE_BATCH_COOLDOWN, batch_size=IMAGE_BATCH_SIZE,
+        stagger=IMAGE_BATCH_STAGGER,
         item_label=lambda e: e.get("name") or e["id"])
     return {"job_id": job.id, "total": len(todo)}
 
