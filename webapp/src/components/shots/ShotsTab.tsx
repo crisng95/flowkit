@@ -248,6 +248,18 @@ export default function ShotsTab({
     }
   };
 
+  // Thêm scene bằng tay — dự án chưa có kịch bản thì chưa có scene nào để treo shot vào.
+  const addScene = async (shots = 1) => {
+    setErr(null);
+    try {
+      const sc = await api.addScene(project.id, { shots });
+      setScenes((list) => [...list, sc]);
+      await loadShots(sc.id);
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+
   // Render all shots (have image, no video) as a server-side background job (§9):
   // survives tab close, throttled + verified server-side, streams to the banner.
   const genAll = async () => {
@@ -293,6 +305,19 @@ export default function ShotsTab({
         {err && (
           <div className="mb-4 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-sm text-rose-300">
             {err}
+          </div>
+        )}
+        {!scenes.length && (
+          // Chưa có kịch bản = chưa có scene, mà shot nào cũng phải nằm trong một scene.
+          <div className="rounded-xl border border-dashed border-neutral-800 py-12 text-center text-sm text-neutral-500">
+            <p>Chưa có scene — tạo kịch bản ở tab Script, hoặc tự thêm shot ở đây.</p>
+            <button
+              disabled={busy}
+              onClick={() => addScene(1)}
+              className="mt-3 rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
+            >
+              + Thêm scene (kèm 1 shot)
+            </button>
           </div>
         )}
         {scenes.map((sc) => {

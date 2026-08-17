@@ -2862,6 +2862,52 @@ async def rebuild_project_audio(pid: str):
     return {"job_id": job.id, "total": len(scenes)}
 
 
+class AddSceneRequest(BaseModel):
+    heading: Optional[str] = None
+    # Tạo luôn N shot rỗng trong scene mới. Dự án chưa có kịch bản thì việc người dùng muốn
+    # là "cho tôi một khung để làm", không phải "cho tôi một scene rỗng rồi bấm tiếp".
+    shots: int = 0
+
+
+@router.post("/projects/{pid}/scenes")
+async def add_scene(pid: str, body: AddSceneRequest = None):
+    """Thêm MỘT scene rỗng vào cuối dự án (+ tuỳ chọn vài shot rỗng trong đó).
+
+    Đường làm việc KHÔNG qua kịch bản: dự án mới chưa trích được scene nào thì storyboard và
+    shots không có chỗ nào để treo shot vào — mọi thứ nằm dưới `shot.scene_id`. Scene tạo tay
+    để trống mọi trường văn bản; các đường sinh ảnh/video đều đọc `description` của shot chứ
+    không bắt scene phải có `action`/`dialog`.
+    """
+    await _project_or_404(pid)
+    body = body or AddSceneRequest()
+    ts = db.now()
+    row = await db.query_one("SELECT MAX(idx) AS m FROM scene WHERE project_id=?", (pid,))
+    idx = (row["m"] + 1) if row and row["m"] is not None else 0
+    scene_id = db.new_id()
+    await db.insert("scene", {
+        "id": scene_id, "project_id": pid, "idx": idx,
+        "heading": (body.heading or "").strip() or f"SCENE {idx + 1}",
+        "slug": "", "action": "", "dialog": "",
+        "created_at": ts})
+    for _ in range(max(0, min(body.shots, 20))):
+        await add_shot(scene_id)
+    return await _scene_or_404(scene_id)
+
+
+@router.delete("/scenes/{sid}")
+async def delete_scene(sid: str):
+    """Xoá scene + toàn bộ shot của nó (file media giữ nguyên trong thư mục dự án)."""
+    scene = await _scene_or_404(sid)
+    await db.execute("DELETE FROM shot WHERE scene_id=?", (sid,))
+    await db.execute("DELETE FROM scene WHERE id=?", (sid,))
+    # Dồn idx cho liền lại, nếu không thứ tự hiển thị vẫn đúng nhưng số scene nhảy cóc.
+    rows = await db.query_all(
+        "SELECT id FROM scene WHERE project_id=? ORDER BY idx", (scene["project_id"],))
+    for i, r in enumerate(rows):
+        await db.execute("UPDATE scene SET idx=? WHERE id=?", (i, r["id"]))
+    return {"ok": True}
+
+
 @router.post("/scenes/{sid}/shots")
 async def add_shot(sid: str):
     await _scene_or_404(sid)

@@ -307,6 +307,47 @@ export default function StoryboardTab({
     },
   });
 
+  // Thêm scene bằng tay (đường không qua kịch bản). `shots` > 0 → scene mới có sẵn khung
+  // trống để bắt tay vào làm ngay.
+  const addScene = async (shots = 0) => {
+    setErr(null);
+    try {
+      const sc = await api.addScene(project.id, { shots });
+      setScenes((list) => [...list, sc]);
+      await loadShots(sc.id);
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+
+  // Xoá scene + mọi shot trong nó. Hỏi lại khi scene còn shot: shot đã render là công sức
+  // (và credit) thật, xoá nhầm không lấy lại được.
+  const delScene = async (sc: Scene) => {
+    const n = (shotsByScene[sc.id] || []).length;
+    if (
+      n &&
+      !(await confirm({
+        title: "Xoá scene?",
+        message: `"${sc.heading}" còn ${n} shot — xoá scene là xoá luôn cả ${n} shot đó.`,
+        confirmText: "Xoá",
+        danger: true,
+      }))
+    )
+      return;
+    setErr(null);
+    try {
+      await api.deleteScene(sc.id);
+      setScenes((list) => list.filter((x) => x.id !== sc.id).map((x, i) => ({ ...x, idx: i })));
+      setShotsByScene((m) => {
+        const n2 = { ...m };
+        delete n2[sc.id];
+        return n2;
+      });
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  };
+
   // Storytelling "Dựng theo lời đọc" runs as a job too (TTS is slow). Reload shots scene
   // by scene as each is rebuilt, and announce the result.
   const beatsJob = jobFor("beats");
@@ -666,8 +707,17 @@ export default function StoryboardTab({
           </div>
         )}
         {!scenes.length && (
+          // Dự án trắng vẫn phải làm được: mọi shot treo dưới `shot.scene_id`, nên "thêm shot"
+          // khi chưa có scene nào = tạo scene rồi thêm shot vào đó, làm gọn trong một nút.
           <div className="rounded-xl border border-dashed border-neutral-800 py-12 text-center text-sm text-neutral-500">
-            Chưa có scene — tạo kịch bản ở tab Script trước.
+            <p>Chưa có scene — tạo kịch bản ở tab Script, hoặc tự thêm shot ở đây.</p>
+            <button
+              disabled={!!busy}
+              onClick={() => addScene(1)}
+              className="mt-3 rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
+            >
+              + Thêm scene (kèm 1 shot)
+            </button>
           </div>
         )}
         {scenes.map((sc, scenePos) => {
@@ -777,6 +827,14 @@ export default function StoryboardTab({
                     className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
                   >
                     {imgJob ? "…" : "✦ Auto gen"}
+                  </button>
+                  <button
+                    disabled={!!busy}
+                    onClick={() => delScene(sc)}
+                    title="Xoá scene này và mọi shot trong nó"
+                    className="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:bg-rose-950/40 hover:text-rose-300 disabled:opacity-40"
+                  >
+                    🗑
                   </button>
                 </div>
               </div>
@@ -960,6 +1018,16 @@ export default function StoryboardTab({
             </section>
           );
         })}
+        {!!scenes.length && (
+          <button
+            disabled={!!busy}
+            onClick={() => addScene(1)}
+            title="Thêm một scene rỗng vào cuối (kèm 1 shot để làm ngay)"
+            className="mb-8 w-full rounded-xl border border-dashed border-neutral-800 py-3 text-sm text-neutral-600 hover:border-neutral-600 hover:text-neutral-400 disabled:opacity-40"
+          >
+            + Thêm scene
+          </button>
+        )}
       </div>
 
       {sel && (

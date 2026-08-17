@@ -352,6 +352,14 @@ export const api = {
 
   getProject: (id: string) => req<Project>(`/projects/${id}`),
   listScenes: (id: string) => req<{ scenes: Scene[] }>(`/projects/${id}/scenes`),
+  // Thêm scene bằng tay — đường làm việc KHÔNG qua kịch bản. `shots` tạo luôn shot rỗng
+  // bên trong, vì dự án trắng thì thứ người dùng cần là một khung để làm ngay.
+  addScene: (id: string, opts?: { heading?: string; shots?: number }) =>
+    req<Scene>(`/projects/${id}/scenes`, {
+      method: "POST",
+      body: JSON.stringify({ heading: opts?.heading ?? null, shots: opts?.shots ?? 0 }),
+    }),
+  deleteScene: (sid: string) => req<{ ok: boolean }>(`/scenes/${sid}`, { method: "DELETE" }),
   generateScript: (id: string, idea: string, target_duration: number | null) =>
     req<ScriptResult>(`/projects/${id}/script/generate`, {
       method: "POST",
