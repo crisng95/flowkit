@@ -302,7 +302,8 @@ class MusicClient:
 
     async def create_music_video(self, clip_id: str, conversation_id: str = None, *,
                                   aspect_ratio: str = "16:9", render_lyrics: bool = False,
-                                  note: str = "", start_s: int = 0, duration_s: int = 60,
+                                  note: str = "", style: str = "", style_image_url: str = None,
+                                  start_s: int = 0, duration_s: int = 60,
                                   auto_confirm: bool = True,
                                   timeout: float = None) -> dict:
         """Đặt lệnh render music video cho một bài hát đã có.
@@ -322,11 +323,28 @@ class MusicClient:
         lyrics_line = ("Render the lyrics on screen." if render_lyrics
                        else "Do not render lyrics on screen.")
         end_s = int(start_s) + int(duration_s)
-        msg = (f"Create the music video for this song, using the segment from "
-               f"{int(start_s)}s to {end_s}s ({int(duration_s)} seconds). "
+        # Gọi ĐÍCH DANH clip id trong câu chữ. `client_context.current_song_id` KHÔNG đủ để
+        # ghim bài: đo thật trên conversation có hai bài (A/B) — đặt current_song_id là bài A
+        # mà agent vẫn truyền bài B cho `propose`, tức render nhầm bài và mất 750 credit.
+        msg = (f"Create the music video for the song with clip id {clip_id}, using the "
+               f"segment from {int(start_s)}s to {end_s}s ({int(duration_s)} seconds). "
                f"Use aspect ratio {aspect_ratio}. {lyrics_line}")
+        # PHONG CÁCH phải nói THẲNG, và phải đòi giữ nguyên qua mọi cảnh. Flow Music lập kế
+        # hoạch nhiều cảnh rồi sinh TỪNG cảnh riêng, nên không neo phong cách là mỗi cảnh một
+        # chất liệu. Đo trên video thật (job 06551f8b, 60s): giây 3 gần như ảnh thật, giây 18
+        # là mô hình giấy cắt dán, giây 33 tranh bán 3D, giây 50 đất nặn — bốn cảnh bốn kiểu.
+        # Cũng ở đó: chữ "paper-craft" trong phần mô tả NỘI DUNG (phố hàng mã) bị hiểu thành
+        # CHẤT LIỆU dựng cảnh → cả cảnh biến thành diorama giấy. Từ nào vừa là nội dung vừa là
+        # chất liệu (paper, clay, pixel, comic…) thì phải nói rõ nó thuộc vế nào.
+        keep_one = ("Use ONE single consistent visual style for every shot of the video — "
+                    "never switch between photoreal, 3D render, anime, comic, claymation or "
+                    "paper-craft looks from shot to shot.")
+        msg = f"{msg} {f'Visual style: {style.strip()}. {keep_one}' if style else keep_one}"
+        if style_image_url:
+            msg = (f"{msg} Use this image as the style reference for every shot: "
+                   f"{style_image_url.strip()}")
         if note:
-            msg = f"{msg} Visual direction: {note.strip()}"
+            msg = f"{msg} Scene content (this describes WHAT is in frame, not the art medium): {note.strip()}"
 
         # current_song_id = bài đang mở trên player của Flow Music UI. Không đặt thì agent
         # phải tự đoán "this song" là bài nào — với conversation nhiều bài là đoán sai.
@@ -359,10 +377,7 @@ class MusicClient:
                     payload["text"] = payload2.get("text") or payload.get("text")
 
         status = "submitted" if job_id else ("proposed" if proposed else "not_called")
-        if status == "submitted":
-            logger.warning("Flow Music: đã đặt render music video (job %s) cho clip %s "
-                           "— ~500 credit, 15-30 phút", job_id, clip_id)
-        return {
+        out = {
             "conversation_id": conv_id,
             "clip_id": clip_id,
             "status": status,
@@ -370,14 +385,59 @@ class MusicClient:
             "text": payload.get("text"),
             "raw_tool_returns": created + proposed,
         }
+        if not job_id:
+            return out
+
+        logger.warning("Flow Music: đã đặt render music video (job %s) cho clip %s "
+                       "— ~750 credit, ~9 phút", job_id, clip_id)
+        # Đối chiếu bài THẬT SỰ được nhận: agent tự chọn clip nên vẫn có cửa render nhầm bài.
+        # Biết ngay lúc submit thì còn kịp hủy/đặt lại, biết lúc xem video thì đã mất tiền.
+        job = await self.music_video_job_status(job_id)
+        used = (job.get("raw", {}).get("state") or {}).get("clip_id") if not job.get("error") else None
+        out["clip_id_used"] = used
+        if used and used != clip_id:
+            out["warning"] = (f"Flow Music nhận clip {used}, KHÁC bài yêu cầu ({clip_id}) — "
+                              f"agent tự chọn bài trong conversation.")
+            logger.warning("music video job %s render NHẦM bài: %s thay vì %s",
+                           job_id, used, clip_id)
+        return out
+
+    async def music_video_job_status(self, job_id: str) -> dict:
+        """Tiến độ + KẾT QUẢ render theo `job_id` (giá trị `video__create_music_video` trả về).
+
+        Đây là nguồn sự thật DUY NHẤT cho music video, đã đo trên một job thật:
+          • conversation chỉ ghi "submitted job" rồi im tới lúc xong — không có phần trăm;
+          • clip audio KHÔNG được cập nhật: xong video rồi mà `video_id`/`video_url` của nó
+            vẫn `null`, nên đừng chờ ở đó (xem `music_video_status`).
+        Trả về đã chuẩn hoá: {status, stage, video_url, duration_s, runtime_s, preview_image,
+        error, raw}. `status` của Flow Music: "completed" | (đang chạy) | ...
+        """
+        res = await self._api("GET", "music_video_status", path_kwargs={"job_id": job_id})
+        if _is_error(res):
+            return {"error": res.get("error", "music_video_status failed")}
+        data = res.get("data", res) or {}
+        state = data.get("state") or {}
+        url = state.get("final_video_url")
+        return {
+            "job_id": data.get("job_id") or job_id,
+            "status": "done" if url else (state.get("status") or "pending"),
+            "stage": state.get("current_stage"),
+            "video_url": url,
+            "clip_id": state.get("clip_id"),
+            "duration_s": state.get("video_duration_s"),
+            "runtime_s": state.get("total_runtime_s"),
+            "preview_image": (data.get("preview") or {}).get("image"),
+            "error": state.get("error_message"),
+            "raw": data,
+        }
 
     async def music_video_status(self, clip_id: str) -> dict:
-        """Music video của một bài đã xong chưa → {status, video_url, video_clip_id}.
+        """Tra music video qua CLIP — chỉ là đường phụ, hãy dùng `music_video_job_status`.
 
-        Video KHÔNG nằm trong clip audio: clip audio chỉ mang `video_id` trỏ sang một clip
-        riêng (`op_type: video__create_music_video`) và `video_url` nằm ở clip đó. URL của
-        Flow Music là URL tĩnh public (bucket producer-app-public) nên lấy được là tải thẳng,
-        không cần ký lại như Flow video.
+        Đo trên một job đã render xong: clip audio vẫn `video_id: null`, `video_url: null`,
+        nên đường này trả "none" kể cả khi video đã nằm sẵn trên GCS. Giữ lại vì có thể
+        Flow Music cập nhật clip trễ (hoặc chỉ khi người dùng lưu video vào thư viện), nhưng
+        thứ đáng tin là `job_id` mà lúc đặt render đã trả về — hãy giữ lấy nó.
         """
         res = await self.get_clips([clip_id])
         if _is_error(res):

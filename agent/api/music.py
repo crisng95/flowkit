@@ -39,7 +39,11 @@ class CreateMusicVideoRequest(BaseModel):
     conversation_id: Optional[str] = None     # conversation chứa bài đó (nên có)
     aspect_ratio: str = "16:9"                # "16:9" | "9:16" | "1:1"
     render_lyrics: bool = False
-    note: Optional[str] = None                # thêm yêu cầu bằng lời (phong cách, nội dung…)
+    note: Optional[str] = None                # NỘI DUNG khung hình (cái gì xuất hiện)
+    # PHONG CÁCH — tách khỏi `note` có chủ đích. Không nói phong cách thì mỗi cảnh một chất
+    # liệu (đo thật: ảnh thật → giấy cắt dán → tranh 3D → đất nặn trong cùng một video 60s).
+    style: Optional[str] = None
+    style_image_url: Optional[str] = None     # ảnh neo phong cách (URL công khai)
     start_s: int = 0                          # video dựng theo MỘT ĐOẠN của bài, không cả bài
     duration_s: int = 60
     # False = chỉ để agent ĐỀ XUẤT, không bấm nút render (không tốn credit) — dùng để thử.
@@ -133,10 +137,22 @@ async def create_music_video(body: CreateMusicVideoRequest):
     result = await client.create_music_video(
         body.clip_id, conversation_id=body.conversation_id,
         aspect_ratio=body.aspect_ratio, render_lyrics=body.render_lyrics,
-        note=body.note or "", start_s=body.start_s, duration_s=body.duration_s,
+        note=body.note or "", style=body.style or "",
+        style_image_url=body.style_image_url,
+        start_s=body.start_s, duration_s=body.duration_s,
         auto_confirm=body.auto_confirm, timeout=body.timeout)
     _raise_if_error(result)
     return result
+
+
+@router.get("/music-video-job/{job_id}")
+async def music_video_job_status(job_id: str):
+    """Tiến độ render (phần trăm / thời gian còn lại) theo `job_id` mà
+    `POST /create-music-video` trả về. Trả nguyên payload của Flow Music."""
+    client = _require_connected()
+    result = await client.music_video_job_status(job_id)
+    _raise_if_error(result)
+    return result.get("data", result)
 
 
 @router.get("/music-video/{clip_id}")

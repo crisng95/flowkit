@@ -49,6 +49,9 @@ MUSIC_ENDPOINTS = {
     "conversation_delete": "/__api/conversations/{conversation_id}",  # DELETE
     "message_stream": "/__api/messages/{job_id}/stream",      # GET (SSE) ?last_id=0
     "song_status": "/__api/audio-create-song-status/{operation_id}",  # GET — poll
+    # GET — tiến độ render music video theo job_id của video__create_music_video. Đây là chỗ
+    # DUY NHẤT có phần trăm: conversation chỉ ghi "submitted job" rồi im tới lúc xong.
+    "music_video_status": "/__api/music-video/{job_id}/status",
     "clips_batch": "/__api/clips",                            # POST {"clip_ids": [...]}
     "billing_credits": "/__api/billing/credits",               # GET
     "billing_subscription": "/__api/billing/subscription",     # GET
