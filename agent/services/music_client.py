@@ -280,6 +280,134 @@ class MusicClient:
         }
 
 
+    # ─── Music video (video__create_music_video) ─────────────
+    #
+    # ĐẮT VÀ CHẬM: ~500 credit và 15-30 phút mỗi video (vì vậy trước đây cố tình không làm).
+    # Không có REST nào nhận tham số — vẫn phải nói bằng lời với agent phía Flow Music, y hệt
+    # `create_song`. Agent thường đi hai nhịp: `video__propose_music_video` (thẻ đề xuất cho
+    # người dùng bấm xác nhận) rồi mới `video__create_music_video`. Cái sau mới tiêu credit,
+    # nên `auto_confirm` chỉ gửi ĐÚNG MỘT lượt xác nhận khi nhịp đầu dừng ở đề xuất.
+
+    @staticmethod
+    def _video_tool_returns(payload: dict, tool: str) -> list[dict]:
+        return [p for p in (payload.get("tool_returns") or []) if p.get("tool_name") == tool]
+
+    @staticmethod
+    def _video_job_id(tool_returns: list[dict]) -> Optional[str]:
+        for tr in tool_returns:
+            content = tr.get("content")
+            if isinstance(content, dict) and content.get("job_id"):
+                return content["job_id"]
+        return None
+
+    async def create_music_video(self, clip_id: str, conversation_id: str = None, *,
+                                  aspect_ratio: str = "16:9", render_lyrics: bool = False,
+                                  note: str = "", start_s: int = 0, duration_s: int = 60,
+                                  auto_confirm: bool = True,
+                                  timeout: float = None) -> dict:
+        """Đặt lệnh render music video cho một bài hát đã có.
+
+        Trả {conversation_id, status, video_job_id, text, raw_tool_returns} với status:
+          • "submitted" — agent đã gọi `video__create_music_video` (ĐANG TIÊU CREDIT)
+          • "proposed"  — mới dừng ở đề xuất, chưa render (auto_confirm=False, hoặc lượt xác
+                          nhận vẫn không đẩy agent đi tiếp)
+          • "not_called"— agent hiểu tin nhắn thành việc khác; đọc `text` để biết nó nói gì
+        KHÔNG chờ render xong (15-30 phút) — hỏi tiếp bằng `music_video_status(clip_id)`.
+        """
+        # Mọi THAM SỐ phải nằm ở lượt ĐỀ XUẤT: `video__propose_music_video` nhận
+        # {clip_id, start_time, end_time, duration_s, aspect_ratio, user_message,
+        # display_lyrics}, còn `video__create_music_video` KHÔNG nhận field nào (mọi field
+        # đều bị server trả "extra_forbidden" — đo trên conversation thật). Nên tin nhắn đầu
+        # nói đủ ý, tin nhắn xác nhận thì để trống trơn.
+        lyrics_line = ("Render the lyrics on screen." if render_lyrics
+                       else "Do not render lyrics on screen.")
+        end_s = int(start_s) + int(duration_s)
+        msg = (f"Create the music video for this song, using the segment from "
+               f"{int(start_s)}s to {end_s}s ({int(duration_s)} seconds). "
+               f"Use aspect ratio {aspect_ratio}. {lyrics_line}")
+        if note:
+            msg = f"{msg} Visual direction: {note.strip()}"
+
+        # current_song_id = bài đang mở trên player của Flow Music UI. Không đặt thì agent
+        # phải tự đoán "this song" là bài nào — với conversation nhiều bài là đoán sai.
+        ctx = {"current_song_id": clip_id, "song_queue": [{"id": clip_id}]}
+        result = await self.send_message(msg, conversation_id=conversation_id,
+                                          client_context=ctx, timeout=timeout)
+        if _is_error(result):
+            return {"error": result.get("error", "send_message failed")}
+        payload = result.get("data", result)
+        if not isinstance(payload, dict):
+            return {"error": "Unexpected response shape from extension"}
+        conv_id = payload.get("conversation_id") or conversation_id
+
+        created = self._video_tool_returns(payload, "video__create_music_video")
+        job_id = self._video_job_id(created)
+        proposed = self._video_tool_returns(payload, "video__propose_music_video")
+
+        if not job_id and proposed and auto_confirm:
+            # Nhịp hai: xác nhận đúng MỘT lần. Gửi lại nữa là mời agent submit lần thứ hai —
+            # mỗi lần submit là ~500 credit, không phải thứ đáng thử vận may.
+            confirm = await self.send_message(
+                "Yes, create that music video now.", conversation_id=conv_id,
+                client_context=ctx, timeout=timeout)
+            if not _is_error(confirm):
+                payload2 = confirm.get("data", confirm)
+                if isinstance(payload2, dict):
+                    created2 = self._video_tool_returns(payload2, "video__create_music_video")
+                    job_id = self._video_job_id(created2) or job_id
+                    created = created + created2
+                    payload["text"] = payload2.get("text") or payload.get("text")
+
+        status = "submitted" if job_id else ("proposed" if proposed else "not_called")
+        if status == "submitted":
+            logger.warning("Flow Music: đã đặt render music video (job %s) cho clip %s "
+                           "— ~500 credit, 15-30 phút", job_id, clip_id)
+        return {
+            "conversation_id": conv_id,
+            "clip_id": clip_id,
+            "status": status,
+            "video_job_id": job_id,
+            "text": payload.get("text"),
+            "raw_tool_returns": created + proposed,
+        }
+
+    async def music_video_status(self, clip_id: str) -> dict:
+        """Music video của một bài đã xong chưa → {status, video_url, video_clip_id}.
+
+        Video KHÔNG nằm trong clip audio: clip audio chỉ mang `video_id` trỏ sang một clip
+        riêng (`op_type: video__create_music_video`) và `video_url` nằm ở clip đó. URL của
+        Flow Music là URL tĩnh public (bucket producer-app-public) nên lấy được là tải thẳng,
+        không cần ký lại như Flow video.
+        """
+        res = await self.get_clips([clip_id])
+        if _is_error(res):
+            return {"error": res.get("error", "get_clips failed")}
+        clip = (((res.get("data", res)) or {}).get("clips") or {}).get(clip_id)
+        if not clip:
+            return {"error": f"Không thấy clip {clip_id}"}
+
+        if clip.get("video_url"):
+            return {"status": "done", "video_url": clip["video_url"],
+                    "video_clip_id": clip.get("video_id") or clip_id}
+
+        video_id = clip.get("video_id")
+        if not video_id:
+            return {"status": "none", "clip_id": clip_id,
+                    "note": "Bài này chưa có music video nào được đặt render."}
+
+        res2 = await self.get_clips([video_id])
+        if _is_error(res2):
+            return {"error": res2.get("error", "get_clips failed")}
+        vclip = (((res2.get("data", res2)) or {}).get("clips") or {}).get(video_id) or {}
+        url = vclip.get("video_url")
+        return {
+            "status": "done" if url else "pending",
+            "video_url": url,
+            "video_clip_id": video_id,
+            "title": vclip.get("title") or clip.get("title"),
+        }
+
+
 def _is_error(result: dict) -> bool:
     return bool(result.get("error")) or (isinstance(result.get("status"), int) and result["status"] >= 400)
 

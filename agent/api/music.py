@@ -34,6 +34,19 @@ class RenameConversationRequest(BaseModel):
     title: str
 
 
+class CreateMusicVideoRequest(BaseModel):
+    clip_id: str                              # bài hát (clip audio) muốn dựng video
+    conversation_id: Optional[str] = None     # conversation chứa bài đó (nên có)
+    aspect_ratio: str = "16:9"                # "16:9" | "9:16" | "1:1"
+    render_lyrics: bool = False
+    note: Optional[str] = None                # thêm yêu cầu bằng lời (phong cách, nội dung…)
+    start_s: int = 0                          # video dựng theo MỘT ĐOẠN của bài, không cả bài
+    duration_s: int = 60
+    # False = chỉ để agent ĐỀ XUẤT, không bấm nút render (không tốn credit) — dùng để thử.
+    auto_confirm: bool = True
+    timeout: Optional[float] = None
+
+
 class ClipsRequest(BaseModel):
     clip_ids: list[str]
 
@@ -100,6 +113,43 @@ async def send_message(body: SendMessageRequest):
     )
     _raise_if_error(result)
     return result.get("data", result)
+
+
+@router.post("/create-music-video")
+async def create_music_video(body: CreateMusicVideoRequest):
+    """Đặt lệnh dựng MUSIC VIDEO của Flow Music cho một bài hát đã có.
+
+    ⚠ **~500 credit và 15-30 phút mỗi video** — đắt hơn mọi thứ khác trong Flow Kit gộp lại.
+    Endpoint này KHÔNG chờ render xong: nó trả về ngay khi agent phía Flow Music nhận việc.
+    Hỏi kết quả bằng `GET /api/music/music-video/{clip_id}`.
+
+    `auto_confirm=false` → chỉ lấy ĐỀ XUẤT (agent gọi `video__propose_music_video`), không
+    render, không tốn credit. Dùng để xem agent hiểu yêu cầu thế nào trước khi tiêu tiền.
+
+    Trả `status`: `submitted` (đã đặt render) | `proposed` (mới đề xuất) | `not_called`
+    (agent hiểu thành việc khác — đọc `text`).
+    """
+    client = _require_connected()
+    result = await client.create_music_video(
+        body.clip_id, conversation_id=body.conversation_id,
+        aspect_ratio=body.aspect_ratio, render_lyrics=body.render_lyrics,
+        note=body.note or "", start_s=body.start_s, duration_s=body.duration_s,
+        auto_confirm=body.auto_confirm, timeout=body.timeout)
+    _raise_if_error(result)
+    return result
+
+
+@router.get("/music-video/{clip_id}")
+async def music_video_status(clip_id: str):
+    """Music video của bài `clip_id` xong chưa → `{status, video_url, video_clip_id}`.
+
+    `status`: `done` (có `video_url`, tải thẳng được — URL tĩnh public) | `pending` (đang
+    render) | `none` (chưa từng đặt render bài này).
+    """
+    client = _require_connected()
+    result = await client.music_video_status(clip_id)
+    _raise_if_error(result)
+    return result
 
 
 @router.get("/song-status/{operation_id}")

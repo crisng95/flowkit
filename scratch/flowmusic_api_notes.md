@@ -151,6 +151,26 @@ log message của một **agent framework kiểu PydanticAI** (`part_kind`:
   Video render async, **15–30 phút**, kết quả tự xuất hiện trong chat khi xong (server
   push — nghi là qua Supabase Realtime WS thấy trong bundle JS, cần xác nhận thêm; có thể
   cũng chỉ là client tự poll lại conversation).
+
+  **Bổ sung 2026-08-17 — đọc log tool-call của conversation THẬT (`1104e19c`, "Giấy màu ướt
+  mưa - Hàng Mã"):** hai tool này chia việc rất rạch ròi, và đây là chỗ dễ hiểu nhầm nhất:
+  - **Tham số nằm ở `propose`, KHÔNG ở `create`.** `video__propose_music_video` nhận
+    `{inputs: {clip_id, start_time, end_time, duration_s, aspect_ratio, user_message,
+    display_lyrics}}` (tên field snake_case, bọc trong `inputs`; agent thử camelCase và
+    không bọc `inputs` đều bị 422). Nó trả `content: null` — chỉ dựng thẻ đề xuất trên UI.
+  - **`video__create_music_video` không nhận field NÀO.** Mọi biến thể đều bị chặn:
+    `{inputs: {...}}` → `extra_forbidden` ở `inputs`; đưa field ra ngoài → `extra_forbidden`
+    ở từng field một. Khớp với lần bắt được trước đây: chỉ `args: {}` rỗng mới chạy. Tức là
+    server tự lấy thông số từ đề xuất đang treo — `create` chỉ là cái nút "đồng ý".
+  - **Trong conversation này agent KHÔNG bao giờ submit được**: 6 lần gọi `create` đều 422,
+    rồi agent bỏ cuộc và nhắn *"I ran into a technical hiccup… please try clicking the
+    confirmation button on the proposal card above directly"*. Cả hai clip của conversation
+    tới giờ vẫn `video_id: null`, `video_url: null` → tài khoản này CHƯA có music video nào
+    render xong.
+  - Hệ quả cho tự động hoá: lượt chat đầu phải nói đủ thông số (để `propose` bắt đúng), lượt
+    xác nhận phải **trống trơn** ("Yes, create that music video now.") để agent không nhét
+    field vào `create`. Đường chắc ăn hơn là gọi thẳng REST mà nút xác nhận trên thẻ dùng —
+    JS bundle có `/video/generate`, **chưa xác nhận path/schema thật** (xem mục "Còn thiếu").
 - `synthetic__suggest_actions(action1, action2, action3)` → gợi ý 3 nút hành động nhanh
   cho UI, không cần quan tâm khi build automation.
 
