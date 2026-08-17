@@ -156,20 +156,27 @@ export default function ProjectGrid({ onOpen }: Props) {
             className="group overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/50 transition hover:border-neutral-600"
           >
             <button onClick={() => onOpen(p)} className="block w-full text-left">
+              {/* crop=false: ảnh đại diện có thể là ảnh asset khung DỌC (nhân vật/đạo cụ),
+                  mà ô này khung ngang — cắt-đầy xén mất đầu lẫn chân, chỉ chừa khúc giữa. */}
               <Thumb
                 src={p.thumb_media_key ? thumbUrl(p.thumb_media_key) : null}
                 alt={p.title}
                 rounded="rounded-none"
+                crop={false}
                 className="aspect-video w-full"
               />
             </button>
             <div className="flex items-center justify-between gap-2 p-3">
               <button onClick={() => onOpen(p)} className="min-w-0 flex-1 text-left">
                 <div className="truncate font-medium">{p.title}</div>
+                {/* `style` là cả một đặc tả phong cách (dự án thật đang 2000+ ký tự), để nó
+                    xuống dòng tự do là một thẻ dài gấp mấy lần cái ảnh. Một dòng, cắt đuôi. */}
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                  <span>{p.style}</span>
+                  <span className="min-w-0 flex-1 truncate" title={p.style || ""}>
+                    {p.style}
+                  </span>
                   {p.storytelling ? (
-                    <span className="rounded bg-amber-500/15 px-1.5 text-amber-300">
+                    <span className="shrink-0 rounded bg-amber-500/15 px-1.5 text-amber-300">
                       storytelling
                     </span>
                   ) : null}
