@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type MusicStatus, type MusicTrack, type Project } from "../../api/client";
 import { useConfirm } from "../common/Confirm";
 import MusicManager from "./MusicManager";
+import MusicVideoPanel from "./MusicVideoPanel";
 
 // Playlist nhạc của dự án — chế độ "music video": nhiều bài phát nối tiếp, cách nhau `gap`
 // giây, và TỔNG thời lượng playlist quyết định độ dài video. Hình (scene/shot) là một dòng
@@ -241,6 +242,11 @@ export default function MusicTab({ project }: { project: Project }) {
           Ghép video ở tab <b>Assemble</b> như bình thường — khi bật chế độ music video, khâu
           ghép sẽ tự nối playlist thành một dải âm thanh rồi khớp hình vào đúng độ dài đó.
         </p>
+
+        {/* Đường THỨ HAI, hoàn toàn khác: để Flow Music tự dựng hình cho một bài. Không đi
+            qua storyboard/shot của Flow Kit, nên đặt tách hẳn xuống dưới để không lẫn với
+            playlist ở trên. */}
+        <MusicVideoPanel project={project} tracks={tracks} />
       </div>
 
       {picker && (

@@ -300,6 +300,31 @@ class MusicClient:
                 return content["job_id"]
         return None
 
+    async def create_style_image(self, description: str, aspect_ratio: str = "16:9",
+                                  conversation_id: str = None,
+                                  timeout: float = None) -> dict:
+        """Nhờ chính Flow Music sinh MỘT ảnh neo phong cách (`image__create_image`).
+
+        Vì sao phải nhờ họ: `style_image_url` cần URL Flow Music với tới được, mà media của
+        Flow Kit phục vụ ở 127.0.0.1. Ảnh do `image__create_image` sinh nằm trên bucket công
+        khai `producer-app-public` nên dùng thẳng được.
+        """
+        msg = (f"Create a style reference image ({aspect_ratio}) for a music video. "
+               f"The image: {description.strip()}. Just make the image, nothing else.")
+        res = await self.send_message(msg, conversation_id=conversation_id, timeout=timeout)
+        if _is_error(res):
+            return {"error": res.get("error", "send_message failed")}
+        payload = res.get("data", res)
+        for tr in (payload.get("tool_returns") or []):
+            if tr.get("tool_name") != "image__create_image":
+                continue
+            content = tr.get("content")
+            if isinstance(content, dict) and content.get("image_url"):
+                return {"image_url": content["image_url"],
+                        "conversation_id": payload.get("conversation_id")}
+        return {"error": "Agent không tạo ảnh (image__create_image không được gọi)",
+                "text": payload.get("text")}
+
     async def create_music_video(self, clip_id: str, conversation_id: str = None, *,
                                   aspect_ratio: str = "16:9", render_lyrics: bool = False,
                                   note: str = "", style: str = "", style_image_url: str = None,
@@ -320,6 +345,20 @@ class MusicClient:
         # display_lyrics}, còn `video__create_music_video` KHÔNG nhận field nào (mọi field
         # đều bị server trả "extra_forbidden" — đo trên conversation thật). Nên tin nhắn đầu
         # nói đủ ý, tin nhắn xác nhận thì để trống trơn.
+        # "auto" = tự dựng ảnh neo trước rồi mới đặt render. Neo bằng ẢNH là kênh chắc chắn
+        # nhất (field thật của `propose`), nhưng nó đòi một URL công khai — nên bước này phải
+        # có ai đó làm; để người dùng tự đi tạo ảnh rồi dán URL vào là bắt họ làm việc của máy.
+        auto_style_image = None
+        if str(style_image_url or "").strip().lower() == "auto":
+            style_image_url = None
+            desc = ", ".join(x.strip() for x in (style, note) if x and x.strip())
+            if desc:
+                img = await self.create_style_image(desc, aspect_ratio=aspect_ratio,
+                                                     conversation_id=conversation_id,
+                                                     timeout=timeout)
+                style_image_url = img.get("image_url")
+                auto_style_image = img.get("image_url") or {"error": img.get("error")}
+
         lyrics_line = ("Render the lyrics on screen." if render_lyrics
                        else "Do not render lyrics on screen.")
         end_s = int(start_s) + int(duration_s)
@@ -367,6 +406,25 @@ class MusicClient:
         job_id = self._video_job_id(created)
         proposed = self._video_tool_returns(payload, "video__propose_music_video")
 
+        # Agent hay từ chối ngay lượt đầu ("technical parameter issue…") và KHÔNG gọi cả
+        # `propose`. Phải thúc cho có đề xuất MỚI rồi mới xác nhận: `create` không nhận tham
+        # số, nó lấy từ đề xuất đang treo — xác nhận khi chưa có đề xuất mới là render lại
+        # đúng đề xuất CŨ của conversation (sai bài, sai tỷ lệ), mà vẫn mất 750 credit.
+        if not job_id and not proposed and auto_confirm:
+            nudge = await self.send_message(
+                f"Just update the music video proposal card with those settings "
+                f"(clip {clip_id}, {aspect_ratio}, {int(duration_s)} seconds). "
+                f"Do not create the video yet.",
+                conversation_id=conv_id, client_context=ctx, timeout=timeout)
+            if not _is_error(nudge):
+                payload_n = nudge.get("data", nudge)
+                if isinstance(payload_n, dict):
+                    proposed = self._video_tool_returns(payload_n, "video__propose_music_video")
+                    created_n = self._video_tool_returns(payload_n, "video__create_music_video")
+                    job_id = self._video_job_id(created_n) or job_id
+                    created = created + created_n
+                    payload["text"] = payload_n.get("text") or payload.get("text")
+
         if not job_id and proposed and auto_confirm:
             # Nhịp hai: xác nhận đúng MỘT lần. Gửi lại nữa là mời agent submit lần thứ hai —
             # mỗi lần submit là ~500 credit, không phải thứ đáng thử vận may.
@@ -387,6 +445,8 @@ class MusicClient:
             "clip_id": clip_id,
             "status": status,
             "video_job_id": job_id,
+            "style_image_url": style_image_url,
+            "auto_style_image": auto_style_image,
             "text": payload.get("text"),
             "raw_tool_returns": created + proposed,
         }
@@ -395,16 +455,23 @@ class MusicClient:
 
         logger.warning("Flow Music: đã đặt render music video (job %s) cho clip %s "
                        "— ~750 credit, ~9 phút", job_id, clip_id)
-        # Đối chiếu bài THẬT SỰ được nhận: agent tự chọn clip nên vẫn có cửa render nhầm bài.
-        # Biết ngay lúc submit thì còn kịp hủy/đặt lại, biết lúc xem video thì đã mất tiền.
+        # Đối chiếu thứ Flow Music THẬT SỰ nhận. `create` lấy tham số từ đề xuất đang treo chứ
+        # không từ lượt gọi, nên vẫn có cửa render nhầm bài hoặc nhầm tỷ lệ — biết ngay lúc
+        # submit thì còn kịp đặt lại, biết lúc xem video thì đã mất 750 credit.
         job = await self.music_video_job_status(job_id)
-        used = (job.get("raw", {}).get("state") or {}).get("clip_id") if not job.get("error") else None
+        state = (job.get("raw") or {}).get("state") or {}
+        used = state.get("clip_id")
+        msg_echo = state.get("message") or ""
         out["clip_id_used"] = used
+        warns = []
         if used and used != clip_id:
-            out["warning"] = (f"Flow Music nhận clip {used}, KHÁC bài yêu cầu ({clip_id}) — "
-                              f"agent tự chọn bài trong conversation.")
-            logger.warning("music video job %s render NHẦM bài: %s thay vì %s",
-                           job_id, used, clip_id)
+            warns.append(f"Flow Music nhận clip {used}, KHÁC bài yêu cầu ({clip_id})")
+        if msg_echo and f"Aspect ratio: {aspect_ratio}" not in msg_echo:
+            warns.append(f"tỷ lệ không phải {aspect_ratio}")
+        if warns:
+            out["warning"] = (" · ".join(warns) +
+                              " — Flow Music dùng đề xuất đang treo trong conversation.")
+            logger.warning("music video job %s lệch yêu cầu: %s", job_id, out["warning"])
         return out
 
     async def music_video_job_status(self, job_id: str) -> dict:

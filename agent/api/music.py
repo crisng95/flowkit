@@ -43,7 +43,9 @@ class CreateMusicVideoRequest(BaseModel):
     # PHONG CÁCH — tách khỏi `note` có chủ đích. Không nói phong cách thì mỗi cảnh một chất
     # liệu (đo thật: ảnh thật → giấy cắt dán → tranh 3D → đất nặn trong cùng một video 60s).
     style: Optional[str] = None
-    style_image_url: Optional[str] = None     # ảnh neo phong cách (URL công khai)
+    # Ảnh neo phong cách: URL công khai, hoặc "auto" để Flow Music tự sinh ảnh neo từ `style`
+    # (+ `note`) trước khi đặt render. Đây là kênh neo CHẮC nhất — xem create_music_video.
+    style_image_url: Optional[str] = None
     start_s: int = 0                          # video dựng theo MỘT ĐOẠN của bài, không cả bài
     duration_s: int = 60
     # False = chỉ để agent ĐỀ XUẤT, không bấm nút render (không tốn credit) — dùng để thử.

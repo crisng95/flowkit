@@ -931,4 +931,47 @@ export const musicApi = {
     });
     return clipIds.map((id) => res.clips?.[id]).filter(Boolean).map(_clipToSong);
   },
+
+  // ── Music video (Flow Music tự dựng hình cho bài hát) ─────
+  // ĐẮT: ~750 credit + ~9 phút mỗi video, và chỉ trừ credit khi render XONG (job lỗi không
+  // mất gì). Submit trả về ngay, tiến độ hỏi riêng bằng job_id.
+  createMusicVideo: (body: {
+    clip_id: string;
+    conversation_id?: string | null;
+    aspect_ratio?: string;
+    render_lyrics?: boolean;
+    style?: string | null;
+    // URL công khai, hoặc "auto" để Flow Music tự sinh ảnh neo phong cách trước khi render.
+    style_image_url?: string | null;
+    note?: string | null;
+    start_s?: number;
+    duration_s?: number;
+  }) =>
+    musicReq<{
+      status: "submitted" | "proposed" | "not_called";
+      video_job_id: string | null;
+      clip_id: string;
+      clip_id_used?: string | null;
+      style_image_url?: string | null;
+      warning?: string | null;
+      text?: string | null;
+    }>("/create-music-video", { method: "POST", body: JSON.stringify(body) }),
+
+  musicVideoJob: (jobId: string) =>
+    musicReq<{
+      job_id: string;
+      status: string;            // done | running | completed | error | pending
+      stage?: string | null;     // 02_visual_aesthetic … 06_postprocess
+      video_url?: string | null;
+      clip_id?: string | null;
+      duration_s?: number | null;
+      runtime_s?: number | null;
+      preview_image?: string | null;
+      error?: string | null;
+    }>(`/music-video-job/${jobId}`),
 };
+
+/** clip_id nằm ngay trong audio_url của Flow Music (…/clips/{clip_id}.m4a) — track trong
+ *  playlist không phải lúc nào cũng lưu meta, nên rút từ URL là đường chắc nhất. */
+export const clipIdFromAudioUrl = (url?: string | null): string | null =>
+  (String(url || "").match(/\/clips\/([0-9a-f-]{36})\./i) || [])[1] || null;
