@@ -4453,6 +4453,8 @@ class BuildMusicVideoItem(BaseModel):
 class BuildMusicVideoRequest(BaseModel):
     items: list[BuildMusicVideoItem]
     title: Optional[str] = None
+    # Chỉ dùng cho bản export Resolve: độ dài cross dissolve (khung, 24fps → 24 = 1 giây).
+    xfade_frames: int = davinci_xml.XFADE_F
 
 
 class GenerateTrackRequest(BaseModel):
@@ -4593,6 +4595,39 @@ def _media_path_in_project(pid: str, web: str) -> Path:
     if not p.exists():
         raise HTTPException(404, f"Không thấy file: {web}")
     return p
+
+
+async def _music_video_pairs(pid: str, items: list[BuildMusicVideoItem]) -> list[tuple[dict, Path]]:
+    """[(track_row, đường dẫn music video)] — dùng chung cho đường ghép sẵn và export Resolve."""
+    pairs: list[tuple[dict, Path]] = []
+    for it in items:
+        track = await db.query_one("SELECT * FROM music_track WHERE id=? AND project_id=?",
+                                   (it.track_id, pid))
+        if not track:
+            raise HTTPException(404, f"Không thấy bài {it.track_id} trong dự án")
+        if not Path(track["path"]).exists():
+            raise HTTPException(404, f"Thiếu file nhạc của bài '{track['title']}'")
+        pairs.append((track, _media_path_in_project(pid, it.video_web)))
+    return pairs
+
+
+@router.post("/projects/{pid}/music-video/davinci-xml")
+async def export_music_video_davinci(pid: str, body: BuildMusicVideoRequest):
+    """Xuất timeline Resolve cho video nhạc — CÓ cross dissolve ở mọi mối nối.
+
+    Khác `/music-video/build` (ffmpeg cắt phựt, xong là ra file MP4): bản này để người dùng
+    dựng tiếp trong Resolve, nơi chỗ nối giữa hai vòng lặp hình và chỗ chuyển bài đều là
+    một cross dissolve `xfade_frames` khung thay vì cắt cứng.
+    """
+    await _project_or_404(pid)
+    if not body.items:
+        raise HTTPException(400, "Chưa chọn bài nào")
+    pairs = await _music_video_pairs(pid, body.items)
+    try:
+        return await davinci_xml.build_music_video(
+            pid, pairs, xfade_f=max(0, min(120, int(body.xfade_frames))))
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/projects/{pid}/music-video/build")

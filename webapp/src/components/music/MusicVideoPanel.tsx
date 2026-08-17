@@ -338,6 +338,32 @@ export default function MusicVideoPanel({
     }
   };
 
+  // Bản Resolve: cùng phép ghép, nhưng chỗ nối là CROSS DISSOLVE thay vì cắt phựt — ffmpeg
+  // ở đường "dựng sẵn" chỉ nối cứng, muốn mượt thì dựng tiếp trong Resolve.
+  const [xfade, setXfade] = useState(24);
+  const [xml, setXml] = useState<{ web_path: string; clips: number; songs: number } | null>(null);
+  const exportDavinci = async () => {
+    if (!ready.length) {
+      setErr("Chưa bài nào trong playlist có music video đã lưu vào dự án.");
+      return;
+    }
+    setJoining(true);
+    setErr(null);
+    try {
+      setXml(
+        await api.musicVideoDavinci(
+          project.id,
+          ready.map((p) => ({ track_id: p.track.id, video_web: p.video_web! })),
+          xfade
+        )
+      );
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setJoining(false);
+    }
+  };
+
   // Nối thô theo thứ tự CŨ → MỚI: dùng khi các lượt là nhiều ĐOẠN của cùng một bài, hoặc khi
   // bài không nằm trong playlist dự án.
   const joinAll = async () => {
@@ -600,6 +626,41 @@ export default function MusicVideoPanel({
             >
               🔗 Nối thô
             </button>
+          </div>
+
+          {/* Đường Resolve: chỗ nối là cross dissolve chứ không cắt phựt như bản ffmpeg. */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950/50 px-3 py-2">
+            <span className="text-sm text-neutral-400">Xuất DaVinci Resolve</span>
+            <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+              cross dissolve
+              <input
+                type="number"
+                min={0}
+                max={120}
+                step={6}
+                value={xfade}
+                onChange={(e) => setXfade(Math.max(0, Math.min(120, Number(e.target.value) || 0)))}
+                className="w-16 rounded border border-neutral-700 bg-neutral-950 px-1.5 py-1 text-center text-sm text-neutral-200 outline-none focus:border-indigo-500"
+              />
+              khung ({(xfade / 24).toFixed(2)}s @24fps)
+            </label>
+            <button
+              onClick={exportDavinci}
+              disabled={joining || !ready.length}
+              title="Timeline .xml: hình lặp hết bài, mỗi mối nối và mỗi chỗ chuyển bài là một cross dissolve"
+              className="ml-auto rounded-lg border border-violet-700/60 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-950/40 disabled:opacity-40"
+            >
+              {joining ? "Đang xuất…" : "🎞 Xuất timeline"}
+            </button>
+            {xml && (
+              <a
+                href={xml.web_path}
+                download
+                className="w-full text-xs text-violet-300 hover:text-violet-200"
+              >
+                ✓ {xml.songs} bài · {xml.clips} clip hình · tải {xml.web_path.split("/").pop()}
+              </a>
+            )}
           </div>
 
           {joined && (

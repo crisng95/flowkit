@@ -369,6 +369,26 @@ export const api = {
       `/projects/${pid}/music-video/build`,
       { method: "POST", body: JSON.stringify({ items, title: title ?? null }) }
     ),
+  // Cùng phép ghép như buildMusicVideo, nhưng xuất TIMELINE Resolve: mỗi mối nối (giữa hai
+  // vòng lặp hình và chỗ chuyển bài) là một cross dissolve `xfade_frames` khung.
+  musicVideoDavinci: (
+    pid: string,
+    items: { track_id: string; video_web: string }[],
+    xfade_frames = 24
+  ) =>
+    req<{
+      web_path: string;
+      songs: number;
+      clips: number;
+      xfade_frames: number;
+      fps: number;
+      duration: number;
+      width: number;
+      height: number;
+    }>(`/projects/${pid}/music-video/davinci-xml`, {
+      method: "POST",
+      body: JSON.stringify({ items, xfade_frames }),
+    }),
   // Nối nhiều music video đã lưu thành một video dài (mỗi video mang sẵn tiếng bài của nó).
   concatMusicVideos: (pid: string, webs: string[], title?: string) =>
     req<{ web: string; duration: number; parts: number; size_mb: number }>(

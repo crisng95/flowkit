@@ -174,6 +174,195 @@ def _audio_item(idx: int, name: str, path: Path, start_f: int, dur_f: int,
         </clipitem>"""
 
 
+def _transition_item(start_f: int, end_f: int) -> str:
+    """Cross dissolve giữa hai clip kề nhau, kiểu FCP7 (Resolve nhập được).
+
+    `alignment=center`: chỗ cắt nằm GIỮA khoảng [start_f, end_f], nên hai clip hai bên phải
+    chờm lên nhau đúng bằng độ dài này — xem `_music_video_track`.
+    """
+    return f"""        <transitionitem>
+          <rate><timebase>{FPS}</timebase><ntsc>FALSE</ntsc></rate>
+          <start>{start_f}</start>
+          <end>{end_f}</end>
+          <alignment>center</alignment>
+          <cutPointTicks>0</cutPointTicks>
+          <effect>
+            <name>Cross Dissolve</name>
+            <effectid>Cross Dissolve</effectid>
+            <effectcategory>Dissolve</effectcategory>
+            <effecttype>transition</effecttype>
+            <mediatype>video</mediatype>
+            <wipecode>0</wipecode>
+            <wipeaccuracy>100</wipeaccuracy>
+            <startratio>0</startratio>
+            <endratio>1</endratio>
+            <reverse>FALSE</reverse>
+          </effect>
+        </transitionitem>"""
+
+
+def _clipitem_slice(idx: int, name: str, path: Path, start_f: int, in_f: int, out_f: int,
+                    w: int, h: int, file_id: str, define_file: bool, file_dur_f: int) -> str:
+    """Một clipitem đọc ĐOẠN [in_f, out_f) của file. Nhiều vòng lặp của cùng một video dùng
+    chung `file_id`: chỉ clip đầu khai `<file>` đầy đủ, các clip sau tham chiếu lại."""
+    dur_f = out_f - in_f
+    if define_file:
+        file_xml = (f'<file id="{file_id}">\n'
+                    f'            <name>{escape(path.name)}</name>\n'
+                    f'            <pathurl>{_file_url(path)}</pathurl>\n'
+                    f'            <rate><timebase>{FPS}</timebase></rate>\n'
+                    f'            <duration>{file_dur_f}</duration>\n'
+                    f'            <media><video><samplecharacteristics>\n'
+                    f'              <width>{w}</width><height>{h}</height>\n'
+                    f'            </samplecharacteristics></video></media>\n'
+                    f'          </file>')
+    else:
+        file_xml = f'<file id="{file_id}"/>'
+    return f"""        <clipitem id="mv{idx}">
+          <name>{escape(name)}</name>
+          <duration>{file_dur_f}</duration>
+          <rate><timebase>{FPS}</timebase><ntsc>FALSE</ntsc></rate>
+          <start>{start_f}</start>
+          <end>{start_f + dur_f}</end>
+          <in>{in_f}</in>
+          <out>{out_f}</out>
+          {file_xml}
+        </clipitem>"""
+
+
+# Độ dài cross dissolve mặc định: 24 khung = 1 giây ở 24fps.
+XFADE_F = 24
+
+
+async def build_music_video(project_id: str, pairs: list[tuple[dict, Path]],
+                            xfade_f: int = XFADE_F) -> dict:
+    """Timeline Resolve cho video nhạc: mỗi bài một music video, HÌNH LẶP hết bài.
+
+    Khác `build()` (đi theo shot/scene): ở đây hình và tiếng là hai dòng độc lập —
+      • dòng TIẾNG: mỗi bài một clip, nối tiếp nhau, cách nhau `project.music_gap`;
+      • dòng HÌNH: video của bài lặp lại cho phủ hết bài, mỗi mối nối (giữa hai vòng lặp,
+        và giữa hai bài) là một cross dissolve `xfade_f` khung.
+
+    Vì hai clip hình phải CHỜM lên nhau đúng bằng độ dài dissolve, mỗi vòng lặp chỉ đẩy
+    timeline đi `Lv - xfade_f` khung chứ không phải `Lv` — không trừ phần chờm này thì hình
+    hết trước nhạc đúng `xfade_f × số mối nối` khung.
+
+    `pairs`: [(track_row, đường dẫn music video)] theo thứ tự phát.
+    """
+    project = await db.query_one("SELECT * FROM project WHERE id=?", (project_id,))
+    if not project:
+        raise RuntimeError("project not found")
+    if not pairs:
+        raise RuntimeError("Chưa có bài nào kèm music video")
+
+    w, h = await assembler.probe_size(pairs[0][1])
+    if not (w and h):
+        w, h = assembler._res(project["aspect_ratio"], 720)
+    gap_f = round(float(project.get("music_gap") or 0) * FPS)
+
+    dv_dir = STUDIO_MEDIA_DIR / project_id / "dv_music"
+    shutil.rmtree(dv_dir, ignore_errors=True)
+    dv_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Bước 1: mốc thời gian ─────────────────────────────────
+    # Dòng tiếng nối tiếp nhau, cách nhau `gap`. Dòng hình chạy LIÊN TỤC, chỉ đổi nguồn: hình
+    # của bài k kéo tới đúng lúc bài k+1 bắt đầu, còn hình bài k+1 vào sớm hơn `xfade` khung —
+    # nên khi tiếng sang bài mới thì hình đã chuyển xong. Không có khoảng hở nào để dissolve
+    # phải hoà vào chỗ trống.
+    songs = []
+    cursor = 0
+    for k, (track, vpath) in enumerate(pairs):
+        apath = Path(track["path"])
+        song_f = max(1, round(float(track.get("duration") or 0) * FPS))
+        if song_f <= 1:
+            song_f = max(1, round(await assembler.probe_duration(apath) * FPS))
+        vid_f = max(1, round(await assembler.probe_duration(vpath) * FPS))
+        songs.append({"track": track, "vpath": vpath, "apath": apath,
+                      "astart": cursor, "aend": cursor + song_f, "vid_f": vid_f})
+        cursor += song_f + (gap_f if k < len(pairs) - 1 else 0)
+    total = songs[-1]["aend"]
+
+    # ── Bước 2: các đoạn hình, có tính phần CHỜM ──────────────
+    # Mỗi vòng lặp chỉ đẩy timeline đi `vid_f - xfade` khung chứ không phải `vid_f` — quên trừ
+    # phần chờm là hình hết trước nhạc đúng `xfade × số mối nối` khung.
+    #
+    # Các vòng lặp CHIA ĐỀU chứ không "chạy hết video rồi lấy phần dư": cách chạy-hết để lại
+    # một mẩu vụn ở cuối bài (đo thật: 42 khung kẹp giữa hai dissolve — hình vừa hiện đã mờ
+    # đi). Số vòng n = ceil((D - X) / (Lv - X)), rồi mỗi vòng dài (D + (n-1)X)/n — luôn ≤ Lv
+    # theo đúng công thức, nên không vòng nào đòi nhiều hơn độ dài video có thật.
+    spans: list[dict] = []          # {k, start, take, join}
+    for k, s in enumerate(songs):
+        vstart = s["astart"] - (xfade_f if k else 0)
+        vend = songs[k + 1]["astart"] if k + 1 < len(songs) else s["aend"]
+        need = vend - vstart
+        step = max(1, s["vid_f"] - xfade_f)
+        n = max(1, -(-(need - xfade_f) // step))          # ceil
+        take = (need + (n - 1) * xfade_f) / n
+        pos = vstart
+        for j in range(n):
+            end = vend if j == n - 1 else round(vstart + (j + 1) * take - j * xfade_f)
+            spans.append({"k": k, "start": pos, "take": end - pos, "join": j > 0 or k > 0})
+            pos = end - xfade_f
+
+    # ── Bước 3: XML ───────────────────────────────────────────
+    video_items: list[str] = []
+    audio_items: list[str] = []
+    defined: set[int] = set()
+    for k, s in enumerate(songs):
+        staged_a = _stage(s["apath"], f"song{_alpha(k)}", dv_dir)
+        audio_items.append(_audio_item(
+            k, s["track"].get("title") or f"Bài {k+1}", staged_a,
+            s["astart"], s["aend"] - s["astart"], file_dur_f=s["aend"] - s["astart"]))
+    staged_v = {k: _stage(s["vpath"], f"mv{_alpha(k)}", dv_dir) for k, s in enumerate(songs)}
+    for idx, sp in enumerate(spans):
+        k = sp["k"]
+        s = songs[k]
+        video_items.append(_clipitem_slice(
+            idx, s["track"].get("title") or f"Bài {k+1}", staged_v[k],
+            sp["start"], 0, sp["take"], w, h,
+            f"mvfile{k}", define_file=k not in defined, file_dur_f=s["vid_f"]))
+        defined.add(k)
+        if sp["join"]:
+            video_items.append(_transition_item(sp["start"], sp["start"] + xfade_f))
+    loops_total = len(spans)
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xmeml>
+<xmeml version="5">
+  <sequence id="seq1">
+    <name>{escape((project["title"] or "Music video") + " — MV")}</name>
+    <duration>{total}</duration>
+    <rate><timebase>{FPS}</timebase><ntsc>FALSE</ntsc></rate>
+    <media>
+      <video>
+        <format><samplecharacteristics>
+          <width>{w}</width><height>{h}</height>
+          <rate><timebase>{FPS}</timebase></rate>
+        </samplecharacteristics></format>
+        <track>
+{chr(10).join(video_items)}
+        </track>
+      </video>
+      <audio>
+        <track>
+{chr(10).join(audio_items)}
+        </track>
+      </audio>
+    </media>
+  </sequence>
+</xmeml>
+"""
+    out_dir = STUDIO_MEDIA_DIR / project_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "music_video_timeline.xml"
+    out.write_text(xml, encoding="utf-8")
+    return {"path": str(out),
+            "web_path": f"/studio-media/{project_id}/music_video_timeline.xml",
+            "songs": len(pairs), "clips": loops_total,
+            "xfade_frames": xfade_f, "fps": FPS,
+            "duration": round(total / FPS, 2), "width": w, "height": h}
+
+
 DEFAULT_IMG_S = 4.0
 
 
