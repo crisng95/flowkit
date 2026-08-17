@@ -171,6 +171,40 @@ log message của một **agent framework kiểu PydanticAI** (`part_kind`:
     xác nhận phải **trống trơn** ("Yes, create that music video now.") để agent không nhét
     field vào `create`. Đường chắc ăn hơn là gọi thẳng REST mà nút xác nhận trên thẻ dùng —
     JS bundle có `/video/generate`, **chưa xác nhận path/schema thật** (xem mục "Còn thiếu").
+
+### `GET /__api/music-video/{job_id}/status` — tiến độ + KẾT QUẢ music video (đo thật 2026-08-17)
+
+`job_id` = giá trị `video__create_music_video` trả về. Đây là **nguồn sự thật duy nhất**:
+- `state.current_stage`: `02_visual_aesthetic` → `03_video_planning_from_song` →
+  `04_video_continuing_shot` → `06_postprocess`; `state.status`: `running` | `completed` | `error`.
+- `state.final_video_url`: MP4 tĩnh public (`producer-app-public/music-video/{job_id}/{job_id}.mp4`).
+- `state.message`: in lại nguyên văn tham số job nhận được (Clip ID / Style image URL /
+  Likeness image URL / Start time / Duration / Aspect ratio / Resolution / `<user_message>`)
+  → **chỗ để kiểm xem yêu cầu của mình có tới nơi không**, đừng đoán.
+- `state.total_runtime_s`, `token_estimate`, `needs_credits`, `error_message`.
+
+**Clip audio KHÔNG được cập nhật**: video xong rồi mà `/__api/clips` vẫn trả `video_id: null`,
+`video_url: null` → tra trạng thái qua clip là sai đường, phải giữ `job_id`.
+
+#### Ba phép đo đắt giá (mỗi lượt 750 credit)
+
+1. **Giá & thời gian**: 750 credit (9000 token) cho 60s/720p, ~8,6 phút — không phải "~500
+   credit, 15-30 phút" như ghi chú cũ. Credit trừ **lúc render xong**, không phải lúc submit
+   (đo bằng vòng lấy số dư 2 phút/lần: đứng yên suốt lúc render, tụt đúng mẫu có `completed`).
+   Job `error` (`video__create_video_clip_async exceeded max retries count of 5`) **không bị
+   trừ**.
+2. **`client_context.current_song_id` KHÔNG ghim được bài**: conversation có 2 bài (A/B), đặt
+   `current_song_id` = bài A mà agent vẫn đưa bài B cho `propose` → render nhầm bài. Phải gọi
+   **đích danh clip id trong câu chữ**, và đối chiếu lại `state.clip_id` ngay sau khi submit.
+3. **Chỉ MỘT câu mô tả cảnh sống sót vào `user_message`**. Mọi câu chỉ thị kèm theo ("Visual
+   style: …", "giữ một phong cách xuyên suốt") đều bị agent bỏ khi soạn tham số. Muốn phong
+   cách tới nơi thì **ghép nó vào đầu câu tả cảnh dưới dạng tính từ**. Không neo phong cách
+   thì mỗi cảnh một chất liệu — job `06551f8b` (60s): giây 3 ảnh thật, giây 18 mô hình giấy
+   cắt dán, giây 33 tranh bán 3D, giây 50 đất nặn; job `9c10e2b7` thì photoreal toàn bộ dù
+   nội dung mô tả y hệt. Kênh chắc chắn hơn là **`style_image_url`** — field thật của
+   `propose`; lấy URL công khai bằng cách nhờ chính agent gọi `image__create_image`.
+   Cảnh báo kèm theo: từ vừa là nội dung vừa là chất liệu ("paper-craft street" = phố hàng mã)
+   bị đọc thành chất liệu dựng cảnh → ra hẳn diorama giấy.
 - `synthetic__suggest_actions(action1, action2, action3)` → gợi ý 3 nút hành động nhanh
   cho UI, không cần quan tâm khi build automation.
 
