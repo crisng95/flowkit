@@ -12,15 +12,35 @@ import { useConfirm } from "../common/Confirm";
 import { downloadFile, slugName } from "../../lib/download";
 
 // Music video của Flow Music: HỌ dựng hình cho bài hát, khác hẳn đường dựng video của Flow
-// Kit (storyboard → shot → clip). Dùng khi muốn một MV minh hoạ nhanh cho một bài trong
-// playlist, không phải khi muốn kiểm soát từng khung hình.
+// Kit (storyboard → shot → clip).
 //
-// Ba điều đã đo trên job thật, và UI này được dựng quanh chúng:
-//   • ~750 credit + ~9 phút mỗi video, credit chỉ trừ khi render XONG (job lỗi không mất gì).
+// Giới hạn của họ định hình toàn bộ màn này: MỘT lượt = MỘT bài, MỘT đoạn ≤60s. Muốn video
+// dài hoặc nhiều bài thì phải dựng nhiều lượt rồi NỐI lại — nên ở đây có hàng đợi và nút
+// nối, chứ không phải một nút "tạo video" đơn lẻ.
+//
+// Ba điều đã đo trên job thật:
+//   • ~750 credit + ~9 phút mỗi lượt, credit chỉ trừ khi render XONG (job lỗi không mất gì).
 //   • KHÔNG neo phong cách thì mỗi cảnh một chất liệu (ảnh thật → giấy cắt dán → đất nặn
-//     trong cùng một video 60s). Vì vậy ô "ảnh neo" mặc định bật.
-//   • Trạng thái chỉ đọc được qua job_id; clip audio KHÔNG bao giờ được cập nhật. Nên job_id
-//     phải được giữ lại ở máy người dùng, nếu không là mất dấu video đang render.
+//     trong cùng một video 60s) → ô "ảnh neo" mặc định bật.
+//   • Trạng thái chỉ đọc được qua job_id; clip audio KHÔNG bao giờ được cập nhật, nên job_id
+//     phải giữ lại ở máy người dùng.
+
+/** Một lượt render đang XẾP HÀNG (chưa gửi đi). Phải xếp hàng chứ không bắn song song:
+ *  `video__create_music_video` không nhận tham số, nó bắn ĐỀ XUẤT ĐANG TREO của conversation
+ *  — hai lượt chồng nhau là lượt sau cướp đề xuất của lượt trước, và mỗi lượt 750 credit. */
+type QueueItem = {
+  qid: string;
+  clip_id: string;
+  conversation_id: string | null;
+  title: string;
+  aspect: string;
+  start_s: number;
+  duration_s: number;
+  style: string;
+  note: string;
+  anchor: boolean;
+  lyrics: boolean;
+};
 
 type Job = {
   job_id: string;
@@ -32,7 +52,7 @@ type Job = {
   status?: string;
   stage?: string | null;
   error?: string | null;
-  /** /media/… sau khi đã tải bản của mình về dự án. */
+  /** /media/… sau khi đã tải bản của mình về dự án (điều kiện để nối). */
   saved_web?: string | null;
 };
 
@@ -45,14 +65,17 @@ const STAGES: Record<string, string> = {
 };
 
 const KEY = (pid: string) => `flowkit.musicVideos.${pid}`;
+const QKEY = (pid: string) => `flowkit.musicVideoQueue.${pid}`;
 
-const loadJobs = (pid: string): Job[] => {
+function loadJson<T>(key: string): T[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY(pid)) || "[]");
+    return JSON.parse(localStorage.getItem(key) || "[]");
   } catch {
     return [];
   }
-};
+}
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 export default function MusicVideoPanel({
   project,
@@ -61,10 +84,7 @@ export default function MusicVideoPanel({
   project: Project;
   tracks: MusicTrack[];
 }) {
-  // Hai nguồn bài, vì dựng MV không đòi bài phải nằm trong playlist dự án:
-  //   "playlist"  — bài đã thêm vào dự án (chỉ bài gốc Flow Music: bài upload từ máy không
-  //                 có clip_id bên họ nên không dựng được).
-  //   "library"   — mọi bài trong tài khoản flowmusic.app, lấy qua conversation.
+  // Hai nguồn bài, vì dựng MV không đòi bài phải nằm trong playlist dự án.
   const [src, setSrc] = useState<"playlist" | "library">("playlist");
   const [convs, setConvs] = useState<MusicConversation[]>([]);
   const [convId, setConvId] = useState("");
@@ -79,25 +99,31 @@ export default function MusicVideoPanel({
       ? playlistSongs
       : libSongs.map((s) => ({ clip_id: s.clip_id, title: s.title || s.clip_id.slice(0, 8) }));
 
-  const [clipId, setClipId] = useState<string>("");
+  const [picked, setPicked] = useState<string[]>([]);
   const [aspect, setAspect] = useState("16:9");
-  const [durationS, setDurationS] = useState(60);
-  const [startS, setStartS] = useState(0);
+  const [segLen, setSegLen] = useState(60);
+  const [segCount, setSegCount] = useState(1);
   const [lyrics, setLyrics] = useState(false);
   const [style, setStyle] = useState("");
   const [note, setNote] = useState("");
   const [anchor, setAnchor] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<Job[]>(() => loadJobs(project.id));
+  const [jobs, setJobs] = useState<Job[]>(() => loadJson<Job>(KEY(project.id)));
+  const [queue, setQueue] = useState<QueueItem[]>(() => loadJson<QueueItem>(QKEY(project.id)));
+  const [sending, setSending] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState<{ web: string; duration: number; parts: number } | null>(
+    null
+  );
   const confirm = useConfirm();
 
-  useEffect(() => setJobs(loadJobs(project.id)), [project.id]);
   useEffect(() => {
-    if (songs.length && !songs.some((s) => s.clip_id === clipId)) setClipId(songs[0].clip_id);
-  }, [songs.map((s) => s.clip_id).join(",")]);
+    setJobs(loadJson<Job>(KEY(project.id)));
+    setQueue(loadJson<QueueItem>(QKEY(project.id)));
+    setJoined(null);
+  }, [project.id]);
 
-  // Thư viện: nạp danh sách conversation một lần, bài trong đó nạp khi chọn.
   useEffect(() => {
     if (src !== "library" || convs.length) return;
     musicApi.conversations(30).then(setConvs).catch((e) => setErr(e.message));
@@ -111,22 +137,30 @@ export default function MusicVideoPanel({
       .catch((e) => setErr(e.message))
       .finally(() => setLibBusy(false));
   }, [convId]);
+  // Đổi nguồn/cuộc trò chuyện thì bỏ chọn cũ — id không còn nằm trong danh sách nữa.
+  useEffect(() => setPicked([]), [src, convId]);
 
-  const save = (next: Job[]) => {
+  const saveJobs = (next: Job[]) => {
     setJobs(next);
     localStorage.setItem(KEY(project.id), JSON.stringify(next));
   };
-  const saveRef = useRef(save);
-  saveRef.current = save;
+  const saveQueue = (next: QueueItem[]) => {
+    setQueue(next);
+    localStorage.setItem(QKEY(project.id), JSON.stringify(next));
+  };
+  const refs = useRef({ saveJobs, saveQueue, jobs, queue });
+  refs.current = { saveJobs, saveQueue, jobs, queue };
 
-  // Poll job chưa xong. 20s/lần là đủ: render mất ~9 phút, hỏi dày hơn chỉ tốn lượt relay.
+  const running = jobs.some((j) => !j.video_url && j.status !== "error");
+
+  // Poll lượt chưa xong. 20s/lần là đủ: render mất ~9 phút, hỏi dày hơn chỉ tốn lượt relay.
   useEffect(() => {
-    const pending = jobs.filter((j) => !j.video_url && j.status !== "error");
-    if (!pending.length) return;
+    if (!running) return;
     let stop = false;
     const tick = async () => {
+      const cur = refs.current.jobs;
       const updated = await Promise.all(
-        jobs.map(async (j) => {
+        cur.map(async (j) => {
           if (j.video_url || j.status === "error") return j;
           try {
             const r = await musicApi.musicVideoJob(j.job_id);
@@ -142,7 +176,7 @@ export default function MusicVideoPanel({
           }
         })
       );
-      if (!stop) saveRef.current(updated);
+      if (!stop) refs.current.saveJobs(updated);
     };
     const id = setInterval(tick, 20000);
     tick();
@@ -150,79 +184,109 @@ export default function MusicVideoPanel({
       stop = true;
       clearInterval(id);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs.map((j) => `${j.job_id}:${j.video_url ? 1 : 0}:${j.status}`).join(",")]);
+  }, [running]);
 
-  const submit = async () => {
-    const song = songs.find((s) => s.clip_id === clipId);
-    if (!song) {
-      setErr("Chọn một bài lấy từ Flow Music trước.");
+  // Đầu tàu của hàng đợi: chỉ gửi lượt kế khi KHÔNG còn lượt nào đang chạy.
+  useEffect(() => {
+    if (running || sending || !queue.length) return;
+    let stop = false;
+    (async () => {
+      setSending(true);
+      const item = queue[0];
+      const drop = () =>
+        refs.current.saveQueue(refs.current.queue.filter((q) => q.qid !== item.qid));
+      try {
+        const r = await musicApi.createMusicVideo({
+          clip_id: item.clip_id,
+          conversation_id: item.conversation_id,
+          aspect_ratio: item.aspect,
+          render_lyrics: item.lyrics,
+          style: item.style || null,
+          style_image_url: item.anchor ? "auto" : null,
+          note: item.note || null,
+          start_s: item.start_s,
+          duration_s: item.duration_s,
+        });
+        if (stop) return;
+        if (r.status !== "submitted" || !r.video_job_id) {
+          setErr(`"${item.title}": Flow Music không nhận lệnh (${r.status}). ${r.text || ""}`.trim());
+          drop();
+          return;
+        }
+        if (r.warning) setErr(`"${item.title}": ${r.warning}`);
+        refs.current.saveJobs([
+          {
+            job_id: r.video_job_id,
+            clip_id: r.clip_id_used || item.clip_id,
+            title: item.title,
+            aspect: item.aspect,
+            created_at: Date.now(),
+            status: "running",
+          },
+          ...refs.current.jobs,
+        ]);
+        drop();
+      } catch (e: any) {
+        if (!stop) {
+          setErr(e.message);
+          drop();
+        }
+      } finally {
+        if (!stop) setSending(false);
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [running, sending, queue.length]);
+
+  const enqueue = async () => {
+    const chosen = songs.filter((s) => picked.includes(s.clip_id));
+    if (!chosen.length) {
+      setErr("Chọn ít nhất một bài.");
       return;
     }
+    const total = chosen.length * segCount;
     const ok = await confirm({
-      title: "Dựng music video?",
+      title: `Dựng ${total} video?`,
       message:
-        `Flow Music sẽ dựng ${durationS}s hình cho "${song.title}" — khoảng 9 phút và ` +
-        "~750 credit. Credit chỉ bị trừ khi render xong; job hỏng giữa chừng thì không mất gì.",
-      confirmText: "Dựng video",
+        `${chosen.length} bài × ${segCount} đoạn ${segLen}s = ${total} lượt render, ` +
+        `khoảng ${total * 9} phút và ~${total * 750} credit. Chúng chạy LẦN LƯỢT (Flow Music ` +
+        "không cho hai lượt chồng nhau). Credit chỉ trừ khi mỗi lượt render xong.",
+      confirmText: `Dựng ${total} video`,
       danger: true,
     });
     if (!ok) return;
-    setBusy(true);
     setErr(null);
-    try {
-      const r = await musicApi.createMusicVideo({
-        clip_id: song.clip_id,
-        // Đúng conversation của bài thì agent khỏi phải mò — và đề xuất treo đúng chỗ.
-        conversation_id: src === "library" ? convId || null : null,
-        aspect_ratio: aspect,
-        render_lyrics: lyrics,
-        style: style.trim() || null,
-        // "auto" = nhờ Flow Music sinh ảnh neo trước. Không neo là mỗi cảnh một chất liệu.
-        style_image_url: anchor ? "auto" : null,
-        note: note.trim() || null,
-        start_s: startS,
-        duration_s: durationS,
-      });
-      if (r.status !== "submitted" || !r.video_job_id) {
-        setErr(
-          r.status === "proposed"
-            ? "Flow Music mới dừng ở bước đề xuất, chưa nhận render — thử lại."
-            : `Flow Music không nhận lệnh dựng video. ${r.text || ""}`
-        );
-        return;
-      }
-      if (r.warning) setErr(r.warning);
-      save([
-        {
-          job_id: r.video_job_id,
-          clip_id: r.clip_id_used || song.clip_id,
-          title: song.title,
+    const stamp = Date.now();
+    const items: QueueItem[] = [];
+    chosen.forEach((s, si) => {
+      for (let k = 0; k < segCount; k++) {
+        items.push({
+          qid: `${stamp}-${si}-${k}`,
+          clip_id: s.clip_id,
+          conversation_id: src === "library" ? convId || null : null,
+          title: segCount > 1 ? `${s.title} (${k + 1}/${segCount})` : s.title,
           aspect,
-          created_at: Date.now(),
-          status: "running",
-        },
-        ...jobs,
-      ]);
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
+          start_s: k * segLen,
+          duration_s: segLen,
+          style: style.trim(),
+          note: note.trim(),
+          anchor,
+          lyrics,
+        });
+      }
+    });
+    saveQueue([...queue, ...items]);
   };
 
-  const forget = (j: Job) => save(jobs.filter((x) => x.job_id !== j.job_id));
-
-  // Tải bản của mình về dự án. Video 60s ~60-90 MB nên server tải hộ (một lượt), không bắt
-  // trình duyệt tải rồi upload ngược lên.
-  const [saving, setSaving] = useState<string | null>(null);
   const saveToProject = async (j: Job) => {
     if (!j.video_url) return;
     setSaving(j.job_id);
     setErr(null);
     try {
       const r = await api.saveMusicVideo(project.id, j.video_url, j.title);
-      save(jobs.map((x) => (x.job_id === j.job_id ? { ...x, saved_web: r.web } : x)));
+      saveJobs(jobs.map((x) => (x.job_id === j.job_id ? { ...x, saved_web: r.web } : x)));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -230,6 +294,37 @@ export default function MusicVideoPanel({
     }
   };
 
+  // Nối theo thứ tự CŨ → MỚI (danh sách hiển thị mới nhất trên cùng), tức đúng thứ tự đã xếp
+  // hàng: đoạn 1 rồi đoạn 2, bài 1 rồi bài 2.
+  const joinAll = async () => {
+    const parts = [...jobs].reverse().filter((j) => j.saved_web);
+    if (parts.length < 2) {
+      setErr("Cần ít nhất 2 video ĐÃ lưu vào dự án để nối.");
+      return;
+    }
+    if (new Set(parts.map((p) => p.aspect)).size > 1) {
+      setErr("Các video phải cùng tỷ lệ khung hình mới nối được.");
+      return;
+    }
+    setJoining(true);
+    setErr(null);
+    try {
+      setJoined(
+        await api.concatMusicVideos(
+          project.id,
+          parts.map((p) => p.saved_web!),
+          `${project.title}-mv`
+        )
+      );
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const forget = (j: Job) => saveJobs(jobs.filter((x) => x.job_id !== j.job_id));
+  const savedCount = jobs.filter((j) => j.saved_web).length;
   const inp =
     "w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500";
 
@@ -237,11 +332,12 @@ export default function MusicVideoPanel({
     <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
       <div className="mb-1 flex items-baseline gap-2">
         <h3 className="font-medium">🎬 Music video (Flow Music dựng hình)</h3>
-        <span className="text-xs text-neutral-500">~750 credit · ~9 phút · 720p</span>
+        <span className="text-xs text-neutral-500">~750 credit · ~9 phút · 720p · mỗi lượt 1 bài</span>
       </div>
       <p className="mb-3 text-xs leading-relaxed text-neutral-500">
-        Flow Music tự lên kịch bản hình theo bài hát — nhanh, nhưng không kiểm soát được từng
-        khung như đường storyboard của Flow Kit. Credit chỉ trừ khi render xong.
+        Flow Music chỉ dựng được <b>một đoạn ≤60s của một bài</b> mỗi lượt. Muốn video dài hoặc
+        nhiều bài thì chọn nhiều bài / nhiều đoạn ở đây — chúng chạy lần lượt, xong thì lưu về
+        dự án rồi bấm <b>Nối</b> thành một video. Credit chỉ trừ khi mỗi lượt render xong.
       </p>
 
       {err && (
@@ -251,157 +347,222 @@ export default function MusicVideoPanel({
       )}
 
       <div className="space-y-3">
-          <div className="flex gap-1 text-xs">
-            {(["playlist", "library"] as const).map((s) => (
+        <div className="flex gap-1 text-xs">
+          {(["playlist", "library"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSrc(s)}
+              className={`rounded-lg px-2.5 py-1 ${
+                src === s
+                  ? "bg-neutral-800 text-neutral-100"
+                  : "text-neutral-500 hover:bg-neutral-800/60"
+              }`}
+            >
+              {s === "playlist" ? `Playlist dự án (${playlistSongs.length})` : "Thư viện Flow Music"}
+            </button>
+          ))}
+        </div>
+
+        {src === "library" && (
+          <label className="block">
+            <span className="mb-1 block text-xs text-neutral-400">Cuộc trò chuyện</span>
+            <select value={convId} onChange={(e) => setConvId(e.target.value)} className={inp}>
+              <option value="">— chọn —</option>
+              {convs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-xs text-neutral-400">
+            <span>Bài hát ({picked.length} đã chọn)</span>
+            {songs.length > 1 && (
               <button
-                key={s}
-                onClick={() => setSrc(s)}
-                className={`rounded-lg px-2.5 py-1 ${
-                  src === s ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:bg-neutral-800/60"
-                }`}
+                onClick={() =>
+                  setPicked(picked.length === songs.length ? [] : songs.map((s) => s.clip_id))
+                }
+                className="text-indigo-400 hover:text-indigo-300"
               >
-                {s === "playlist" ? `Playlist dự án (${playlistSongs.length})` : "Thư viện Flow Music"}
+                {picked.length === songs.length ? "bỏ chọn hết" : "chọn hết"}
               </button>
+            )}
+          </div>
+          <div className="max-h-40 space-y-0.5 overflow-auto rounded-lg border border-neutral-800 p-1">
+            {!songs.length && (
+              <p className="px-2 py-3 text-center text-xs text-neutral-600">
+                {libBusy
+                  ? "đang nạp…"
+                  : src === "playlist"
+                    ? "Playlist chưa có bài nào từ Flow Music (bài tải lên từ máy không dựng được)."
+                    : "Chọn một cuộc trò chuyện để thấy bài."}
+              </p>
+            )}
+            {songs.map((s) => (
+              <label
+                key={s.clip_id}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-neutral-800/60"
+              >
+                <input
+                  type="checkbox"
+                  checked={picked.includes(s.clip_id)}
+                  onChange={(e) =>
+                    setPicked(
+                      e.target.checked
+                        ? [...picked, s.clip_id]
+                        : picked.filter((x) => x !== s.clip_id)
+                    )
+                  }
+                />
+                <span className="truncate text-neutral-300">{s.title}</span>
+              </label>
             ))}
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {src === "library" && (
-              <label className="col-span-2 block sm:col-span-4">
-                <span className="mb-1 block text-xs text-neutral-400">Cuộc trò chuyện</span>
-                <select value={convId} onChange={(e) => setConvId(e.target.value)} className={inp}>
-                  <option value="">— chọn —</option>
-                  {convs.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="col-span-2 block">
-              <span className="mb-1 block text-xs text-neutral-400">Bài hát</span>
-              <select
-                value={clipId}
-                onChange={(e) => setClipId(e.target.value)}
-                disabled={!songs.length}
-                className={inp}
-              >
-                {!songs.length && (
-                  <option value="">
-                    {libBusy
-                      ? "đang nạp…"
-                      : src === "playlist"
-                        ? "playlist chưa có bài từ Flow Music"
-                        : "chọn cuộc trò chuyện trước"}
-                  </option>
-                )}
-                {songs.map((s) => (
-                  <option key={s.clip_id} value={s.clip_id}>
-                    {s.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-neutral-400">Tỷ lệ</span>
-              <select value={aspect} onChange={(e) => setAspect(e.target.value)} className={inp}>
-                <option value="16:9">16:9 ngang</option>
-                <option value="9:16">9:16 dọc (Shorts)</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-neutral-400">Độ dài (giây)</span>
-              <input
-                type="number"
-                min={10}
-                max={180}
-                step={10}
-                value={durationS}
-                onChange={(e) => setDurationS(Math.max(10, Number(e.target.value) || 60))}
-                className={inp}
-              />
-            </label>
-          </div>
-
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-neutral-400">
-              Phong cách — nét vẽ, chất liệu, bảng màu
-            </span>
-            <div className="flex gap-2">
-              <input
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-                placeholder="vd: late-2000s Japanese TV-anime, thin even line art, flat two-tone cel shading"
-                className={inp}
-              />
-              {!!project.style && (
-                <button
-                  type="button"
-                  onClick={() => setStyle(project.style.replace(/\s+/g, " ").slice(0, 400))}
-                  title="Lấy phong cách của dự án làm điểm xuất phát"
-                  className="shrink-0 rounded-lg border border-neutral-700 px-2.5 text-xs text-neutral-300 hover:bg-neutral-800"
-                >
-                  ↤ style dự án
-                </button>
-              )}
-            </div>
+            <span className="mb-1 block text-xs text-neutral-400">Tỷ lệ</span>
+            <select value={aspect} onChange={(e) => setAspect(e.target.value)} className={inp}>
+              <option value="16:9">16:9 ngang</option>
+              <option value="9:16">9:16 dọc (Shorts)</option>
+            </select>
           </label>
-
           <label className="block">
-            <span className="mb-1 block text-xs text-neutral-400">
-              Nội dung khung hình — CÁI GÌ xuất hiện (đừng lẫn chất liệu vào đây)
-            </span>
+            <span className="mb-1 block text-xs text-neutral-400">Mỗi đoạn (giây)</span>
             <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="vd: phố cổ Hà Nội chiều mưa, đèn lồng, cô gái cầm ô trong suốt"
+              type="number"
+              min={10}
+              max={60}
+              step={10}
+              value={segLen}
+              onChange={(e) => setSegLen(Math.min(60, Math.max(10, Number(e.target.value) || 60)))}
               className={inp}
             />
           </label>
-
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={anchor}
-                onChange={(e) => setAnchor(e.target.checked)}
-              />
-              <span>
-                Ảnh neo phong cách
-                <span className="ml-1 text-xs text-neutral-500">
-                  (tự tạo trước — tắt thì mỗi cảnh một chất liệu)
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <input type="checkbox" checked={lyrics} onChange={(e) => setLyrics(e.target.checked)} />
-              <span>Hiện lời bài hát</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <span className="text-neutral-400">Bắt đầu từ</span>
-              <input
-                type="number"
-                min={0}
-                step={10}
-                value={startS}
-                onChange={(e) => setStartS(Math.max(0, Number(e.target.value) || 0))}
-                className="w-20 rounded-lg border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm outline-none focus:border-indigo-500"
-              />
-              <span className="text-neutral-500">giây</span>
-            </label>
-            <button
-              onClick={submit}
-              disabled={busy || !clipId}
-              className="ml-auto rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          <label className="block">
+            <span className="mb-1 block text-xs text-neutral-400">Số đoạn mỗi bài</span>
+            <select
+              value={segCount}
+              onChange={(e) => setSegCount(Number(e.target.value))}
+              className={inp}
             >
-              {busy ? "Đang gửi…" : "🎬 Dựng music video"}
-            </button>
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n} đoạn · {mmss(n * segLen)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="mb-1 block text-xs text-neutral-400">
+            Phong cách — nét vẽ, chất liệu, bảng màu
+          </span>
+          <div className="flex gap-2">
+            <input
+              value={style}
+              onChange={(e) => setStyle(e.target.value)}
+              placeholder="vd: late-2000s Japanese TV-anime, thin even line art, flat two-tone cel shading"
+              className={inp}
+            />
+            {!!project.style && (
+              <button
+                type="button"
+                onClick={() => setStyle(project.style.replace(/\s+/g, " ").slice(0, 400))}
+                title="Lấy phong cách của dự án làm điểm xuất phát"
+                className="shrink-0 rounded-lg border border-neutral-700 px-2.5 text-xs text-neutral-300 hover:bg-neutral-800"
+              >
+                ↤ style dự án
+              </button>
+            )}
           </div>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-xs text-neutral-400">
+            Nội dung khung hình — CÁI GÌ xuất hiện (đừng lẫn chất liệu vào đây)
+          </span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="vd: phố cổ Hà Nội chiều mưa, đèn lồng, cô gái cầm ô trong suốt"
+            className={inp}
+          />
+        </label>
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" checked={anchor} onChange={(e) => setAnchor(e.target.checked)} />
+            <span>
+              Ảnh neo phong cách
+              <span className="ml-1 text-xs text-neutral-500">
+                (tự tạo trước — tắt thì mỗi cảnh một chất liệu)
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" checked={lyrics} onChange={(e) => setLyrics(e.target.checked)} />
+            <span>Hiện lời bài hát</span>
+          </label>
+          <button
+            onClick={enqueue}
+            disabled={!picked.length}
+            className="ml-auto rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
+          >
+            🎬 Dựng {picked.length * segCount || ""} video
+          </button>
+        </div>
       </div>
+
+      {!!queue.length && (
+        <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/50 px-3 py-2 text-sm">
+          <span className="text-neutral-400">Đang chờ tới lượt ({queue.length}): </span>
+          <span className="text-neutral-300">{queue.map((q) => q.title).join(", ")}</span>
+          <button
+            onClick={() => saveQueue([])}
+            className="ml-2 text-xs text-rose-400 hover:text-rose-300"
+          >
+            huỷ hàng đợi
+          </button>
+        </div>
+      )}
 
       {!!jobs.length && (
         <div className="mt-4 space-y-2 border-t border-neutral-800 pt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-neutral-400">
+              {jobs.length} lượt · {savedCount} đã lưu vào dự án
+            </span>
+            <button
+              onClick={joinAll}
+              disabled={joining || savedCount < 2}
+              title="Nối các video ĐÃ lưu thành một video dài — mỗi video mang sẵn tiếng bài của nó"
+              className="ml-auto rounded-lg border border-sky-700/60 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
+            >
+              {joining ? "Đang nối…" : "🔗 Nối thành một video"}
+            </button>
+          </div>
+
+          {joined && (
+            <div className="rounded-lg border border-sky-800/60 bg-sky-950/20 p-3">
+              <p className="mb-2 text-sm text-sky-300">
+                Đã nối {joined.parts} video · {mmss(joined.duration)}
+              </p>
+              <video src={joined.web} controls className="w-full rounded-lg bg-black" />
+              <button
+                onClick={() => downloadFile(joined.web, `${slugName(project.title)}-mv.mp4`)}
+                className="mt-2 rounded-lg border border-emerald-800/70 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-950/40"
+              >
+                ⬇ Tải video đã nối
+              </button>
+            </div>
+          )}
+
           {jobs.map((j) => (
             <div key={j.job_id} className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
               <div className="flex items-center gap-2">
@@ -449,14 +610,12 @@ export default function MusicVideoPanel({
                       ⬇ Tải về máy
                     </button>
                     {j.saved_web ? (
-                      <span className="text-xs text-emerald-400">
-                        ✓ đã lưu trong dự án ({j.saved_web})
-                      </span>
+                      <span className="text-xs text-emerald-400">✓ đã lưu trong dự án</span>
                     ) : (
                       <button
                         onClick={() => saveToProject(j)}
                         disabled={saving === j.job_id}
-                        title="Tải bản của mình về thư mục media của dự án"
+                        title="Tải bản của mình về dự án — bắt buộc nếu muốn NỐI nhiều video"
                         className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
                       >
                         {saving === j.job_id ? "Đang lưu…" : "💾 Lưu vào dự án"}

@@ -358,6 +358,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ video_url, title: title ?? null }),
     }),
+  // Nối nhiều music video đã lưu thành một video dài (mỗi video mang sẵn tiếng bài của nó).
+  concatMusicVideos: (pid: string, webs: string[], title?: string) =>
+    req<{ web: string; duration: number; parts: number; size_mb: number }>(
+      `/projects/${pid}/music-video/concat`,
+      { method: "POST", body: JSON.stringify({ webs, title: title ?? null }) }
+    ),
   listScenes: (id: string) => req<{ scenes: Scene[] }>(`/projects/${id}/scenes`),
   // Thêm scene bằng tay — đường làm việc KHÔNG qua kịch bản. `shots` tạo luôn shot rỗng
   // bên trong, vì dự án trắng thì thứ người dùng cần là một khung để làm ngay.

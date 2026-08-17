@@ -4439,6 +4439,12 @@ class SaveMusicVideoRequest(BaseModel):
     title: Optional[str] = None
 
 
+class ConcatMusicVideoRequest(BaseModel):
+    # Đường /media/... của các video ĐÃ lưu về dự án, theo đúng thứ tự muốn nối.
+    webs: list[str]
+    title: Optional[str] = None
+
+
 class GenerateTrackRequest(BaseModel):
     prompt: str
     conversation_id: Optional[str] = None
@@ -4540,6 +4546,42 @@ async def save_music_video(pid: str, body: SaveMusicVideoRequest):
                 project["title"], name, len(resp.content) / 1e6)
     return {"web": f"/media/{pid}/{name}", "path": str(dest),
             "size_mb": round(len(resp.content) / 1e6, 1)}
+
+
+@router.post("/projects/{pid}/music-video/concat")
+async def concat_music_videos(pid: str, body: ConcatMusicVideoRequest):
+    """Nối nhiều music video ĐÃ lưu về dự án thành MỘT video, theo thứ tự truyền vào.
+
+    Mỗi music video của Flow Music đã mang sẵn tiếng của bài hát đó, nên nối thẳng là ra
+    một video nhiều bài — không cần dựng lại dải âm thanh như đường playlist của tab Nhạc.
+    Một job của Flow Music chỉ dựng được một đoạn ngắn (60s) của MỘT bài, nên đây là cách
+    duy nhất để có video dài / nhiều bài từ đường này.
+    """
+    await _project_or_404(pid)
+    if len(body.webs) < 2:
+        raise HTTPException(400, "Cần ít nhất 2 video để nối")
+    paths: list[Path] = []
+    for w in body.webs:
+        rel = str(w or "").replace("/media/", "", 1)
+        p = media_store.MEDIA_DIR / rel
+        # Chốt chặn: chỉ nhận file NẰM TRONG thư mục media của chính dự án này — `webs` đến
+        # từ client nên không được để nó trỏ ra ngoài bằng "../".
+        try:
+            p = p.resolve()
+            p.relative_to((media_store.MEDIA_DIR / pid).resolve())
+        except (ValueError, OSError):
+            raise HTTPException(400, f"Đường dẫn không thuộc dự án: {w}")
+        if not p.exists():
+            raise HTTPException(404, f"Không thấy file: {w}")
+        paths.append(p)
+
+    out_dir = media_store.MEDIA_DIR / pid
+    out = out_dir / f"mv_{_slug(body.title or 'noi')[:40]}_{db.new_id()[:8]}.mp4"
+    await assembler.concat_videos(paths, out)
+    dur = await assembler.probe_duration(out)
+    return {"web": f"/media/{pid}/{out.name}", "path": str(out),
+            "duration": dur, "parts": len(paths),
+            "size_mb": round(out.stat().st_size / 1e6, 1)}
 
 
 @router.post("/projects/{pid}/music/add")
