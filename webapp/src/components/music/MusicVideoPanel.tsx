@@ -294,8 +294,52 @@ export default function MusicVideoPanel({
     }
   };
 
-  // Nối theo thứ tự CŨ → MỚI (danh sách hiển thị mới nhất trên cùng), tức đúng thứ tự đã xếp
-  // hàng: đoạn 1 rồi đoạn 2, bài 1 rồi bài 2.
+  // Ghép theo PLAYLIST: mỗi bài lấy MV của chính nó (khớp bằng clip_id), hình lặp cho hết
+  // bài, tiếng là bản đầy đủ. Đây mới là cách ra video dài đúng nghĩa — nối thẳng các MV chỉ
+  // cho ra chuỗi đoạn 60s rời rạc.
+  const playlistPairs = tracks
+    .map((t) => {
+      const cid = clipIdFromAudioUrl(t.audio_url);
+      const job = jobs.find((j) => j.clip_id === cid && j.saved_web);
+      return { track: t, clip_id: cid, video_web: job?.saved_web || null };
+    })
+    .filter((x) => !!x.clip_id);
+  const ready = playlistPairs.filter((p) => p.video_web);
+
+  const buildPlaylist = async () => {
+    if (!ready.length) {
+      setErr("Chưa bài nào trong playlist có music video đã lưu vào dự án.");
+      return;
+    }
+    const missing = playlistPairs.length - ready.length;
+    const ok = await confirm({
+      title: "Dựng video theo playlist?",
+      message:
+        `${ready.length}/${playlistPairs.length} bài có sẵn music video. Hình của mỗi bài sẽ ` +
+        `LẶP cho hết bài đó rồi chuyển sang bài kế; tiếng lấy bản đầy đủ của bài.` +
+        (missing ? ` ${missing} bài chưa có video sẽ bị BỎ QUA.` : ""),
+      confirmText: "Dựng video",
+    });
+    if (!ok) return;
+    setJoining(true);
+    setErr(null);
+    try {
+      setJoined(
+        await api.buildMusicVideo(
+          project.id,
+          ready.map((p) => ({ track_id: p.track.id, video_web: p.video_web! })),
+          `${project.title}-mv`
+        )
+      );
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  // Nối thô theo thứ tự CŨ → MỚI: dùng khi các lượt là nhiều ĐOẠN của cùng một bài, hoặc khi
+  // bài không nằm trong playlist dự án.
   const joinAll = async () => {
     const parts = [...jobs].reverse().filter((j) => j.saved_web);
     if (parts.length < 2) {
@@ -335,9 +379,10 @@ export default function MusicVideoPanel({
         <span className="text-xs text-neutral-500">~750 credit · ~9 phút · 720p · mỗi lượt 1 bài</span>
       </div>
       <p className="mb-3 text-xs leading-relaxed text-neutral-500">
-        Flow Music chỉ dựng được <b>một đoạn ≤60s của một bài</b> mỗi lượt. Muốn video dài hoặc
-        nhiều bài thì chọn nhiều bài / nhiều đoạn ở đây — chúng chạy lần lượt, xong thì lưu về
-        dự án rồi bấm <b>Nối</b> thành một video. Credit chỉ trừ khi mỗi lượt render xong.
+        Flow Music chỉ dựng được <b>một đoạn ≤60s của một bài</b> mỗi lượt. Cách rẻ nhất để có
+        video dài: dựng <b>một video cho mỗi bài</b>, lưu về dự án, rồi bấm{" "}
+        <b>Dựng video theo playlist</b> — hình của mỗi bài sẽ lặp cho hết bài đó rồi chuyển
+        sang bài kế, tiếng lấy bản đầy đủ. Credit chỉ trừ khi mỗi lượt render xong.
       </p>
 
       {err && (
@@ -534,17 +579,26 @@ export default function MusicVideoPanel({
 
       {!!jobs.length && (
         <div className="mt-4 space-y-2 border-t border-neutral-800 pt-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-neutral-400">
               {jobs.length} lượt · {savedCount} đã lưu vào dự án
+              {!!playlistPairs.length && ` · ${ready.length}/${playlistPairs.length} bài playlist có video`}
             </span>
+            <button
+              onClick={buildPlaylist}
+              disabled={joining || !ready.length}
+              title="Mỗi bài dùng music video của chính nó, hình lặp cho hết bài, tiếng là bản đầy đủ"
+              className="ml-auto rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+            >
+              {joining ? "Đang dựng…" : "🎼 Dựng video theo playlist"}
+            </button>
             <button
               onClick={joinAll}
               disabled={joining || savedCount < 2}
-              title="Nối các video ĐÃ lưu thành một video dài — mỗi video mang sẵn tiếng bài của nó"
-              className="ml-auto rounded-lg border border-sky-700/60 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
+              title="Nối thô các video đã lưu, giữ nguyên tiếng 60s của từng video — dùng khi chúng là nhiều ĐOẠN của cùng một bài"
+              className="rounded-lg border border-sky-700/60 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-950/40 disabled:opacity-40"
             >
-              {joining ? "Đang nối…" : "🔗 Nối thành một video"}
+              🔗 Nối thô
             </button>
           </div>
 

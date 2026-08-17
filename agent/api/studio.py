@@ -4445,6 +4445,16 @@ class ConcatMusicVideoRequest(BaseModel):
     title: Optional[str] = None
 
 
+class BuildMusicVideoItem(BaseModel):
+    track_id: str       # bài trong playlist (nguồn TIẾNG + độ dài)
+    video_web: str      # /media/... music video minh hoạ cho bài đó (nguồn HÌNH)
+
+
+class BuildMusicVideoRequest(BaseModel):
+    items: list[BuildMusicVideoItem]
+    title: Optional[str] = None
+
+
 class GenerateTrackRequest(BaseModel):
     prompt: str
     conversation_id: Optional[str] = None
@@ -4560,20 +4570,8 @@ async def concat_music_videos(pid: str, body: ConcatMusicVideoRequest):
     await _project_or_404(pid)
     if len(body.webs) < 2:
         raise HTTPException(400, "Cần ít nhất 2 video để nối")
-    paths: list[Path] = []
-    for w in body.webs:
-        rel = str(w or "").replace("/media/", "", 1)
-        p = media_store.MEDIA_DIR / rel
-        # Chốt chặn: chỉ nhận file NẰM TRONG thư mục media của chính dự án này — `webs` đến
-        # từ client nên không được để nó trỏ ra ngoài bằng "../".
-        try:
-            p = p.resolve()
-            p.relative_to((media_store.MEDIA_DIR / pid).resolve())
-        except (ValueError, OSError):
-            raise HTTPException(400, f"Đường dẫn không thuộc dự án: {w}")
-        if not p.exists():
-            raise HTTPException(404, f"Không thấy file: {w}")
-        paths.append(p)
+    # Chỉ nhận file NẰM TRONG media của chính dự án — `webs` đến từ client.
+    paths = [_media_path_in_project(pid, w) for w in body.webs]
 
     out_dir = media_store.MEDIA_DIR / pid
     out = out_dir / f"mv_{_slug(body.title or 'noi')[:40]}_{db.new_id()[:8]}.mp4"
@@ -4581,6 +4579,70 @@ async def concat_music_videos(pid: str, body: ConcatMusicVideoRequest):
     dur = await assembler.probe_duration(out)
     return {"web": f"/media/{pid}/{out.name}", "path": str(out),
             "duration": dur, "parts": len(paths),
+            "size_mb": round(out.stat().st_size / 1e6, 1)}
+
+
+def _media_path_in_project(pid: str, web: str) -> Path:
+    """/media/... → đường thật, và CHẶN mọi đường trỏ ra ngoài thư mục media của dự án."""
+    p = media_store.MEDIA_DIR / str(web or "").replace("/media/", "", 1)
+    try:
+        p = p.resolve()
+        p.relative_to((media_store.MEDIA_DIR / pid).resolve())
+    except (ValueError, OSError):
+        raise HTTPException(400, f"Đường dẫn không thuộc dự án: {web}")
+    if not p.exists():
+        raise HTTPException(404, f"Không thấy file: {web}")
+    return p
+
+
+@router.post("/projects/{pid}/music-video/build")
+async def build_music_video(pid: str, body: BuildMusicVideoRequest):
+    """Dựng video cho CẢ PLAYLIST: mỗi bài lấy music video của nó, LẶP cho hết bài.
+
+    Đây là cách đúng để có video dài từ Flow Music: họ chỉ dựng ~60s hình cho một bài, mà
+    bài thì vài phút — nên hình lặp lại còn TIẾNG là bản đầy đủ của bài (tiếng 60s trong
+    file MV bị bỏ). Hết bài thì sang video của bài kế, nên chuyển bài là chuyển hẳn hình.
+
+    Khoảng lặng giữa hai bài lấy theo `project.music_gap` như chế độ music video của tab
+    Nhạc — hình vẫn chạy tiếp trong khoảng lặng đó, không đứng khung.
+    """
+    project = await _project_or_404(pid)
+    if not body.items:
+        raise HTTPException(400, "Chưa chọn bài nào")
+    gap = float(project.get("music_gap") or 0)
+    out_dir = media_store.MEDIA_DIR / pid
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    segs: list[Path] = []
+    size: tuple[int, int] | None = None
+    for i, it in enumerate(body.items):
+        track = await db.query_one("SELECT * FROM music_track WHERE id=? AND project_id=?",
+                                   (it.track_id, pid))
+        if not track:
+            raise HTTPException(404, f"Không thấy bài {it.track_id} trong dự án")
+        audio = Path(track["path"])
+        if not audio.exists():
+            raise HTTPException(404, f"Thiếu file nhạc của bài '{track['title']}'")
+        video = _media_path_in_project(pid, it.video_web)
+        if size is None:
+            size = await assembler.probe_size(video)
+        seg = out_dir / f"mvseg_{db.new_id()[:8]}.mp4"
+        # Bài cuối không nối thêm khoảng lặng — giống total_duration() của playlist.
+        dur = await assembler.loop_video_over_audio(
+            video, audio, seg, size=size,
+            pad_s=gap if i < len(body.items) - 1 else 0.0)
+        logger.info("music video: '%s' %.1fs (hình lặp từ %s)", track["title"], dur, video.name)
+        segs.append(seg)
+
+    out = out_dir / f"mv_{_slug(body.title or project['title'])[:40]}_{db.new_id()[:8]}.mp4"
+    if len(segs) == 1:
+        segs[0].replace(out)
+    else:
+        await assembler.concat_videos(segs, out)
+        for s in segs:
+            s.unlink(missing_ok=True)
+    return {"web": f"/media/{pid}/{out.name}", "path": str(out),
+            "duration": await assembler.probe_duration(out), "parts": len(body.items),
             "size_mb": round(out.stat().st_size / 1e6, 1)}
 
 

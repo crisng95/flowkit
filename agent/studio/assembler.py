@@ -338,6 +338,54 @@ async def apply_soundtrack(project: dict, final: Path) -> dict | None:
     return {**info, "soundtrack": f"/studio-media/{project['id']}/{sound.name}"}
 
 
+async def probe_size(path: Path) -> tuple[int, int]:
+    """(rộng, cao) của luồng video đầu tiên; (0, 0) nếu không đọc được."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0:s=x", str(path),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    except (FileNotFoundError, NotImplementedError, OSError):
+        return 0, 0
+    out, _ = await proc.communicate()
+    try:
+        w, h = out.decode().strip().split("x")[:2]
+        return int(w), int(h)
+    except (ValueError, IndexError):
+        return 0, 0
+
+
+async def loop_video_over_audio(video: Path, audio: Path, out: Path, *,
+                                 size: tuple[int, int] | None = None,
+                                 pad_s: float = 0.0) -> float:
+    """LẶP `video` cho phủ hết `audio`, lấy tiếng của `audio`, cắt đúng lúc tiếng dứt.
+
+    Dùng cho music video: Flow Music chỉ dựng được ~60s hình cho một bài dài vài phút, nên
+    hình phải lặp còn TIẾNG phải là bản đầy đủ của bài — tiếng 60s nằm sẵn trong file MV bị
+    bỏ đi (`-map 1:a`). `pad_s` nối thêm khoảng lặng sau bài (khoảng cách giữa hai bài trong
+    playlist) mà hình vẫn chạy tiếp, nên chỗ chuyển bài không bị đứng hình.
+    """
+    vf = []
+    if size and all(size):
+        # Ép mọi đoạn về cùng khung: nối các đoạn khác kích thước sẽ hỏng hoặc phải encode lại
+        # toàn bộ ở khâu sau. Giữ tỉ lệ, thừa thì viền đen.
+        w, h = size
+        vf.append(f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                  f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1")
+    af = f"apad=pad_dur={pad_s}" if pad_s > 0 else None
+    args = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(video), "-i", str(audio),
+            "-map", "0:v:0", "-map", "1:a:0"]
+    if vf:
+        args += ["-vf", ",".join(vf)]
+    if af:
+        args += ["-af", af]
+    args += ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+             "-r", "24", "-c:a", "aac", "-b:a", "192k", "-shortest", str(out)]
+    await _run(args)
+    return await probe_duration(out)
+
+
 async def concat_videos(paths: list[Path], out: Path) -> None:
     """Concatenate clips (same codec params from Flow) into one mp4."""
     lst = out.with_name(f"{out.stem}_concat.txt")

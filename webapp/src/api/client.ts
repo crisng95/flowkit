@@ -358,6 +358,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ video_url, title: title ?? null }),
     }),
+  // Dựng video cho CẢ playlist: mỗi bài lấy MV của nó, LẶP hình cho hết bài, tiếng là bản
+  // đầy đủ của bài (không phải 60s trong file MV). Hết bài thì sang MV của bài kế.
+  buildMusicVideo: (
+    pid: string,
+    items: { track_id: string; video_web: string }[],
+    title?: string
+  ) =>
+    req<{ web: string; duration: number; parts: number; size_mb: number }>(
+      `/projects/${pid}/music-video/build`,
+      { method: "POST", body: JSON.stringify({ items, title: title ?? null }) }
+    ),
   // Nối nhiều music video đã lưu thành một video dài (mỗi video mang sẵn tiếng bài của nó).
   concatMusicVideos: (pid: string, webs: string[], title?: string) =>
     req<{ web: string; duration: number; parts: number; size_mb: number }>(
