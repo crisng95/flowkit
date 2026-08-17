@@ -329,22 +329,27 @@ class MusicClient:
         msg = (f"Create the music video for the song with clip id {clip_id}, using the "
                f"segment from {int(start_s)}s to {end_s}s ({int(duration_s)} seconds). "
                f"Use aspect ratio {aspect_ratio}. {lyrics_line}")
-        # PHONG CÁCH phải nói THẲNG, và phải đòi giữ nguyên qua mọi cảnh. Flow Music lập kế
-        # hoạch nhiều cảnh rồi sinh TỪNG cảnh riêng, nên không neo phong cách là mỗi cảnh một
-        # chất liệu. Đo trên video thật (job 06551f8b, 60s): giây 3 gần như ảnh thật, giây 18
-        # là mô hình giấy cắt dán, giây 33 tranh bán 3D, giây 50 đất nặn — bốn cảnh bốn kiểu.
-        # Cũng ở đó: chữ "paper-craft" trong phần mô tả NỘI DUNG (phố hàng mã) bị hiểu thành
-        # CHẤT LIỆU dựng cảnh → cả cảnh biến thành diorama giấy. Từ nào vừa là nội dung vừa là
-        # chất liệu (paper, clay, pixel, comic…) thì phải nói rõ nó thuộc vế nào.
-        keep_one = ("Use ONE single consistent visual style for every shot of the video — "
-                    "never switch between photoreal, 3D render, anime, comic, claymation or "
-                    "paper-craft looks from shot to shot.")
-        msg = f"{msg} {f'Visual style: {style.strip()}. {keep_one}' if style else keep_one}"
+        # PHONG CÁCH phải nằm TRONG câu mô tả cảnh, không được tách thành câu chỉ thị riêng.
+        # Đo trên hai job thật: chỉ đúng MỘT câu mô tả cảnh sống sót vào `user_message` của
+        # `propose` — mọi câu chỉ thị kèm theo ("giữ một phong cách xuyên suốt", "phong cách
+        # là …") đều bị agent bỏ đi khi nó soạn tham số. Nên nhét style vào ĐẦU câu mô tả,
+        # dưới dạng tính từ, để nó đi cùng chuyến với nội dung.
+        #
+        # Vì sao phải neo: Flow Music lập kế hoạch nhiều cảnh rồi sinh TỪNG cảnh riêng. Job
+        # 06551f8b (60s, không neo): giây 3 gần như ảnh thật, giây 18 mô hình giấy cắt dán,
+        # giây 33 tranh bán 3D, giây 50 đất nặn — bốn cảnh bốn chất liệu.
+        # Cũng ở đó: chữ "paper-craft" trong mô tả NỘI DUNG (phố hàng mã) bị đọc thành CHẤT
+        # LIỆU dựng cảnh. Từ nào vừa là nội dung vừa là chất liệu (paper, clay, pixel, comic)
+        # thì đừng để lửng lơ.
+        #
+        # Kênh chắc chắn hơn là `style_image_url` — một field THẬT của `propose` (job status
+        # in ra "Style image URL: …"), không qua tay agent diễn giải. Cần URL công khai.
+        visual = ", ".join(x.strip() for x in (style, note) if x and x.strip())
+        if visual:
+            msg = f"{msg} The video looks like this, in every shot: {visual}."
         if style_image_url:
             msg = (f"{msg} Use this image as the style reference for every shot: "
                    f"{style_image_url.strip()}")
-        if note:
-            msg = f"{msg} Scene content (this describes WHAT is in frame, not the art medium): {note.strip()}"
 
         # current_song_id = bài đang mở trên player của Flow Music UI. Không đặt thì agent
         # phải tự đoán "this song" là bài nào — với conversation nhiều bài là đoán sai.
