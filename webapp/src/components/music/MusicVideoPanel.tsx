@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   clipIdFromAudioUrl,
   musicApi,
+  type MusicConversation,
+  type MusicSong,
   type MusicTrack,
   type Project,
 } from "../../api/client";
@@ -56,10 +58,23 @@ export default function MusicVideoPanel({
   project: Project;
   tracks: MusicTrack[];
 }) {
-  // Chỉ bài lấy từ Flow Music mới dựng được video — bài upload từ máy không có clip_id bên họ.
-  const songs = tracks
-    .map((t) => ({ track: t, clip_id: clipIdFromAudioUrl(t.audio_url) }))
-    .filter((x) => !!x.clip_id) as { track: MusicTrack; clip_id: string }[];
+  // Hai nguồn bài, vì dựng MV không đòi bài phải nằm trong playlist dự án:
+  //   "playlist"  — bài đã thêm vào dự án (chỉ bài gốc Flow Music: bài upload từ máy không
+  //                 có clip_id bên họ nên không dựng được).
+  //   "library"   — mọi bài trong tài khoản flowmusic.app, lấy qua conversation.
+  const [src, setSrc] = useState<"playlist" | "library">("playlist");
+  const [convs, setConvs] = useState<MusicConversation[]>([]);
+  const [convId, setConvId] = useState("");
+  const [libSongs, setLibSongs] = useState<MusicSong[]>([]);
+  const [libBusy, setLibBusy] = useState(false);
+
+  const playlistSongs = tracks
+    .map((t) => ({ clip_id: clipIdFromAudioUrl(t.audio_url), title: t.title }))
+    .filter((x) => !!x.clip_id) as { clip_id: string; title: string }[];
+  const songs =
+    src === "playlist"
+      ? playlistSongs
+      : libSongs.map((s) => ({ clip_id: s.clip_id, title: s.title || s.clip_id.slice(0, 8) }));
 
   const [clipId, setClipId] = useState<string>("");
   const [aspect, setAspect] = useState("16:9");
@@ -76,8 +91,23 @@ export default function MusicVideoPanel({
 
   useEffect(() => setJobs(loadJobs(project.id)), [project.id]);
   useEffect(() => {
-    if (!clipId && songs.length) setClipId(songs[0].clip_id);
-  }, [songs.length]);
+    if (songs.length && !songs.some((s) => s.clip_id === clipId)) setClipId(songs[0].clip_id);
+  }, [songs.map((s) => s.clip_id).join(",")]);
+
+  // Thư viện: nạp danh sách conversation một lần, bài trong đó nạp khi chọn.
+  useEffect(() => {
+    if (src !== "library" || convs.length) return;
+    musicApi.conversations(30).then(setConvs).catch((e) => setErr(e.message));
+  }, [src]);
+  useEffect(() => {
+    if (!convId) return;
+    setLibBusy(true);
+    musicApi
+      .conversationSongs(convId)
+      .then(setLibSongs)
+      .catch((e) => setErr(e.message))
+      .finally(() => setLibBusy(false));
+  }, [convId]);
 
   const save = (next: Job[]) => {
     setJobs(next);
@@ -129,7 +159,7 @@ export default function MusicVideoPanel({
     const ok = await confirm({
       title: "Dựng music video?",
       message:
-        `Flow Music sẽ dựng ${durationS}s hình cho "${song.track.title}" — khoảng 9 phút và ` +
+        `Flow Music sẽ dựng ${durationS}s hình cho "${song.title}" — khoảng 9 phút và ` +
         "~750 credit. Credit chỉ bị trừ khi render xong; job hỏng giữa chừng thì không mất gì.",
       confirmText: "Dựng video",
       danger: true,
@@ -140,6 +170,8 @@ export default function MusicVideoPanel({
     try {
       const r = await musicApi.createMusicVideo({
         clip_id: song.clip_id,
+        // Đúng conversation của bài thì agent khỏi phải mò — và đề xuất treo đúng chỗ.
+        conversation_id: src === "library" ? convId || null : null,
         aspect_ratio: aspect,
         render_lyrics: lyrics,
         style: style.trim() || null,
@@ -162,7 +194,7 @@ export default function MusicVideoPanel({
         {
           job_id: r.video_job_id,
           clip_id: r.clip_id_used || song.clip_id,
-          title: song.track.title,
+          title: song.title,
           aspect,
           created_at: Date.now(),
           status: "running",
@@ -198,20 +230,55 @@ export default function MusicVideoPanel({
         </div>
       )}
 
-      {!songs.length ? (
-        <p className="rounded-lg border border-dashed border-neutral-800 px-3 py-6 text-center text-sm text-neutral-500">
-          Playlist chưa có bài nào lấy từ Flow Music. Bài tải lên từ máy không dựng video được
-          — bên Flow Music không có bản gốc của nó.
-        </p>
-      ) : (
-        <div className="space-y-3">
+      <div className="space-y-3">
+          <div className="flex gap-1 text-xs">
+            {(["playlist", "library"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSrc(s)}
+                className={`rounded-lg px-2.5 py-1 ${
+                  src === s ? "bg-neutral-800 text-neutral-100" : "text-neutral-500 hover:bg-neutral-800/60"
+                }`}
+              >
+                {s === "playlist" ? `Playlist dự án (${playlistSongs.length})` : "Thư viện Flow Music"}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {src === "library" && (
+              <label className="col-span-2 block sm:col-span-4">
+                <span className="mb-1 block text-xs text-neutral-400">Cuộc trò chuyện</span>
+                <select value={convId} onChange={(e) => setConvId(e.target.value)} className={inp}>
+                  <option value="">— chọn —</option>
+                  {convs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="col-span-2 block">
               <span className="mb-1 block text-xs text-neutral-400">Bài hát</span>
-              <select value={clipId} onChange={(e) => setClipId(e.target.value)} className={inp}>
+              <select
+                value={clipId}
+                onChange={(e) => setClipId(e.target.value)}
+                disabled={!songs.length}
+                className={inp}
+              >
+                {!songs.length && (
+                  <option value="">
+                    {libBusy
+                      ? "đang nạp…"
+                      : src === "playlist"
+                        ? "playlist chưa có bài từ Flow Music"
+                        : "chọn cuộc trò chuyện trước"}
+                  </option>
+                )}
                 {songs.map((s) => (
                   <option key={s.clip_id} value={s.clip_id}>
-                    {s.track.title}
+                    {s.title}
                   </option>
                 ))}
               </select>
@@ -305,14 +372,13 @@ export default function MusicVideoPanel({
             </label>
             <button
               onClick={submit}
-              disabled={busy}
+              disabled={busy || !clipId}
               className="ml-auto rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
             >
               {busy ? "Đang gửi…" : "🎬 Dựng music video"}
             </button>
           </div>
-        </div>
-      )}
+      </div>
 
       {!!jobs.length && (
         <div className="mt-4 space-y-2 border-t border-neutral-800 pt-4">
