@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, storyboard, shots as shotsApi, assemble as asm, type Project, type Scene, type Shot } from "../../api/client";
+import { api, storyboard, shots as shotsApi, assemble as asm, type MusicTrack, type Project, type Scene, type Shot } from "../../api/client";
+import MusicVideoPanel from "../music/MusicVideoPanel";
 
 export default function AssembleTab({ project }: { project: Project }) {
   const [allShots, setAllShots] = useState<Shot[]>([]);
@@ -16,6 +17,13 @@ export default function AssembleTab({ project }: { project: Project }) {
   const [meta, setMeta] = useState<any>(null);
   const [kenBurns, setKenBurns] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  // Playlist chỉ để MusicVideoPanel biết có bài nào của dự án; panel tự lo phần còn lại
+  // (và tự cho chọn bài từ thư viện Flow Music khi playlist rỗng).
+  const [tracks, setTracks] = useState<MusicTrack[]>([]);
+
+  useEffect(() => {
+    api.musicStatus(project.id).then((s) => setTracks(s.tracks)).catch(() => {});
+  }, [project.id]);
 
   useEffect(() => {
     (async () => {
@@ -210,6 +218,12 @@ export default function AssembleTab({ project }: { project: Project }) {
           )}
         </div>
       )}
+
+      {/* Đường ghép NGẮN: để Flow Music tự dựng hình cho một bài hát, không qua storyboard.
+          Đặt cuối tab Assemble vì nó cũng cho ra một video hoàn chỉnh — chỉ khác cách làm. */}
+      <div className="mt-8">
+        <MusicVideoPanel project={project} tracks={tracks} />
+      </div>
     </div>
   );
 }

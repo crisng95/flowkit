@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  api,
   clipIdFromAudioUrl,
   musicApi,
   type MusicConversation,
@@ -31,6 +32,8 @@ type Job = {
   status?: string;
   stage?: string | null;
   error?: string | null;
+  /** /media/… sau khi đã tải bản của mình về dự án. */
+  saved_web?: string | null;
 };
 
 const STAGES: Record<string, string> = {
@@ -209,6 +212,23 @@ export default function MusicVideoPanel({
   };
 
   const forget = (j: Job) => save(jobs.filter((x) => x.job_id !== j.job_id));
+
+  // Tải bản của mình về dự án. Video 60s ~60-90 MB nên server tải hộ (một lượt), không bắt
+  // trình duyệt tải rồi upload ngược lên.
+  const [saving, setSaving] = useState<string | null>(null);
+  const saveToProject = async (j: Job) => {
+    if (!j.video_url) return;
+    setSaving(j.job_id);
+    setErr(null);
+    try {
+      const r = await api.saveMusicVideo(project.id, j.video_url, j.title);
+      save(jobs.map((x) => (x.job_id === j.job_id ? { ...x, saved_web: r.web } : x)));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setSaving(null);
+    }
+  };
 
   const inp =
     "w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500";
@@ -411,15 +431,38 @@ export default function MusicVideoPanel({
               {j.error && <p className="mt-1 text-xs text-rose-400">{j.error}</p>}
               {j.video_url && (
                 <div className="mt-2 space-y-2">
-                  <video src={j.video_url} controls className="w-full rounded-lg bg-black" />
-                  <button
-                    onClick={() =>
-                      downloadFile(j.video_url!, `${slugName(j.title || "music-video")}.mp4`)
-                    }
-                    className="rounded-lg border border-emerald-800/70 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-950/40"
-                  >
-                    ⬇ Tải video
-                  </button>
+                  <video
+                    src={j.saved_web || j.video_url}
+                    controls
+                    className="w-full rounded-lg bg-black"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() =>
+                        downloadFile(
+                          j.saved_web || j.video_url!,
+                          `${slugName(j.title || "music-video")}.mp4`
+                        )
+                      }
+                      className="rounded-lg border border-emerald-800/70 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-950/40"
+                    >
+                      ⬇ Tải về máy
+                    </button>
+                    {j.saved_web ? (
+                      <span className="text-xs text-emerald-400">
+                        ✓ đã lưu trong dự án ({j.saved_web})
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => saveToProject(j)}
+                        disabled={saving === j.job_id}
+                        title="Tải bản của mình về thư mục media của dự án"
+                        className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+                      >
+                        {saving === j.job_id ? "Đang lưu…" : "💾 Lưu vào dự án"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

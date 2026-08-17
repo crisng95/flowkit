@@ -351,6 +351,13 @@ export const api = {
     req<{ fonts: { name: string; path: string }[]; current: string }>("/fonts"),
 
   getProject: (id: string) => req<Project>(`/projects/${id}`),
+  // Tải music video của Flow Music về media dự án — để có bản của mình, không phụ thuộc
+  // bucket bên họ còn giữ file hay không.
+  saveMusicVideo: (pid: string, video_url: string, title?: string) =>
+    req<{ web: string; path: string; size_mb: number }>(`/projects/${pid}/music-video/save`, {
+      method: "POST",
+      body: JSON.stringify({ video_url, title: title ?? null }),
+    }),
   listScenes: (id: string) => req<{ scenes: Scene[] }>(`/projects/${id}/scenes`),
   // Thêm scene bằng tay — đường làm việc KHÔNG qua kịch bản. `shots` tạo luôn shot rỗng
   // bên trong, vì dự án trắng thì thứ người dùng cần là một khung để làm ngay.

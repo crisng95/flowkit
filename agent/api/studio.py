@@ -4434,6 +4434,11 @@ class AddTrackRequest(BaseModel):
     title: Optional[str] = None
 
 
+class SaveMusicVideoRequest(BaseModel):
+    video_url: str
+    title: Optional[str] = None
+
+
 class GenerateTrackRequest(BaseModel):
     prompt: str
     conversation_id: Optional[str] = None
@@ -4508,6 +4513,33 @@ async def upload_track(pid: str, file: UploadFile = File(...), title: str = Form
     await music_mod.add_track(
         pid, dest, title=title or Path(file.filename or dest.name).stem, source="upload")
     return await music_status(pid)
+
+
+@router.post("/projects/{pid}/music-video/save")
+async def save_music_video(pid: str, body: SaveMusicVideoRequest):
+    """Tải music video của Flow Music về thư mục media của dự án.
+
+    URL của họ là URL tĩnh public (bucket `producer-app-public`), không hết hạn như Flow
+    video — nhưng nó nằm trên máy chủ người khác. Lưu về dự án để có bản của mình, dùng
+    được khi ghép/xuất và không phụ thuộc bên kia còn giữ file hay không.
+    """
+    project = await _project_or_404(pid)
+    url = body.video_url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(400, "video_url không hợp lệ")
+    out_dir = media_store.MEDIA_DIR / pid
+    out_dir.mkdir(parents=True, exist_ok=True)
+    name = f"mv_{_slug(body.title or 'music-video')[:40]}_{db.new_id()[:8]}.mp4"
+    dest = out_dir / name
+    async with httpx.AsyncClient(timeout=300, follow_redirects=True) as c:
+        resp = await c.get(url)
+    if resp.status_code >= 400:
+        raise HTTPException(502, f"Tải video thất bại ({resp.status_code})")
+    dest.write_bytes(resp.content)
+    logger.info("music video lưu về dự án %s: %s (%.1f MB)",
+                project["title"], name, len(resp.content) / 1e6)
+    return {"web": f"/media/{pid}/{name}", "path": str(dest),
+            "size_mb": round(len(resp.content) / 1e6, 1)}
 
 
 @router.post("/projects/{pid}/music/add")
