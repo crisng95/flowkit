@@ -62,9 +62,16 @@ function broadcastRequestLog() {
 
 // ─── Startup ────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(init);
-chrome.runtime.onStartup.addListener(init);
+let initializationPromise = null;
+
+chrome.runtime.onInstalled.addListener(() => {
+  void ensureInitialized();
+});
+chrome.runtime.onStartup.addListener(() => {
+  void ensureInitialized();
+});
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  await ensureInitialized();
   if (alarm.name === 'reconnect') connectToAgent();
   if (alarm.name === 'keepAlive') keepAlive();
   if (alarm.name === 'token-refresh') {
@@ -72,7 +79,18 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
-async function init() {
+function ensureInitialized() {
+  if (!initializationPromise) {
+    initializationPromise = initialize().catch((error) => {
+      initializationPromise = null;
+      console.error('[FlowAgent] Initialization failed', error);
+      throw error;
+    });
+  }
+  return initializationPromise;
+}
+
+async function initialize() {
   const data = await chrome.storage.local.get(['flowKey', 'metrics', 'callbackSecret']);
   if (data.flowKey) flowKey = data.flowKey;
   if (data.metrics) Object.assign(metrics, data.metrics);
@@ -80,6 +98,10 @@ async function init() {
   connectToAgent();
   chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 });
 }
+
+// MV3 workers can be suspended and restarted without onStartup firing.
+// Rehydrate the persisted Flow key on every worker start.
+void ensureInitialized();
 
 // ─── Token Capture ──────────────────────────────────────────
 
