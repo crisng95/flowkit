@@ -354,7 +354,7 @@ async function handleSolveCaptcha(msg) {
 
 async function handleTrpcRequest(msg) {
   const { id, params } = msg;
-  const { url, method = 'POST', headers = {}, body } = params;
+  const { url, method = 'POST', headers = {}, body, responseMode = 'json' } = params;
 
   if (!url || !url.startsWith('https://labs.google/')) {
     sendToAgent({ id, error: 'INVALID_TRPC_URL' });
@@ -380,7 +380,19 @@ async function handleTrpcRequest(msg) {
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'include',
     });
-    const data = await resp.json();
+    let data;
+    if (responseMode === 'url') {
+      // fetch() has already followed the authenticated Flow redirect. Return
+      // only the final signed URL and cancel the body so large videos are not
+      // buffered in the extension or copied through the WebSocket bridge.
+      data = {
+        url: resp.url,
+        contentType: resp.headers.get('content-type'),
+      };
+      await resp.body?.cancel();
+    } else {
+      data = await resp.json();
+    }
     chrome.storage.local.set({ metrics });
     updateRequestLog(logId, { status: 'success' });
     sendToAgent({ id, status: resp.status, data });

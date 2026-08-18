@@ -29,6 +29,26 @@
       }
     }
   },
+  "omni_flash_models": {
+    "frame_to_video": {
+      "4": "abra_i2v_4s",
+      "6": "abra_i2v_6s",
+      "8": "abra_i2v_8s",
+      "10": "abra_i2v_10s"
+    },
+    "start_end_frame_to_video": {
+      "4": "abra_i2v_4s",
+      "6": "abra_i2v_6s",
+      "8": "abra_i2v_8s",
+      "10": "abra_i2v_10s"
+    },
+    "reference_to_video": {
+      "4": "abra_r2v_4s",
+      "6": "abra_r2v_6s",
+      "8": "abra_r2v_8s",
+      "10": "abra_r2v_10s"
+    }
+  },
   "upscale_models": {
     "VIDEO_RESOLUTION_4K": "veo_3_1_upsampler_4k",
     "VIDEO_RESOLUTION_1080P": "veo_3_1_upsampler_1080p"
