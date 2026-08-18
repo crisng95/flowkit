@@ -93,6 +93,8 @@ export default function AssembleTab({ project }: { project: Project }) {
     });
 
   return (
+    // Khung chứa tab ở ProjectWorkspace là overflow-hidden, nên mỗi tab tự lo phần cuộn.
+    <div className="h-full overflow-auto">
     <div className="mx-auto max-w-4xl px-6 py-6">
       <h2 className="mb-1 text-xl font-semibold">Assemble & Export</h2>
       <p className="mb-5 text-sm text-neutral-400">
@@ -224,6 +226,7 @@ export default function AssembleTab({ project }: { project: Project }) {
       <div className="mt-8">
         <MusicVideoPanel project={project} tracks={tracks} />
       </div>
+    </div>
     </div>
   );
 }
