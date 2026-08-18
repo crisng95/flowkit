@@ -90,6 +90,10 @@ export default function MusicVideoPanel({
   const [convId, setConvId] = useState("");
   const [libSongs, setLibSongs] = useState<MusicSong[]>([]);
   const [libBusy, setLibBusy] = useState(false);
+  // Video ĐÃ render sẵn trong conversation — nhặt lại còn hơn trả 750 credit lần nữa.
+  const [libVideos, setLibVideos] = useState<
+    { job_id: string; status: string; video_url?: string | null; clip_id?: string | null }[]
+  >([]);
 
   const playlistSongs = tracks
     .map((t) => ({ clip_id: clipIdFromAudioUrl(t.audio_url), title: t.title }))
@@ -129,13 +133,21 @@ export default function MusicVideoPanel({
     musicApi.conversations(30).then(setConvs).catch((e) => setErr(e.message));
   }, [src]);
   useEffect(() => {
-    if (!convId) return;
+    if (!convId) {
+      setLibVideos([]);
+      return;
+    }
     setLibBusy(true);
     musicApi
       .conversationSongs(convId)
       .then(setLibSongs)
       .catch((e) => setErr(e.message))
       .finally(() => setLibBusy(false));
+    // Song song: video đã dựng sẵn trong chính conversation đó.
+    musicApi
+      .conversationVideos(convId)
+      .then((r) => setLibVideos(r.videos || []))
+      .catch(() => setLibVideos([]));
   }, [convId]);
   // Đổi nguồn/cuộc trò chuyện thì bỏ chọn cũ — id không còn nằm trong danh sách nữa.
   useEffect(() => setPicked([]), [src, convId]);
@@ -169,7 +181,7 @@ export default function MusicVideoPanel({
               status: r.status,
               stage: r.stage,
               video_url: r.video_url,
-              error: r.error,
+              error: r.error_message,
             };
           } catch {
             return j;
@@ -278,6 +290,29 @@ export default function MusicVideoPanel({
       }
     });
     saveQueue([...queue, ...items]);
+  };
+
+  // Nhặt một video đã render sẵn (trong conversation) vào danh sách lượt của dự án — từ đó
+  // nó lưu về dự án / ghép playlist / xuất Resolve như video mình vừa dựng. Không tốn credit.
+  const adopt = (v: { job_id: string; video_url?: string | null; clip_id?: string | null }) => {
+    if (jobs.some((j) => j.job_id === v.job_id)) return;
+    const title =
+      libSongs.find((s) => s.clip_id === v.clip_id)?.title ||
+      songs.find((s) => s.clip_id === v.clip_id)?.title ||
+      "Video có sẵn";
+    saveJobs([
+      {
+        job_id: v.job_id,
+        clip_id: v.clip_id || "",
+        title,
+        // Tỷ lệ thật của video sẵn có chưa biết cho tới khi lưu về; đoán theo ô đang chọn.
+        aspect,
+        created_at: Date.now(),
+        status: "completed",
+        video_url: v.video_url || null,
+      },
+      ...jobs,
+    ]);
   };
 
   const saveToProject = async (j: Job) => {
@@ -446,6 +481,35 @@ export default function MusicVideoPanel({
               ))}
             </select>
           </label>
+        )}
+
+        {src === "library" && !!libVideos.length && (
+          <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-2">
+            <p className="mb-1 px-1 text-xs text-emerald-300">
+              Cuộc trò chuyện này đã có {libVideos.length} music video — dùng lại thì không tốn
+              credit.
+            </p>
+            {libVideos.map((v) => {
+              const t =
+                libSongs.find((s) => s.clip_id === v.clip_id)?.title || v.clip_id?.slice(0, 8);
+              const taken = jobs.some((j) => j.job_id === v.job_id);
+              return (
+                <div key={v.job_id} className="flex items-center gap-2 px-1 py-0.5 text-sm">
+                  <span className="truncate text-neutral-300">{t}</span>
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {v.video_url ? "xong" : v.status === "error" ? "hỏng" : "đang dựng"}
+                  </span>
+                  <button
+                    onClick={() => adopt(v)}
+                    disabled={taken || !v.video_url}
+                    className="ml-auto shrink-0 rounded border border-emerald-700/60 px-2 py-0.5 text-xs text-emerald-300 hover:bg-emerald-950/40 disabled:opacity-40"
+                  >
+                    {taken ? "đã lấy" : "＋ dùng lại"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         <div>

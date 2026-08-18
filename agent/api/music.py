@@ -125,9 +125,11 @@ async def send_message(body: SendMessageRequest):
 async def create_music_video(body: CreateMusicVideoRequest):
     """Đặt lệnh dựng MUSIC VIDEO của Flow Music cho một bài hát đã có.
 
-    ⚠ **~500 credit và 15-30 phút mỗi video** — đắt hơn mọi thứ khác trong Flow Kit gộp lại.
+    ⚠ **~750 credit và ~9 phút mỗi video** (đo trên 5 lượt thật) — đắt hơn mọi thứ khác trong
+    Flow Kit gộp lại, nhưng credit chỉ trừ khi render XONG; job hỏng giữa chừng không mất gì.
     Endpoint này KHÔNG chờ render xong: nó trả về ngay khi agent phía Flow Music nhận việc.
-    Hỏi kết quả bằng `GET /api/music/music-video/{clip_id}`.
+    Hỏi kết quả bằng `GET /api/music/music-video-job/{job_id}` — KHÔNG phải qua clip_id, clip
+    audio không bao giờ được cập nhật.
 
     `auto_confirm=false` → chỉ lấy ĐỀ XUẤT (agent gọi `video__propose_music_video`), không
     render, không tốn credit. Dùng để xem agent hiểu yêu cầu thế nào trước khi tiêu tiền.
@@ -147,10 +149,25 @@ async def create_music_video(body: CreateMusicVideoRequest):
     return result
 
 
+@router.get("/conversations/{conversation_id}/videos")
+async def conversation_music_videos(conversation_id: str):
+    """Music video ĐÃ đặt render trong một conversation (kèm link nếu xong).
+
+    Dùng để nhặt lại video đã trả tiền hôm trước thay vì render lại — Flow Music không có API
+    "liệt kê video của tôi", dấu vết duy nhất nằm trong log tin nhắn của conversation.
+    """
+    client = _require_connected()
+    result = await client.conversation_music_videos(conversation_id)
+    _raise_if_error(result)
+    return result
+
+
 @router.get("/music-video-job/{job_id}")
 async def music_video_job_status(job_id: str):
-    """Tiến độ render (phần trăm / thời gian còn lại) theo `job_id` mà
-    `POST /create-music-video` trả về. Trả nguyên payload của Flow Music."""
+    """Tiến độ + kết quả theo `job_id` mà `POST /create-music-video` trả về.
+
+    Đã chuẩn hoá: {status, stage, video_url, clip_id, duration_s, runtime_s, error, raw}.
+    Đây là NGUỒN SỰ THẬT duy nhất cho music video."""
     client = _require_connected()
     result = await client.music_video_job_status(job_id)
     _raise_if_error(result)

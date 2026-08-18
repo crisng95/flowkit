@@ -1001,6 +1001,21 @@ export const musicApi = {
       text?: string | null;
     }>("/create-music-video", { method: "POST", body: JSON.stringify(body) }),
 
+  /** Video ĐÃ render trong một conversation — để dùng lại thay vì trả 750 credit lần nữa.
+   *  Flow Music không có API "video của tôi"; dấu vết duy nhất nằm trong log tin nhắn. */
+  conversationVideos: (conversationId: string) =>
+    musicReq<{
+      conversation_id: string;
+      videos: {
+        job_id: string;
+        status: string;
+        video_url?: string | null;
+        clip_id?: string | null;
+        duration_s?: number | null;
+        stage?: string | null;
+      }[];
+    }>(`/conversations/${conversationId}/videos`),
+
   musicVideoJob: (jobId: string) =>
     musicReq<{
       job_id: string;
@@ -1011,7 +1026,8 @@ export const musicApi = {
       duration_s?: number | null;
       runtime_s?: number | null;
       preview_image?: string | null;
-      error?: string | null;
+      /** Lý do RENDER hỏng (job vẫn là dữ liệu hợp lệ, và không bị trừ credit). */
+      error_message?: string | null;
     }>(`/music-video-job/${jobId}`),
 };
 

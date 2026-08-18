@@ -474,6 +474,38 @@ class MusicClient:
             logger.warning("music video job %s lệch yêu cầu: %s", job_id, out["warning"])
         return out
 
+    async def conversation_music_videos(self, conversation_id: str) -> dict:
+        """Mọi music video ĐÃ đặt render trong một conversation, kèm link nếu đã xong.
+
+        Video không nằm trong clip audio (xem `music_video_status`), cũng không có API "liệt
+        kê video của tôi" — dấu vết duy nhất là các lượt gọi `video__create_music_video` nằm
+        trong log tin nhắn. Quét ra `job_id` rồi hỏi trạng thái từng cái. Nhờ vậy video đã trả
+        tiền hôm trước dùng lại được, khỏi render (750 credit) lần nữa.
+        """
+        res = await self.get_conversation(conversation_id)
+        if _is_error(res):
+            return {"error": res.get("error", "get_conversation failed")}
+        data = res.get("data", res) or {}
+        job_ids: list[str] = []
+        for m in data.get("messages") or []:
+            for p in m.get("parts") or []:
+                if p.get("tool_name") != "video__create_music_video":
+                    continue
+                content = p.get("content")
+                jid = content.get("job_id") if isinstance(content, dict) else None
+                if jid and jid not in job_ids:
+                    job_ids.append(jid)
+        if not job_ids:
+            return {"conversation_id": conversation_id, "videos": []}
+        states = await asyncio.gather(*[self.music_video_job_status(j) for j in job_ids])
+        videos = [
+            {"job_id": j, "status": s.get("status"), "video_url": s.get("video_url"),
+             "clip_id": s.get("clip_id"), "duration_s": s.get("duration_s"),
+             "stage": s.get("stage")}
+            for j, s in zip(job_ids, states) if not s.get("error")
+        ]
+        return {"conversation_id": conversation_id, "videos": videos}
+
     async def music_video_job_status(self, job_id: str) -> dict:
         """Tiến độ + KẾT QUẢ render theo `job_id` (giá trị `video__create_music_video` trả về).
 
@@ -482,7 +514,12 @@ class MusicClient:
           • clip audio KHÔNG được cập nhật: xong video rồi mà `video_id`/`video_url` của nó
             vẫn `null`, nên đừng chờ ở đó (xem `music_video_status`).
         Trả về đã chuẩn hoá: {status, stage, video_url, duration_s, runtime_s, preview_image,
-        error, raw}. `status` của Flow Music: "completed" | (đang chạy) | ...
+        error_message, raw}. `status`: "done" khi có link | "error" | trạng thái của Flow Music.
+
+        Chú ý khoá lỗi: `error` chỉ dành cho lỗi GỌI (không kết nối được, HTTP hỏng…), còn
+        render hỏng đi bằng `status="error"` + `error_message`. Nhập hai thứ làm một thì mọi
+        chỗ kiểm `if result.get("error")` sẽ coi job hỏng như gọi hỏng — và job hỏng biến mất
+        khỏi danh sách thay vì hiện ra kèm lý do (nó vẫn là dữ liệu hợp lệ, và KHÔNG mất tiền).
         """
         res = await self._api("GET", "music_video_status", path_kwargs={"job_id": job_id})
         if _is_error(res):
@@ -492,14 +529,16 @@ class MusicClient:
         url = state.get("final_video_url")
         return {
             "job_id": data.get("job_id") or job_id,
-            "status": "done" if url else (state.get("status") or "pending"),
+            "status": ("done" if url
+                       else "error" if state.get("error_message")
+                       else (state.get("status") or "pending")),
             "stage": state.get("current_stage"),
             "video_url": url,
             "clip_id": state.get("clip_id"),
             "duration_s": state.get("video_duration_s"),
             "runtime_s": state.get("total_runtime_s"),
             "preview_image": (data.get("preview") or {}).get("image"),
-            "error": state.get("error_message"),
+            "error_message": state.get("error_message"),
             "raw": data,
         }
 
