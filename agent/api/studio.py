@@ -2921,6 +2921,79 @@ async def add_shot(sid: str):
     return await _shot_or_404(shot_id)
 
 
+class BulkShotsRequest(BaseModel):
+    """Văn bản nhiều dòng — MỖI DÒNG một prompt, mỗi prompt một shot."""
+    text: str
+    # Prompt đi vào cột nào: `description` = mô tả khung hình (tab Storyboard, dựng ẢNH),
+    # `motion_prompt` = chuyển động (tab Shots, dựng VIDEO). Hai tab hai cột khác nhau nên
+    # tham số này bắt buộc phải khớp với chỗ gọi, đừng mặc định "cột nào cũng được".
+    field: str = "description"
+
+
+# Đầu dòng kiểu danh sách — dán từ ChatGPT/Word/Docs thì gần như luôn có. Giữ nguyên thì
+# "1." lọt vào prompt gửi lên model.
+_LIST_MARK = re.compile(r"^\s*(?:[-*•–—]|\(?\d{1,3}[.)]|\d{1,3}\s*[-–])\s+")
+BULK_SHOTS_MAX = 300
+
+
+def split_bulk_prompts(text: str) -> list[str]:
+    """Tách văn bản nhiều dòng thành danh sách prompt — MỘT DÒNG một prompt.
+
+    Dòng trống bị bỏ (dán từ Word/Docs hay lẫn dòng trống giữa các mục), và đầu dòng kiểu
+    danh sách ("1.", "-", "•"…) bị cắt. KHÔNG gộp đoạn: xuống dòng là sang shot mới, kể cả
+    khi hai dòng liền nhau — người dùng gõ Enter là có ý sang shot khác."""
+    out = []
+    for line in (text or "").splitlines():
+        line = _LIST_MARK.sub("", line).strip()
+        if line:
+            out.append(line)
+    return out
+
+
+@router.post("/scenes/{sid}/shots/bulk")
+async def add_shots_bulk(sid: str, body: BulkShotsRequest):
+    """Thêm NHIỀU shot vào cuối scene, mỗi dòng của `text` là một prompt.
+
+    Tiêu đề lấy theo đầu prompt chứ không phải "Shot 7": thẻ trên lưới hiện `title`, mà một
+    lưới 20 thẻ đánh số thì chẳng nói lên gì — chỗ duy nhất phân biệt được chúng là prompt."""
+    await _scene_or_404(sid)
+    if body.field not in {"description", "motion_prompt"}:
+        raise HTTPException(400, f"field phải là description hoặc motion_prompt, "
+                                 f"không phải {body.field!r}")
+    prompts = split_bulk_prompts(body.text)
+    if not prompts:
+        raise HTTPException(400, "Không có dòng nào để thêm")
+    if len(prompts) > BULK_SHOTS_MAX:
+        raise HTTPException(400, f"{len(prompts)} dòng là quá nhiều "
+                                 f"(tối đa {BULK_SHOTS_MAX} shot một lượt)")
+
+    ts = db.now()
+    start = await _next_shot_idx(sid)
+    ids = []
+    for i, prompt in enumerate(prompts):
+        shot_id = db.new_id()
+        ids.append(shot_id)
+        await db.insert("shot", {
+            "id": shot_id, "scene_id": sid, "idx": start + i,
+            "title": _short_title(prompt) or f"Shot {start + i + 1}",
+            "description": "", "ref_entity_ids": "[]", "duration": 8,
+            "status": "pending", "created_at": ts, "updated_at": ts,
+            body.field: prompt})
+    return {"added": len(ids), "ids": ids,
+            "shots": await db.query_all(
+                "SELECT * FROM shot WHERE scene_id=? ORDER BY idx", (sid,))}
+
+
+def _short_title(prompt: str) -> str:
+    """Tiêu đề thẻ từ prompt: cắt ở ranh giới TỪ, không cắt giữa chữ."""
+    p = " ".join((prompt or "").split())
+    if len(p) <= 42:
+        return p
+    cut = p[:42]
+    sp = cut.rfind(" ")
+    return (cut[:sp] if sp > 20 else cut) + "…"
+
+
 @router.post("/shots/{sid}/insert")
 async def insert_shot(sid: str):
     cur = await _shot_or_404(sid)

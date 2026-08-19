@@ -618,6 +618,14 @@ export const storyboard = {
       { method: "POST", body: JSON.stringify({ language, measure }) }
     ),
   addShot: (sid: string) => req<Shot>(`/scenes/${sid}/shots`, { method: "POST" }),
+  // Thêm hàng loạt: MỖI DÒNG của `text` là một prompt → một shot, nối vào cuối scene.
+  // `field` phải khớp tab gọi nó: "description" = prompt ẢNH (Storyboard), "motion_prompt"
+  // = prompt VIDEO (Shots). Server lo phần tách dòng (bỏ dòng trống, cắt "1."/"-"/"•").
+  addShotsBulk: (sid: string, text: string, field: "description" | "motion_prompt") =>
+    req<{ added: number; ids: string[]; shots: Shot[] }>(`/scenes/${sid}/shots/bulk`, {
+      method: "POST",
+      body: JSON.stringify({ text, field }),
+    }),
   insertShot: (sid: string) => req<Shot>(`/shots/${sid}/insert`, { method: "POST" }),
   reorderShots: (sid: string, order: string[]) =>
     req<{ shots: Shot[] }>(`/scenes/${sid}/shots/reorder`, {

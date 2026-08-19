@@ -5,6 +5,7 @@ import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import type { DownloadChoice } from "../common/DownloadMenu";
 import { useConfirm } from "../common/Confirm";
+import BulkAddShots from "../common/BulkAddShots";
 import { creditGuard, upscaleVideoCost, videoCost } from "../../lib/credits";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
@@ -59,6 +60,8 @@ export default function ShotsTab({
   // cho cả tab thay vì mỗi thẻ một lượt.
   const [upChoices, setUpChoices] = useState<{ value: string; label: string }[]>([]);
   const [upLabel, setUpLabel] = useState("");
+  // Scene đang mở hộp "thêm hàng loạt" (dán nhiều dòng prompt → nhiều shot).
+  const [bulk, setBulk] = useState<Scene | null>(null);
   const confirm = useConfirm();
   const { jobFor } = useJobs();
 
@@ -412,16 +415,25 @@ export default function ShotsTab({
                     }
                   />
                 ))}
-                <button
-                  onClick={async () => {
-                    await storyboard.addShot(sc.id);
-                    loadShots(sc.id);
-                  }}
-                  title="Thêm shot vào cuối scene"
-                  className="aspect-video rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
-                >
-                  +
-                </button>
+                <div className="flex aspect-video flex-col gap-2">
+                  <button
+                    onClick={async () => {
+                      await storyboard.addShot(sc.id);
+                      loadShots(sc.id);
+                    }}
+                    title="Thêm shot vào cuối scene"
+                    className="flex-1 rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() => setBulk(sc)}
+                    title="Thêm nhiều shot cùng lúc — dán văn bản, mỗi dòng một prompt chuyển động"
+                    className="shrink-0 rounded-xl border border-dashed border-neutral-700 py-1.5 text-xs text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                  >
+                    ＋ hàng loạt
+                  </button>
+                </div>
                 {!list.length && (
                   <div className="col-span-full text-xs text-neutral-600">
                     Chưa có frame — làm Storyboard trước, hoặc bấm + để tự thêm shot.
@@ -432,6 +444,16 @@ export default function ShotsTab({
           );
         })}
       </div>
+
+      {bulk && (
+        <BulkAddShots
+          sceneId={bulk.id}
+          sceneTitle={bulk.heading}
+          field="motion_prompt"
+          onDone={(r) => setByScene((m) => ({ ...m, [bulk.id]: r.shots }))}
+          onClose={() => setBulk(null)}
+        />
+      )}
 
       {sel && (
         <ShotPanel

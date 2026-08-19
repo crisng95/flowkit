@@ -14,6 +14,7 @@ import MediaCard from "../common/MediaCard";
 import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
+import BulkAddShots from "../common/BulkAddShots";
 import { useConfirm } from "../common/Confirm";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
@@ -51,6 +52,8 @@ export default function StoryboardTab({
   const [err, setErr] = useState<string | null>(null);
   const [candidate, setCandidate] = useState<Shot | null>(null);
   const [history, setHistory] = useState<Shot | null>(null);
+  // Scene đang mở hộp "thêm hàng loạt" (dán nhiều dòng prompt → nhiều shot).
+  const [bulk, setBulk] = useState<Scene | null>(null);
   const confirm = useConfirm();
   const { jobFor } = useJobs();
   // Scenes currently being rebuilt by a per-scene "Lời đọc" job (shots cleared optimistically).
@@ -1005,15 +1008,25 @@ export default function StoryboardTab({
                   />
                   </div>
                 ))}
-                <button
-                  onClick={async () => {
-                    await storyboard.addShot(sc.id);
-                    loadShots(sc.id);
-                  }}
-                  className="aspect-video rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
-                >
-                  +
-                </button>
+                <div className="flex aspect-video flex-col gap-2">
+                  <button
+                    onClick={async () => {
+                      await storyboard.addShot(sc.id);
+                      loadShots(sc.id);
+                    }}
+                    title="Thêm một shot rỗng vào cuối scene"
+                    className="flex-1 rounded-xl border border-dashed border-neutral-700 text-2xl text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() => setBulk(sc)}
+                    title="Thêm nhiều shot cùng lúc — dán văn bản, mỗi dòng một prompt ảnh"
+                    className="shrink-0 rounded-xl border border-dashed border-neutral-700 py-1.5 text-xs text-neutral-600 hover:border-neutral-500 hover:text-neutral-400"
+                  >
+                    ＋ hàng loạt
+                  </button>
+                </div>
               </div>
             </section>
           );
@@ -1039,6 +1052,16 @@ export default function StoryboardTab({
           onGenerate={() => genImage(sel)}
           onCover={() => setAsCover(sel)}
           generating={gening.has(sel.id)}
+        />
+      )}
+
+      {bulk && (
+        <BulkAddShots
+          sceneId={bulk.id}
+          sceneTitle={bulk.heading}
+          field="description"
+          onDone={(r) => setShotsByScene((m) => ({ ...m, [bulk.id]: r.shots }))}
+          onClose={() => setBulk(null)}
         />
       )}
 
