@@ -55,10 +55,6 @@ export interface EditorTarget {
   goal?: "image" | "video";
   prompt?: string | null;
   refEntityIds?: string[];
-  // Other storyboard shot frames to pre-seed as source nodes in the default graph.
-  // Pass same-scene shots (excluding the one being edited) so the user can reference them
-  // as start images or composition references without manually adding source nodes.
-  refShotImages?: Array<{ media_id: string; web: string; label: string }>;
   imageMediaId?: string | null;
   imageSrc?: string | null;
   videoSrc?: string | null;
@@ -1468,6 +1464,13 @@ const NODE_TYPES = {
 // Built from the target's goal (image vs video) + its seeded sources, so storyboard
 // edits open on an image graph and shot edits on a video graph. Each reference entity
 // becomes its own "Nguồn ảnh" (source) node, pre-filled with that entity's image.
+//
+// CHỈ những ảnh shot THẬT SỰ tham chiếu tới mới thành node. Trước đây đồ thị mặc định còn
+// gieo sẵn MỌI frame khác trong cùng scene thành một "kệ" node Nguồn ảnh không nối dây, cho
+// tiện kéo dây khi cần. Nhưng nó là node phải XOÁ TAY: mở một shot trong scene đã có 20
+// frame là ra 20 node thừa, và với shot thêm hàng loạt từ text — nơi các prompt chẳng liên
+// quan gì nhau — thì không cái nào dùng tới. Cần một frame cụ thể thì thêm node "Nguồn ảnh"
+// rồi chọn trong danh sách của nó: nó vốn đã liệt kê sẵn toàn bộ frame của dự án.
 function defaultGraph(
   seed: EditorTarget,
   entities: Entity[],
@@ -1484,7 +1487,6 @@ function defaultGraph(
   const prompt = seed.prompt ?? "";
   const goal = seed.goal || (seed.kind === "shot" ? "video" : "image");
   const byId = new Map(entities.map((e) => [e.id, e]));
-  const shotRefs = (seed.refShotImages ?? []).filter((s) => s.media_id && s.web);
 
   const nodes: Node[] = [mk("p", "prompt", 0, 20, { text: prompt, seed_prompt: prompt })];
   const edges: Edge[] = [];
@@ -1509,16 +1511,6 @@ function defaultGraph(
         label: seed.title,
       })
     );
-    // Extra storyboard frames from the same scene, laid out as a left-hand "kệ" of ready-made
-    // sources — NOT wired to the video node. Nối hết cả scene vào một lượt render là sai: Omni
-    // trộn mọi ảnh tham chiếu vào clip nên nhân vật/bối cảnh của shot khác lọt vào, và ảnh
-    // frame của chính shot mất vai trò mỏ neo. Ai cần một frame cụ thể thì tự kéo dây.
-    shotRefs.forEach((s, k) => {
-      const sid = `sref${k}`;
-      nodes.push(mk(sid, "source", -300, 250 + k * 160, {
-        media_id: s.media_id, web: s.web, label: s.label,
-      }));
-    });
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
@@ -1546,16 +1538,6 @@ function defaultGraph(
       })
     );
     edges.push({ id: `es${k}`, source: `src${k}`, target: "i" });
-  });
-  // Storyboard shot frames from the same scene, để sẵn thành "kệ" bên trái — KHÔNG nối vào
-  // node tạo ảnh. Nối cả scene vào một lượt render là sai y như bên video: mọi frame thành ảnh
-  // tham chiếu, model trộn nhân vật/bối cảnh của shot khác vào tấm đang tạo. Ai cần một frame
-  // cụ thể (dáng, ánh sáng, bố cục) thì tự kéo dây.
-  shotRefs.forEach((s, k) => {
-    const sid = `sshot${k}`;
-    nodes.push(mk(sid, "source", -300, 320 + k * 160, {
-      media_id: s.media_id, web: s.web, label: s.label,
-    }));
   });
   // Ảnh tham chiếu người/đồ vật đi khung DỌC: chúng cao hơn rộng, khung ngang phí gần nửa ảnh
   // vào nền trắng hai bên và bóp nhỏ chủ thể — ít điểm ảnh trên khuôn mặt thì model lược nét,
