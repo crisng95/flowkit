@@ -779,7 +779,10 @@ class FlowClient:
 
         - start + end  → nội suy hai khung (`veo_3_1_interpolation_lite_low_priority`)
         - chỉ start    → i2v (`veo_3_1_i2v_lite_low_priority`)
-        - không start  → "inference" r2v (`veo_3_1_r2v_lite_low_priority`), cần ≥1 reference
+        - có reference → "inference" r2v (`veo_3_1_r2v_lite_low_priority`)
+        - KHÔNG ảnh nào → text-to-video (`veo_3_1_t2v_lite_low_priority`), endpoint riêng
+          `batchAsyncGenerateVideoText` — xem `_generate_video_text_veo_lite`. Đừng dựng lại
+          hàng rào "cần ít nhất 1 ảnh": Flow UI vẫn tạo được video Lite chỉ từ prompt.
 
         `duration_s` CHỈ có nghĩa với kiểu nội suy (4/6/8s) và đi vào MODEL KEY chứ không
         phải một field riêng — hệt Omni Flash. Inference/i2v thì Flow cứng 8s nên tham số bị
@@ -797,15 +800,24 @@ class FlowClient:
             # Độ dài nằm trong key; số lạ rơi về bản 8s mặc định thay vì dựng một key bịa ra.
             model_key = (VEO_LITE_FRAME_MODELS.get(str(duration_s))
                          or VEO_LITE_MODELS.get(gen_type))
+        elif start_media_id:
+            gen_type = "frame_2_video"
+            model_key = VEO_LITE_MODELS.get(gen_type)
         else:
-            gen_type = "frame_2_video" if start_media_id else "reference_frame_2_video"
+            # Không ảnh nào ⇒ text-to-video, KHÔNG phải r2v thiếu ảnh: gửi key r2v mà bỏ
+            # `referenceImages` đi thì Flow trả 400 (đo trên bảng Omni, cùng khuôn request).
+            gen_type = ("reference_frame_2_video"
+                        if (reference_media_ids or references) else "text_2_video")
             model_key = VEO_LITE_MODELS.get(gen_type)
         if not model_key:
             return {"error": f"Veo 3.1 Lite không có model cho kiểu {gen_type}"}
 
+        if gen_type == "text_2_video":
+            return await self._generate_video_text_veo_lite(
+                prompt=prompt, project_id=project_id, aspect_ratio=aspect_ratio,
+                user_paygate_tier=user_paygate_tier)
+
         if gen_type == "reference_frame_2_video":
-            if not (reference_media_ids or references):
-                return {"error": "Veo 3.1 Lite (inference) cần ít nhất 1 ảnh tham chiếu"}
             return await self.generate_video_from_references(
                 reference_media_ids=reference_media_ids or [],
                 prompt=prompt, project_id=project_id, scene_id=scene_id,
@@ -817,6 +829,49 @@ class FlowClient:
             scene_id=scene_id, aspect_ratio=aspect_ratio,
             end_image_media_id=end_media_id, user_paygate_tier=user_paygate_tier,
             video_model=model_key, references=references)
+
+    async def _generate_video_text_veo_lite(
+            self, prompt: str, project_id: str,
+            aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
+            user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
+        """Veo 3.1 Lite text-to-video: không ảnh nào, chỉ prompt.
+
+        Khuôn request bắt tận tay trên Flow UI (`video:batchAsyncGenerateVideoText`, key
+        `veo_3_1_t2v_lite_low_priority`). Khác đường r2v/i2v ở ba chỗ, tất cả đều bắt buộc:
+        endpoint riêng, model key riêng, và `outputSpec.resolution` — Flow UI luôn gửi
+        720P cho đường này.
+
+        Độ dài Flow cứng 8s (không có bảng key theo giây như nội suy), nên hàm không nhận
+        `duration_s` thay vì nhận rồi lặng lẽ bỏ qua. `structuredPrompt` chỉ một part text:
+        không có ảnh thì cũng chẳng có `{handle}` nào để bind.
+        """
+        model_key = VEO_LITE_MODELS.get("text_2_video")
+        if not model_key:
+            return {"error": "Veo 3.1 Lite không có model text-to-video"}
+
+        body = {
+            "mediaGenerationContext": {
+                "batchId": f"{uuid.uuid4()}",
+                "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
+            },
+            "clientContext": self._client_context(project_id, user_paygate_tier),
+            "requests": [{
+                "outputSpec": {"resolution": "VIDEO_RESOLUTION_720P"},
+                "aspectRatio": aspect_ratio,
+                "textInput": {"structuredPrompt": {"parts": [{"text": prompt}]}},
+                "videoModelKey": model_key,
+                "seed": int(time.time()) % 100000,
+                "metadata": {},
+            }],
+            "useV2ModelConfig": True,
+        }
+        return await self._send("api_request", {
+            "url": self._build_url("generate_video_text"),
+            "method": "POST",
+            "headers": random_headers(),
+            "body": body,
+            "captchaAction": "VIDEO_GENERATION",
+        }, timeout=60)   # Submit only — polling is separate
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type MusicStatus, type MusicTrack, type Project } from "../../api/client";
+import {
+  api, trackDownloadUrl,
+  type MusicStatus, type MusicTrack, type Project,
+} from "../../api/client";
 import { useConfirm } from "../common/Confirm";
 import MusicManager from "./MusicManager";
 import MusicVideoPanel from "./MusicVideoPanel";
@@ -205,6 +208,16 @@ export default function MusicTab({ project }: { project: Project }) {
               >
                 {t.source === "upload" ? "📁" : "🎧"}
               </span>
+              {/* Tải qua server chứ không trỏ vào `t.web_path`: trên đĩa file mang tên id
+                  ngẫu nhiên, endpoint đặt lại tên theo tiêu đề bài. */}
+              <a
+                href={trackDownloadUrl(t.id)}
+                download
+                className="shrink-0 text-neutral-500 hover:text-neutral-200"
+                title="Tải bài này về máy"
+              >
+                ⬇
+              </a>
               <button
                 onClick={() => remove(t)}
                 disabled={busy}

@@ -4732,6 +4732,35 @@ async def rename_track(tid: str, body: RenameTrackRequest):
     return await music_status(row["project_id"])
 
 
+@router.get("/music-tracks/{tid}/download")
+async def download_track(tid: str):
+    """Tải file nhạc của MỘT bài trong playlist về máy.
+
+    File đã nằm dưới /studio-media nên `<audio>` phát được thẳng; endpoint này chỉ tồn tại vì
+    TÊN FILE: trên đĩa mỗi bài là `<id ngẫu nhiên>.m4a`, tải thẳng đường dẫn ấy về thì được
+    một thư mục toàn tên vô nghĩa. Ở đây tên file lấy theo tiêu đề bài."""
+    row = await _track_or_404(tid)
+    f = Path((row.get("path") or "").strip())
+    if not f.name or not f.exists():
+        raise HTTPException(404, "Không tìm thấy file nhạc")
+    name = f"{_slug(row.get('title') or '') or 'track'}{f.suffix or '.m4a'}"
+    return FileResponse(f, filename=name)
+
+
+@router.get("/projects/{pid}/bgm/download")
+async def download_bgm(pid: str):
+    """Tải file nhạc nền của dự án (MỘT bài chìm dưới lời đọc — khác playlist music video).
+
+    Cùng lý do đặt tên như `download_track`: trên đĩa nó luôn là `bgm.<ext>`, mọi dự án như
+    nhau, nên tải về vài bài là không còn phân biệt được bài nào của dự án nào."""
+    project = await _project_or_404(pid)
+    f = Path((project.get("bgm_path") or "").strip())
+    if not f.name or not f.exists():
+        raise HTTPException(404, "Dự án chưa có nhạc nền")
+    name = f"{_slug(project.get('title') or '') or 'bgm'}-bgm{f.suffix or '.m4a'}"
+    return FileResponse(f, filename=name)
+
+
 @router.delete("/music-tracks/{tid}")
 async def delete_track(tid: str):
     row = await _track_or_404(tid)

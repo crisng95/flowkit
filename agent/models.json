@@ -29,10 +29,12 @@
       }
     }
   },
+  "_comment_veo_lite_models": "text_2_video = KHONG anh nao: endpoint batchAsyncGenerateVideoText + key veo_3_1_t2v_lite_low_priority (bat tan tay tren request that cua Flow UI). Gui key r2v ma bo referenceImages di thi Flow tra 400.",
   "veo_lite_models": {
     "frame_2_video": "veo_3_1_i2v_lite_low_priority",
     "start_end_frame_2_video": "veo_3_1_interpolation_lite_low_priority",
-    "reference_frame_2_video": "veo_3_1_r2v_lite_low_priority"
+    "reference_frame_2_video": "veo_3_1_r2v_lite_low_priority",
+    "text_2_video": "veo_3_1_t2v_lite_low_priority"
   },
   "veo_lite_frame_models": {
     "4": "veo_3_1_i2v_s_lite_4s_fl_low_priority",

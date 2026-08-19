@@ -1074,7 +1074,7 @@ function VideoNode({ id, data }: NodeProps) {
             value={liteMode}
             onChange={(e) => update(id, { lite_mode: e.target.value })}
           >
-            <option value="inference">Inference — mọi ảnh nối vào = tham chiếu (8s)</option>
+            <option value="inference">Inference — mọi ảnh nối vào = tham chiếu, không nối ảnh = chỉ prompt (8s)</option>
             <option value="frames">Khung đầu + khung cuối — nội suy (4/6/8s)</option>
           </select>
         </label>
@@ -1104,7 +1104,7 @@ function VideoNode({ id, data }: NodeProps) {
             ưu tiên thấp nên clip lâu hơn.
             {liteMode === "frames"
               ? " Nối ĐÚNG 2 ảnh: ảnh vào trước là khung đầu, ảnh sau là khung cuối."
-              : " Kiểu inference Flow cứng 8s — muốn 4/6s thì đổi sang khung đầu + khung cuối."}
+              : " Kiểu inference Flow cứng 8s — muốn 4/6s thì đổi sang khung đầu + khung cuối. Không nối ảnh nào vào thì chạy text-to-video, chỉ từ prompt."}
           </>
         )}
       </div>

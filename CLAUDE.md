@@ -173,9 +173,17 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   thêm nhánh `if engine == ...` chỗ khác.
 - **`veo_3_1_*_lite_low_priority` là bản 0 credit; `*_lite` KHÔNG.** "Veo 3.1 - Lite [Lower
   Priority]" (0đ, chỉ Ultra) và "Veo 3.1 - Lite" (vẫn tính tiền) là HAI model khác nhau, chỉ
-  khác đuôi `_low_priority` trong key. Ba key trong `models.json → veo_lite_models`, chọn theo
-  ảnh truyền vào chứ không theo cờ: start+end → `interpolation`, chỉ start → `i2v`, không start
-  → `r2v` ("inference"). Đổi key ở đó là đổi hoá đơn — kiểm lại đuôi trước khi sửa.
+  khác đuôi `_low_priority` trong key. BỐN key trong `models.json → veo_lite_models`, chọn theo
+  ảnh truyền vào chứ không theo cờ: start+end → `interpolation`, chỉ start → `i2v`, chỉ
+  reference → `r2v` ("inference"), KHÔNG ảnh nào → `t2v`. Đổi key ở đó là đổi hoá đơn — kiểm
+  lại đuôi trước khi sửa.
+  **Không ảnh nào KHÔNG phải lỗi thiếu ảnh — đó là text-to-video.** Đúng như Omni Flash: một
+  endpoint riêng (`video:batchAsyncGenerateVideoText`) + một key riêng
+  (`veo_3_1_t2v_lite_low_priority`), và riêng đường này Flow UI luôn gửi kèm
+  `outputSpec.resolution = VIDEO_RESOLUTION_720P`. Gửi key r2v mà bỏ `referenceImages` đi thì
+  Flow trả 400. Trước đây cả `flow_client` lẫn node "Tạo video" đều dựng hàng rào "cần ít nhất
+  1 ảnh tham chiếu", nên cách dùng đơn giản nhất — gõ prompt rồi bấm tạo — là cách DUY NHẤT bị
+  chặn, dù Flow vẫn làm được. Đừng dựng lại hàng rào đó.
   **Độ dài: chỉ kiểu nội suy mới chọn được (4/6/8s)**, và nó nằm TRONG model key như Omni
   Flash chứ không phải một field riêng — `veo_lite_frame_models` trong models.json. Tên key
   không đều, đừng suy ra theo công thức: 4s/6s là `veo_3_1_i2v_s_lite_{4,6}s_fl_low_priority`

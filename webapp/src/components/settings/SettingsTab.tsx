@@ -5,6 +5,7 @@ import {
   synthesize,
   base64ToAudioUrl,
   projectExportUrl,
+  bgmDownloadUrl,
   storyboard,
   shots as shotsApi,
   PROMPT_KEYS,
@@ -794,7 +795,12 @@ export default function SettingsTab({
                 {bgmName ? (
                   <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm">
                     <span className="truncate text-neutral-200">🎵 {bgmName}</span>
-                    <div className="ml-2 flex shrink-0 gap-3">
+                    <div className="ml-2 flex shrink-0 items-center gap-3">
+                      {/* Trên đĩa file luôn tên `bgm.<ext>` ở mọi dự án — endpoint đặt lại
+                          tên theo tên dự án khi tải về. */}
+                      <a href={bgmDownloadUrl(project.id)} download
+                        title="Tải bài nhạc nền này về máy"
+                        className="text-neutral-500 hover:text-neutral-200">⬇</a>
                       <button onClick={() => setShowMusicManager(true)} disabled={busy}
                         className="text-indigo-400 hover:text-indigo-300 disabled:opacity-40">Đổi bài</button>
                       <button onClick={removeBgm} disabled={busy}

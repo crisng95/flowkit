@@ -133,6 +133,9 @@ IMAGE_MODELS = _MODELS["image_models"]
 #   frame_2_video           — startImage (i2v)            → batchAsyncGenerateVideoStartImage
 #   start_end_frame_2_video — startImage + endImage (nội suy) → ...StartAndEndImage
 #   reference_frame_2_video — referenceImages (r2v/"inference") → ...ReferenceImages
+#   text_2_video            — KHÔNG ảnh nào, chỉ prompt        → ...Text
+# Đường text_2_video (`veo_3_1_t2v_lite_low_priority`) còn khác hai đường kia ở chỗ nó gửi
+# kèm `outputSpec.resolution = VIDEO_RESOLUTION_720P` — bắt tận tay trên request của Flow UI.
 # i2v lite vốn đã là mặc định của PAYGATE_TIER_TWO trong `video_models`; hai key còn lại chỉ
 # mở khi tài khoản là Gemini Ultra, nên chúng nằm riêng ở đây thay vì trộn vào bảng theo tier.
 VEO_LITE_MODELS = _MODELS.get("veo_lite_models", {})

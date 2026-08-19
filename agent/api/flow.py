@@ -65,7 +65,7 @@ class GenerateVideoVeoLiteRequest(BaseModel):
     """Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Gemini Ultra (PAYGATE_TIER_TWO).
 
     Kiểu sinh suy ra từ ảnh truyền vào: start+end → nội suy hai khung, chỉ start → i2v,
-    không start → "inference" r2v (cần ≥1 reference)."""
+    chỉ reference → "inference" r2v, KHÔNG ảnh nào → text-to-video (endpoint riêng)."""
     prompt: str
     project_id: str
     scene_id: str = ""

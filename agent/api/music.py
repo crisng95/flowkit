@@ -5,9 +5,15 @@ tiện dụng bậc cao (gửi prompt → chờ agent phía Google tạo bài �
 `POST /send-message` là API bậc thấp cho các lượt chat tiếp theo trong 1 conversation (đổi
 tỉ lệ video, yêu cầu chỉnh sửa...).
 """
+import os
+import re
+import unicodedata
 from typing import Optional
+from urllib.parse import quote, urlparse
 
+import httpx
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from agent.services.music_client import get_music_client
@@ -241,3 +247,47 @@ async def delete_conversation(conversation_id: str, delete_clips: bool = False,
         delete_music_videos=delete_music_videos)
     _raise_if_error(result)
     return {"ok": True}
+
+
+@router.get("/download")
+async def download_song(url: str, title: str = ""):
+    """Tải một bài của Flow Music thẳng về máy người dùng, tên file theo tiêu đề.
+
+    Phải đi vòng qua agent chứ không dùng `<a download>` được: `audio_url` nằm trên host
+    khác, mà thuộc tính `download` bị trình duyệt BỎ QUA khi link trỏ cross-origin — bấm nút
+    chỉ mở thêm một tab phát nhạc. Agent tải hộ rồi phát lại dưới dạng attachment.
+
+    Khác `POST /projects/{pid}/music/add`: chỗ đó tải về ĐĨA của agent để đưa vào playlist,
+    còn đây không lưu gì cả, chỉ chuyển tiếp cho trình duyệt.
+    """
+    parsed = urlparse(url)
+    # Agent chạy trên máy người dùng và mở cổng 8100 — một endpoint nhận URL tuỳ ý là đường
+    # để trang web bất kỳ đọc hộ các dịch vụ đang chạy trên localhost/LAN. Chỉ cho https ra
+    # ngoài, chặn tên máy nội bộ.
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise HTTPException(400, "Chỉ nhận URL https")
+    host = parsed.hostname.lower()
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or host.endswith(".local"):
+        raise HTTPException(400, f"Không tải từ địa chỉ nội bộ ({host})")
+
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c:
+        resp = await c.get(url)
+    if resp.status_code >= 400:
+        raise HTTPException(502, f"Tải nhạc thất bại ({resp.status_code})")
+
+    ext = os.path.splitext(parsed.path)[1].lower()
+    if ext not in {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".aac"}:
+        ext = ".m4a"
+    name = re.sub(r'[\/:*?"<>|\r\n\t]+', "", (title or "").strip())[:60] or "flowmusic"
+    # Hai lần tên: `filename` phải ASCII thuần (tiêu đề tiếng Việt rơi hết dấu ở đây), còn
+    # `filename*` mới giữ nguyên dấu cho trình duyệt nào đọc được — trình duyệt hiện đại ưu
+    # tiên bản sau. Bỏ bản ASCII đi thì vài trình duyệt lưu ra tên toàn ký tự %.
+    ascii_name = (unicodedata.normalize("NFKD", name)
+                  .encode("ascii", "ignore").decode().strip()) or "flowmusic"
+    return Response(
+        content=resp.content,
+        media_type=resp.headers.get("content-type") or "audio/mpeg",
+        headers={"Content-Disposition":
+                 f'attachment; filename="{ascii_name}{ext}"; '
+                 f"filename*=UTF-8''{quote(name + ext)}"},
+    )

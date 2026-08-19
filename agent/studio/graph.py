@@ -871,15 +871,17 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 else:
                     if not imgs and inp["media_id"]:
                         imgs = [{"handle": "source", "media_id": inp["media_id"]}]
-                    if not imgs:
-                        raise GraphError("Veo 3.1 Lite (inference) cần ít nhất 1 ảnh "
-                                         "tham chiếu/nguồn")
-                    used_model = VEO_LITE_MODELS.get("reference_frame_2_video")
+                    # Không nối ảnh nào vào thì client chuyển sang đường text-to-video
+                    # (`veo_3_1_t2v_lite_low_priority` + endpoint riêng) — giống node Omni.
+                    # Đừng dựng lại hàng rào "cần ít nhất 1 ảnh": Flow UI vẫn tạo được video
+                    # Lite chỉ từ prompt, và đó là cách dùng đơn giản nhất của node.
+                    used_model = VEO_LITE_MODELS.get(
+                        "reference_frame_2_video" if imgs else "text_2_video")
                     submit = lambda: client.generate_video_veo_lite(
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
                         reference_media_ids=[r["media_id"] for r in imgs],
                         duration_s=VEO_LITE_DEFAULT_S, aspect_ratio=aspect_v,
-                        user_paygate_tier=project["paygate_tier"], references=imgs)
+                        user_paygate_tier=project["paygate_tier"], references=imgs or None)
             else:   # Veo i2v — needs a start frame
                 if not inp["media_id"]:
                     raise GraphError("Veo i2v cần ảnh start (nối từ Nguồn ảnh / Tạo ảnh)")

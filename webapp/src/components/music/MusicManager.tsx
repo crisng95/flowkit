@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   api,
   musicApi,
+  musicSongDownloadUrl,
   type Project,
   type MusicSong,
   type MusicStatus,
@@ -292,13 +293,25 @@ function SongCard({
         )}
       </div>
       <audio controls src={song.audio_url} className="h-8 w-full" />
-      <button
-        onClick={onPick}
-        disabled={busy}
-        className="mt-2 w-full rounded-md bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 disabled:opacity-40"
-      >
-        {mode === "playlist" ? "＋ Thêm vào playlist" : "✓ Dùng bài này làm nhạc nền"}
-      </button>
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={onPick}
+          disabled={busy}
+          className="flex-1 rounded-md bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-600/30 disabled:opacity-40"
+        >
+          {mode === "playlist" ? "＋ Thêm vào playlist" : "✓ Dùng bài này làm nhạc nền"}
+        </button>
+        {/* Tải THẲNG về máy, không qua playlist. Phải đi vòng qua agent: `audio_url` nằm ở
+            host khác nên trình duyệt bỏ qua thuộc tính `download` và chỉ mở tab phát nhạc. */}
+        <a
+          href={musicSongDownloadUrl(song.audio_url, song.title || "")}
+          download
+          className="shrink-0 rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:border-neutral-500 hover:text-neutral-200"
+          title="Tải bài này về máy"
+        >
+          ⬇
+        </a>
+      </div>
     </div>
   );
 }

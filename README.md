@@ -140,7 +140,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | Storytelling | `POST /scenes/{sid}/beats`, `POST /projects/{pid}/voiceover`, `POST /shots/{sid}/narration` |
 | Node graph | `GET/PUT /shots/{sid}/graph`, `POST /shots/{sid}/graph/run` (tương tự cho `/entities/{eid}/graph`) |
 | Ghép & Xuất | `POST /projects/{pid}/assemble`, `…/assemble-images`, `…/export`, `…/export/davinci-xml`, `GET /fonts` |
-| Playlist nhạc (music video) | `GET /projects/{pid}/music`, `PATCH …/music/settings` (bật chế độ + khoảng cách bài), `POST …/music/upload`, `…/music/generate`, `…/music/add`, `…/music/reorder`, `PATCH/DELETE /music-tracks/{tid}` |
+| Playlist nhạc (music video) | `GET /projects/{pid}/music`, `PATCH …/music/settings` (bật chế độ + khoảng cách bài), `POST …/music/upload`, `…/music/generate`, `…/music/add`, `…/music/reorder`, `PATCH/DELETE /music-tracks/{tid}`, `GET /music-tracks/{tid}/download`, `GET /projects/{pid}/bgm/download` |
 | Nhạc nền | `POST /projects/{pid}/bgm` (upload), `POST …/bgm/copy` (chép từ dự án khác), `POST …/bgm/generate` (sinh bằng Flow Music), `POST …/bgm/select` (áp 1 bài đã sinh/có sẵn), `DELETE /projects/{pid}/bgm` |
 
 ---
@@ -159,7 +159,7 @@ Toàn bộ endpoint nằm dưới `/api/studio/*`. Nhóm chính (chi tiết tron
 | POST | `/upload-image` | Upload ảnh cục bộ → `media_id` |
 | POST | `/generate-video` | Video i2v từ ảnh đầu (+ ảnh cuối tuỳ chọn, để nối clip) |
 | POST | `/generate-video-omni` | Video r2v (Omni Flash, `abra_r2v_{4,6,8,10}s`) |
-| POST | `/generate-video-veo-lite` | Video Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Ultra |
+| POST | `/generate-video-veo-lite` | Video Veo 3.1 Lite [Lower Priority] — 0 credit, chỉ Ultra. Không truyền ảnh nào = text-to-video |
 | POST | `/generate-video-refs` | Video từ các ảnh tham chiếu |
 | POST | `/upscale/video` | Upscale một video đã sinh |
 | POST | `/check-status` | Poll operation async (video/upscale) |
@@ -186,6 +186,7 @@ Extension lo phần submit + đọc hết SSE rồi trả về 1 lần.
 | POST  | `/send-message` | Gửi tin nhắn chat bậc thấp (tiếp tục 1 conversation — vd yêu cầu tạo music video) |
 | GET   | `/song-status/{operation_id}` | Poll trạng thái 1 lượt tạo nhạc |
 | POST  | `/clips` | Lấy chi tiết clip (`audio_url`/`wav_url`/`title`/`lyrics`) theo `clip_ids` |
+| GET   | `/download` | Tải một bài (`?url=&title=`) về máy — proxy vì `audio_url` khác origin nên `<a download>` bị bỏ qua |
 | GET   | `/conversations` | Liệt kê conversation (mỗi bài hát nằm trong 1 conversation) |
 | GET   | `/conversations/{id}` | Nội dung đầy đủ 1 conversation (toàn bộ message/tool-call) |
 | PATCH | `/conversations/{id}` | Đổi tên conversation |

@@ -825,6 +825,16 @@ export const storyboardExportUrl = (pid: string) =>
 export const shotImageDownloadUrl = (sid: string) =>
   `/api/studio/shots/${sid}/image/download`;
 
+// Tải nhạc về máy. Ba nguồn, ba đường — điểm chung là đều phải đi qua server: file trên đĩa
+// mang tên id ngẫu nhiên / `bgm.<ext>`, còn bài trên Flow Music thì nằm ở host khác nên
+// `<a download>` bị trình duyệt bỏ qua (cross-origin) và chỉ mở thêm một tab phát nhạc.
+export const trackDownloadUrl = (tid: string) =>
+  `/api/studio/music-tracks/${tid}/download`;
+export const bgmDownloadUrl = (pid: string) =>
+  `/api/studio/projects/${pid}/bgm/download`;
+export const musicSongDownloadUrl = (audioUrl: string, title = "") =>
+  `/api/music/download?url=${encodeURIComponent(audioUrl)}&title=${encodeURIComponent(title)}`;
+
 // OmniVoice base URL config lives on the tts router (not /studio).
 export async function getTtsConfig(): Promise<{ base_url: string }> {
   const res = await fetch("/api/tts/config");
