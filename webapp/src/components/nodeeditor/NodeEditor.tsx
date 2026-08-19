@@ -2163,12 +2163,6 @@ function Editor({
       }
     };
     const apply = (g: { nodes: any[]; edges: any[] }) => {
-      const nodes: Node[] = g.nodes.map((n: any) => ({
-        id: n.id,
-        type: n.type || n.data?._type || "prompt",
-        position: n.position || { x: 0, y: 0 },
-        data: { ...n.data, _type: n.type || n.data?._type },
-      }));
       const edges: Edge[] = (g.edges || [])
         .map((e: any, i: number) => ({
           id: e.id || `e${i}`,
@@ -2183,6 +2177,25 @@ function Editor({
             !(/^esr\d+$/.test(e.id) && /^sref\d+$/.test(e.source)) &&
             !(/^ess\d+$/.test(e.id) && /^sshot\d+$/.test(e.source))
         );
+      const wired = new Set(edges.flatMap((e) => [e.source, e.target]));
+      const nodes: Node[] = g.nodes
+        // Dọn "kệ" node Nguồn ảnh mà defaultGraph cũ gieo sẵn: MỌI frame khác trong cùng
+        // scene, mỗi cái một node không nối dây. Đường gieo đã bỏ, nhưng đồ thị đã lưu từ
+        // trước vẫn mang chúng theo — mở một shot trong scene 20 frame là 20 node phải xoá
+        // tay. Nhận diện bằng đúng id do code ấy sinh (`sref0`, `sshot3`…): node người dùng
+        // tự thêm mang id `source-<timestamp>` nên không bao giờ khớp.
+        // CÒN DÂY thì GIỮ: kéo dây vào là cố ý dùng frame đó làm tham chiếu, xoá đi là đổi
+        // kết quả render sau lưng người dùng. Chỉ dọn node nằm không.
+        .filter((n: any) => !(
+          (n.type || n.data?._type) === "source" &&
+          /^(sref|sshot)\d+$/.test(n.id || "") &&
+          !wired.has(n.id)))
+        .map((n: any) => ({
+          id: n.id,
+          type: n.type || n.data?._type || "prompt",
+          position: n.position || { x: 0, y: 0 },
+          data: { ...n.data, _type: n.type || n.data?._type },
+        }));
       // Refresh entity-bound source nodes to the entity's CURRENT image, so regenerating a
       // location/character updates its reference node instead of keeping the stale snapshot.
       for (const n of nodes) {
