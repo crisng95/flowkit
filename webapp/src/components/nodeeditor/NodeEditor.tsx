@@ -1503,14 +1503,20 @@ function defaultGraph(
   };
 
   if (goal === "video") {
-    // the shot's own frame is the start/reference image
-    nodes.push(
-      mk("src", "source", 0, 250, {
-        media_id: seed.imageMediaId || "",
-        web: seed.imageSrc || "",
-        label: seed.title,
-      })
-    );
+    // Frame của CHÍNH shot làm ảnh start/tham chiếu — nhưng CHỈ khi shot đã có frame.
+    // Shot chưa có ảnh (vd thêm hàng loạt từ text) mà vẫn gieo node này thì được một node
+    // "Nguồn ảnh" RỖNG nối sẵn vào node tạo video: không dùng được việc gì, và người dùng
+    // phải xoá tay. Không có nó, đồ thị mặc định đúng bằng thứ cần cho text-to-video
+    // (prompt → tạo video → output), thứ Veo Lite và Omni Flash đều làm được.
+    if (seed.imageMediaId) {
+      nodes.push(
+        mk("src", "source", 0, 250, {
+          media_id: seed.imageMediaId,
+          web: seed.imageSrc || "",
+          label: seed.title,
+        })
+      );
+    }
     nodes.push(
       // No `duration` → the clip length comes from ⚙ Cấu hình dự án.
       mk("v", "video", 340, 80, {
@@ -1519,11 +1525,9 @@ function defaultGraph(
       })
     );
     nodes.push(mk("o", "output", 660, 110, { _result: seed.videoSrc || "", _ext: "mp4" }));
-    edges.push(
-      { id: "ep", source: "p", target: "v" },
-      { id: "es", source: "src", target: "v" },
-      { id: "eo", source: "v", target: "o" }
-    );
+    edges.push({ id: "ep", source: "p", target: "v" });
+    if (seed.imageMediaId) edges.push({ id: "es", source: "src", target: "v" });
+    edges.push({ id: "eo", source: "v", target: "o" });
     wrapNodes("v");
     return { nodes, edges };
   }
