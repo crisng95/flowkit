@@ -118,11 +118,11 @@ export default function ShotsTab({
       return n;
     });
 
+  // Không chặn trước theo "có ảnh frame hay chưa": Omni Flash và Veo Lite render được chỉ từ
+  // prompt (text-to-video), nên shot chưa có ảnh vẫn hợp lệ ở hai engine ấy. Luật đủ phức tạp
+  // (còn phụ thuộc engine + shot có dài hơn một clip không) mà chép sang client là hai bên sẽ
+  // lệch — để server trả lời, thông báo lỗi của nó đã nói rõ phải làm gì.
   const genVideo = async (shot: Shot): Promise<boolean> => {
-    if (!shot.image_path) {
-      setErr("Shot chưa có ảnh frame — tạo ở Storyboard trước");
-      return false;
-    }
     mark(shot.id, true);
     setErr(null);
     try {
@@ -586,7 +586,7 @@ function ShotPanel({
       <div className="space-y-2 border-t border-neutral-800 p-3">
         <button
           onClick={onGenVideo}
-          disabled={running || !shot.image_path}
+          disabled={running}
           className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
           {running ? "Đang render…" : "Generate Video"}

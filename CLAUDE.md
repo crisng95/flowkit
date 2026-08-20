@@ -171,6 +171,12 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   mặc định**, và mặc định của tài khoản Ultra (`PAYGATE_TIER_TWO`) là **Veo Lite**. Thêm engine
   mới thì sửa `video_engine` + `_R2V_ENGINES` + `_engine_model_key` + `_clip_submit`, đừng rải
   thêm nhánh `if engine == ...` chỗ khác.
+  **"Shot này render video được không" cũng chỉ hỏi MỘT chỗ: `_shot_video_blocker`.** Thiếu ảnh
+  frame không còn là lỗi chung — Omni Flash và Veo Lite chạy text-to-video. Chỉ Veo trả tiền
+  (i2v cần `startImage`) và shot dài hơn MỘT clip (nối clip lấy khung cuối clip trước làm ảnh
+  đầu clip sau) mới thật sự cần ảnh. ⚡ từng shot gọi nó để BÁO LỖI, ✦ sinh hàng loạt gọi nó để
+  LỌC; hai bên lệch nhau thì batch lẳng lặng bỏ qua đúng những shot ⚡ vẫn chạy được. Client
+  không chép lại luật này — để server trả lời.
 - **`veo_3_1_*_lite_low_priority` là bản 0 credit; `*_lite` KHÔNG.** "Veo 3.1 - Lite [Lower
   Priority]" (0đ, chỉ Ultra) và "Veo 3.1 - Lite" (vẫn tính tiền) là HAI model khác nhau, chỉ
   khác đuôi `_low_priority` trong key. BỐN key trong `models.json → veo_lite_models`, chọn theo

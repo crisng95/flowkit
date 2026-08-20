@@ -3514,20 +3514,26 @@ def _clip_submit(client, project: dict, shot_id: str, prompt: str,
     references thì chúng mới được bind thành reference part; không có nó thì dấu ngoặc nhọn
     lọt thẳng vào structuredPrompt dưới dạng text thô."""
     # Ảnh frame đứng đầu (mỏ neo thị giác của shot), rồi tới entity refs để bind token.
-    r2v_refs = [{"handle": "frame", "media_id": start_media_id}] + [
+    # `start_media_id` RỖNG là hợp lệ với hai engine r2v: shot chưa có frame (vd thêm hàng
+    # loạt từ text) vẫn render được bằng đường text-to-video, miễn là đừng nhét một reference
+    # media_id=None vào request. Veo i2v thì không — nó bắt buộc có start image, xem
+    # `_shot_video_blocker`.
+    frame_ref = [{"handle": "frame", "media_id": start_media_id}] if start_media_id else []
+    r2v_refs = frame_ref + [
         r for r in (refs or []) if r.get("media_id") != start_media_id]
+    start_ids = [start_media_id] if start_media_id else []
     if engine == "omni":
         return lambda: client.generate_video_omni(
             prompt=prompt, project_id=project["flow_project_id"],
-            reference_media_ids=[start_media_id], duration_s=duration_s,
+            reference_media_ids=start_ids, duration_s=duration_s,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
-            references=r2v_refs)
+            references=r2v_refs or None)
     if engine == "veo_lite":
         return lambda: client.generate_video_veo_lite(
             prompt=prompt, project_id=project["flow_project_id"], scene_id=shot_id,
-            reference_media_ids=[start_media_id], duration_s=duration_s,
+            reference_media_ids=start_ids, duration_s=duration_s,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
-            references=r2v_refs)
+            references=r2v_refs or None)
     return lambda: client.generate_video(
         start_image_media_id=start_media_id, prompt=prompt,
         project_id=project["flow_project_id"], scene_id=shot_id,
@@ -3660,18 +3666,45 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
     return await _shot_or_404(shot["id"])
 
 
+def _shot_video_blocker(shot: dict, engine: str, clip_max: int) -> str | None:
+    """Lý do shot này KHÔNG render video được, hoặc None nếu render được.
+
+    Shot chưa có ảnh frame KHÔNG còn là lỗi ở mọi engine: Omni Flash và Veo Lite đều có
+    đường text-to-video (endpoint + model key riêng, xem flow_client). Chỉ hai chỗ thật sự
+    cần ảnh:
+      • Veo trả tiền — i2v, `startImage` là bắt buộc;
+      • beat dài hơn MỘT clip — nối clip nghĩa là lấy khung cuối clip trước làm ảnh đầu clip
+        sau, không có ảnh mở màn thì chuỗi ấy không bắt đầu được.
+    Một chỗ duy nhất giữ luật này để ⚡ từng shot và ✦ sinh hàng loạt không lệch nhau: bên
+    lọc trước, bên báo lỗi, mà lệch thì batch lẳng lặng bỏ qua đúng những shot ⚡ vẫn chạy."""
+    if shot.get("image_media_id"):
+        return None
+    dur = float(shot.get("duration") or 0)
+    if dur > clip_max:
+        n = math.ceil(dur / clip_max)
+        return (f"Shot dài {dur:g}s phải cắt thành {n} clip nối nhau, mà mối nối lấy khung "
+                f"cuối clip trước làm ảnh đầu clip sau — cần ảnh frame. Tạo ảnh ở Storyboard "
+                f"trước, hoặc hạ thời lượng shot xuống ≤ {clip_max}s.")
+    if engine == "veo":
+        return ("Veo i2v cần ảnh frame — tạo ảnh ở Storyboard trước, hoặc đổi engine video "
+                "sang Veo 3.1 Lite / Omni Flash trong ⚙ Cấu hình dự án để render chỉ từ "
+                "prompt (text-to-video).")
+    return None
+
+
 async def _generate_shot_video(shot: dict) -> dict:
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
     client = _require_extension()
-    if not shot.get("image_media_id"):
-        raise HTTPException(400, "Shot chưa có ảnh frame — tạo ảnh ở Storyboard trước")
-    await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
-
     # Engine + độ dài tối đa một clip do Cấu hình dự án quyết định (Veo i2v 8s mặc định, hoặc
     # Omni Flash 4/6/8/10s). Beat dài hơn một clip → chained sub-clips phủ hết beat; với Omni
     # 10s thì một beat 10s chỉ cần MỘT clip thay vì hai clip Veo nối nhau.
     engine, clip_max = _video_engine(project)
+    blocked = _shot_video_blocker(shot, engine, clip_max)
+    if blocked:
+        raise HTTPException(400, blocked)
+    await db.update("shot", shot["id"], {"status": "running", "updated_at": db.now()})
+
     dur = float(shot.get("duration") or 0)
     n = max(1, math.ceil(dur / clip_max)) if dur > clip_max else 1
     tier = await _current_tier()
@@ -3691,7 +3724,8 @@ async def _generate_shot_video(shot: dict) -> dict:
         motion = shot.get("motion_prompt") or shot.get("visual_prompt") or shot.get("description") or ""
         refs = await _build_frame_references(shot, scene) if engine in _R2V_ENGINES else None
         submit = _clip_submit(client, project, shot["id"],
-                              _video_prompt(project, shot, motion), shot["image_media_id"],
+                              _video_prompt(project, shot, motion),
+                              shot.get("image_media_id") or "",
                               engine, clip_max, tier, refs)
         info = await _render_clip(
             client, project, shot["id"], submit,
@@ -3861,12 +3895,19 @@ async def upscale_all_videos(pid: str, force: bool = False):
 
 @router.post("/projects/{pid}/shots/generate-all")
 async def generate_all_videos(pid: str, force: bool = False):
-    """✦ Auto gen video cho shot CÓ ảnh, CHƯA có video → job nền (§9). Throttle 15–30s."""
-    await _project_or_404(pid)
+    """✦ Auto gen video cho shot CHƯA có video → job nền (§9). Throttle 15–30s.
+
+    Trước đây lọc cứng "phải có ảnh frame". Nhưng Omni Flash và Veo Lite render được chỉ từ
+    prompt, nên với hai engine ấy lọc như cũ là lặng lẽ bỏ qua đúng những shot ⚡ vẫn chạy
+    được — vd cả loạt shot vừa thêm từ text. Luật ở `_shot_video_blocker`, chung với ⚡."""
+    project = await _project_or_404(pid)
+    engine, clip_max = _video_engine(project)
     shots = await db.query_all(
         "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
         "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
-    todo = [s for s in shots if s.get("image_media_id") and (force or not s.get("video_path"))]
+    todo = [s for s in shots
+            if not _shot_video_blocker(s, engine, clip_max)
+            and (force or not s.get("video_path"))]
 
     async def _worker(s):
         await _generate_shot_video(s)
