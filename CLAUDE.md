@@ -177,6 +177,14 @@ python -m agent.main   # HTTP on :8100, extension WebSocket on :9222
   đầu clip sau) mới thật sự cần ảnh. ⚡ từng shot gọi nó để BÁO LỖI, ✦ sinh hàng loạt gọi nó để
   LỌC; hai bên lệch nhau thì batch lẳng lặng bỏ qua đúng những shot ⚡ vẫn chạy được. Client
   không chép lại luật này — để server trả lời.
+  **✦ sinh hàng loạt chạy theo LÔ, nhưng lô video nhỏ và giãn hơn hẳn lô ảnh.** Ảnh: 4/lô,
+  cooldown ~10s, stagger phần mười giây. Video: `VIDEO_BATCH_SIZE=3`, cooldown 20–30s,
+  stagger 4–8s — vì bắn 4 submit video thật sự đồng thời từng bị Google chặn ("hoạt động
+  bất thường", 3/4 lượt hỏng) trong khi batch 4 ảnh chạy êm. Thứ thật sự tiết kiệm thời gian
+  KHÔNG phải submit song song mà là POLL song song: submit đi qua single-flight lock của
+  `flow_client` nên vốn đã nối đuôi nhau, còn render mất 30–240s. Cả lô dùng chung một
+  `mediaGenerationContext.batchId` (`batch_id` xuyên từ `JobManager._run_batched` →
+  `_generate_shot_video` → `_clip_submit`/`run_graph` → `flow_client`), đúng như Flow UI làm.
 - **`veo_3_1_*_lite_low_priority` là bản 0 credit; `*_lite` KHÔNG.** "Veo 3.1 - Lite [Lower
   Priority]" (0đ, chỉ Ultra) và "Veo 3.1 - Lite" (vẫn tính tiền) là HAI model khác nhau, chỉ
   khác đuôi `_low_priority` trong key. BỐN key trong `models.json → veo_lite_models`, chọn theo

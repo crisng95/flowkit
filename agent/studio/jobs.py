@@ -126,6 +126,7 @@ class JobManager:
         finalize: Optional[Callable[[], Awaitable[None]]] = None,
         batch_size: int = 1,
         stagger: tuple[float, float] = (0.0, 0.0),
+        unit: str = "ảnh",
     ) -> Job:
         """Run `worker` over `items`. batch_size=1 → one at a time with `throttle` between
         items. batch_size>1 → process items in groups of that many CONCURRENTLY, each group
@@ -139,7 +140,7 @@ class JobManager:
         self._jobs[job.id] = job
         runner = self._run_batched if batch_size > 1 else self._run
         job.task = asyncio.create_task(
-            runner(job, items, worker, throttle, item_label, finalize, batch_size, stagger))
+            runner(job, items, worker, throttle, item_label, finalize, batch_size, stagger, unit))
         return job
 
     async def _cooldown(self, job, throttle) -> None:
@@ -151,7 +152,8 @@ class JobManager:
 
     async def _run_batched(self, job, items, worker, throttle, item_label,
                            finalize=None, batch_size: int = 4,
-                           stagger: tuple[float, float] = (0.0, 0.0)) -> None:
+                           stagger: tuple[float, float] = (0.0, 0.0),
+                           unit: str = "ảnh") -> None:
         """Fire items in concurrent groups of `batch_size`, each group sharing one Flow batch
         id, with a cooldown between groups — like the web UI's 4-image batch. Cuts wall-clock
         time for large storyboards (400+ frames) roughly by the batch size."""
@@ -165,7 +167,7 @@ class JobManager:
                 break
             batch_id = str(uuid.uuid4())
             labels = [item_label(it) if item_label else str(k) for k, it in enumerate(group)]
-            job.current = (f"Lô {gi + 1}/{len(groups)} · {len(group)} ảnh: "
+            job.current = (f"Lô {gi + 1}/{len(groups)} · {len(group)} {unit}: "
                            + ", ".join(labels)[:80])
             await self._broadcast(job)
 
@@ -224,7 +226,8 @@ class JobManager:
 
     async def _run(self, job, items, worker, throttle, item_label,
                    finalize=None, batch_size: int = 1,
-                   stagger: tuple[float, float] = (0.0, 0.0)) -> None:
+                   stagger: tuple[float, float] = (0.0, 0.0),
+                   unit: str = "ảnh") -> None:   # `unit` chỉ có nghĩa ở chế độ lô
         await self._broadcast(job)
         await self._persist(job)
         for i, item in enumerate(items):

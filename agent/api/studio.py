@@ -81,6 +81,26 @@ IMAGE_BATCH_STAGGER = (
     float(os.environ.get("FLOWKIT_IMAGE_BATCH_STAGGER", "0.3")),
     float(os.environ.get("FLOWKIT_IMAGE_BATCH_STAGGER_MAX", "0.8")),
 )
+
+# Batch VIDEO — cùng cơ chế batch ảnh nhưng CONSERVATIVE hơn hẳn, có lý do đo được: bắn 4
+# submit video thật sự đồng thời bị Google chặn ("hoạt động bất thường", 3/4 lượt hỏng),
+# trong khi batch 4 ảnh chạy êm. Video nhạy với đồng thời hơn ảnh nhiều.
+#
+# Cái ăn tiền ở đây KHÔNG phải submit song song mà là POLL song song: submit đi qua
+# single-flight lock của flow_client nên vốn đã nối đuôi nhau, còn render mất 30–240s và
+# trước đây job chờ hết clip này mới submit clip sau. Chạy theo lô N clip thì tổng thời gian
+# ≈ clip lâu nhất của lô thay vì tổng cả lô.
+# Stagger để dài hơn hẳn bên ảnh (giây, không phải phần mười giây) cho mỗi submit tự giải
+# captcha riêng — đó là khoảng cách tự nhiên mà Flow UI cũng có.
+VIDEO_BATCH_SIZE = int(os.environ.get("FLOWKIT_VIDEO_BATCH_SIZE", "3"))
+VIDEO_BATCH_COOLDOWN = (
+    float(os.environ.get("FLOWKIT_VIDEO_BATCH_COOLDOWN", "20")),
+    float(os.environ.get("FLOWKIT_VIDEO_BATCH_COOLDOWN_MAX", "30")),
+)
+VIDEO_BATCH_STAGGER = (
+    float(os.environ.get("FLOWKIT_VIDEO_BATCH_STAGGER", "4")),
+    float(os.environ.get("FLOWKIT_VIDEO_BATCH_STAGGER_MAX", "8")),
+)
 # Google anti-abuse block ("unusual activity"/429): retrying fast EXTENDS the block, so on a
 # detected block we wait this long before retrying (vs a few seconds for a normal transient),
 # and grant a few EXTRA attempts so one block doesn't burn the normal retry budget.
@@ -3500,7 +3520,7 @@ def _video_prompt(project: dict, shot: dict, motion: str) -> str:
 
 def _clip_submit(client, project: dict, shot_id: str, prompt: str,
                  start_media_id: str, engine: str, duration_s: int, tier: str,
-                 refs: list[dict] | None = None):
+                 refs: list[dict] | None = None, batch_id: str | None = None):
     """Callable submit một clip theo engine đã chọn.
 
     Veo là i2v (ảnh frame làm START image); Omni Flash là r2v (không có start image) nên ảnh
@@ -3527,17 +3547,17 @@ def _clip_submit(client, project: dict, shot_id: str, prompt: str,
             prompt=prompt, project_id=project["flow_project_id"],
             reference_media_ids=start_ids, duration_s=duration_s,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
-            references=r2v_refs or None)
+            references=r2v_refs or None, batch_id=batch_id)
     if engine == "veo_lite":
         return lambda: client.generate_video_veo_lite(
             prompt=prompt, project_id=project["flow_project_id"], scene_id=shot_id,
             reference_media_ids=start_ids, duration_s=duration_s,
             aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier,
-            references=r2v_refs or None)
+            references=r2v_refs or None, batch_id=batch_id)
     return lambda: client.generate_video(
         start_image_media_id=start_media_id, prompt=prompt,
         project_id=project["flow_project_id"], scene_id=shot_id,
-        aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier)
+        aspect_ratio=project["aspect_ratio"], user_paygate_tier=tier, batch_id=batch_id)
 
 
 def _engine_model_key(engine: str, clip_s: int, tier: str, aspect: str) -> str | None:
@@ -3612,7 +3632,8 @@ async def _render_clip(client, project: dict, shot_id: str, submit, name: str) -
 
 
 async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
-                         engine: str = "veo", clip_max: int = CLIP_MAX_S) -> dict:
+                         engine: str = "veo", clip_max: int = CLIP_MAX_S,
+                         batch_id: str | None = None) -> dict:
     """Storytelling beat > one clip: render `n` chained sub-clips (each continues from the
     previous clip's last frame, motion flows on) and concat them into the shot's video."""
     tier = await _current_tier()
@@ -3639,7 +3660,7 @@ async def _chained_video(shot: dict, scene: dict, project: dict, client, n: int,
         name = f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_p{k+1}_vid"
         submit = _clip_submit(client, project, shot["id"],
                               _video_prompt(project, shot, motions[k]), start_media,
-                              engine, clip_max, tier, refs)
+                              engine, clip_max, tier, refs, batch_id)
         info = await _render_clip(client, project, shot["id"], submit, name)
         first = first or info
         clips.append(info["local"])
@@ -3692,7 +3713,9 @@ def _shot_video_blocker(shot: dict, engine: str, clip_max: int) -> str | None:
     return None
 
 
-async def _generate_shot_video(shot: dict) -> dict:
+async def _generate_shot_video(shot: dict, batch_id: str | None = None) -> dict:
+    """`batch_id`: khi job ✦ chạy theo lô, cả lô dùng CHUNG một `mediaGenerationContext
+    .batchId` — đúng như Flow UI làm khi bấm tạo nhiều video một lượt."""
     scene = await _scene_or_404(shot["scene_id"])
     project = await _project_or_404(scene["project_id"])
     client = _require_extension()
@@ -3712,8 +3735,9 @@ async def _generate_shot_video(shot: dict) -> dict:
         if n > 1:
             # Beat dài hơn một clip: phải cắt thành nhiều sub-clip rồi nối — đồ thị chỉ mô tả
             # MỘT clip nên nhánh này không đi qua graph được.
-            return await _chained_video(shot, scene, project, client, n, engine, clip_max)
-        out = await _gen_via_graph("shot", shot, project, "video")
+            return await _chained_video(shot, scene, project, client, n, engine, clip_max,
+                                        batch_id)
+        out = await _gen_via_graph("shot", shot, project, "video", batch_id=batch_id)
         if out:
             row = await _commit_shot_media(shot, scene, project, out["media_id"], "mp4",
                                            out.get("path"))
@@ -3726,7 +3750,7 @@ async def _generate_shot_video(shot: dict) -> dict:
         submit = _clip_submit(client, project, shot["id"],
                               _video_prompt(project, shot, motion),
                               shot.get("image_media_id") or "",
-                              engine, clip_max, tier, refs)
+                              engine, clip_max, tier, refs, batch_id)
         info = await _render_clip(
             client, project, shot["id"], submit,
             f"s{scene['idx']+1:02d}_{shot['idx']+1:02d}_vid")
@@ -3937,14 +3961,17 @@ async def generate_all_videos(pid: str, force: bool = False):
     plan = await _video_batch_plan(pid, force)
     todo = plan["todo"]
 
-    async def _worker(s):
-        await _generate_shot_video(s)
+    async def _worker(s, batch_id):
+        await _generate_shot_video(s, batch_id=batch_id)
 
+    # Theo LÔ như storyboard, nhưng lô nhỏ hơn và giãn hơn hẳn — xem VIDEO_BATCH_SIZE.
     job = get_job_manager().start(
         project_id=pid, type_="videos", items=todo, worker=_worker,
-        label=f"Sinh video ({len(todo)})", throttle=(15, 30),
+        label=f"Sinh video ({len(todo)})",
+        throttle=VIDEO_BATCH_COOLDOWN, batch_size=VIDEO_BATCH_SIZE,
+        stagger=VIDEO_BATCH_STAGGER, unit="clip",
         item_label=lambda s: s.get("title") or s["id"])
-    return {"job_id": job.id, "total": len(todo)}
+    return {"job_id": job.id, "total": len(todo), "batch_size": VIDEO_BATCH_SIZE}
 
 
 # ─── Node Editor graphs ─────────────────────────────────────

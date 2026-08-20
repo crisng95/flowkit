@@ -558,7 +558,8 @@ class FlowClient:
                               end_image_media_id: str = None,
                               user_paygate_tier: str = "PAYGATE_TIER_TWO",
                               video_model: str = None,
-                              references: list[dict] = None) -> dict:
+                              references: list[dict] = None,
+                              batch_id: str = None) -> dict:
         """Generate video from start image (i2v).
 
         Two sub-types:
@@ -595,7 +596,7 @@ class FlowClient:
 
         endpoint_key = "generate_video_start_end" if end_image_media_id else "generate_video"
         body = {
-            "mediaGenerationContext": {"batchId": f"{uuid.uuid4()}"},
+            "mediaGenerationContext": {"batchId": batch_id or f"{uuid.uuid4()}"},
             "clientContext": self._client_context(project_id, user_paygate_tier),
             "requests": [request],
             "useV2ModelConfig": True,
@@ -615,7 +616,8 @@ class FlowClient:
                                               aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
                                               user_paygate_tier: str = "PAYGATE_TIER_TWO",
                                               references: list[dict] = None,
-                                              video_model: str = None) -> dict:
+                                              video_model: str = None,
+                                              batch_id: str = None) -> dict:
         """Generate video from multiple reference images (r2v).
 
         Uses referenceImages instead of startImage — the model composes
@@ -664,7 +666,7 @@ class FlowClient:
 
         body = {
             "mediaGenerationContext": {
-                "batchId": f"{uuid.uuid4()}",
+                "batchId": batch_id or f"{uuid.uuid4()}",
                 "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
             },
             "clientContext": self._client_context(project_id, user_paygate_tier),
@@ -686,7 +688,8 @@ class FlowClient:
                                    duration_s: int = 8,
                                    aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
                                    user_paygate_tier: str = "PAYGATE_TIER_ONE",
-                                   references: list[dict] = None) -> dict:
+                                   references: list[dict] = None,
+                                   batch_id: str = None) -> dict:
         """Generate video with Google's **Omni Flash** model.
 
         Aspect must be PORTRAIT or LANDSCAPE. Supports `{handle}` references in the prompt
@@ -705,7 +708,8 @@ class FlowClient:
         if not (reference_media_ids or references):
             return await self._generate_video_text_omni(
                 prompt=prompt, project_id=project_id, duration_s=duration_s,
-                aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier)
+                aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier,
+                batch_id=batch_id)
 
         model_key = OMNI_FLASH_MODELS.get(str(duration_s))
         if not model_key:
@@ -722,12 +726,14 @@ class FlowClient:
             user_paygate_tier=user_paygate_tier,
             references=references,
             video_model=model_key,
+            batch_id=batch_id,
         )
 
     async def _generate_video_text_omni(self, prompt: str, project_id: str,
                                         duration_s: int = 8,
                                         aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
-                                        user_paygate_tier: str = "PAYGATE_TIER_ONE") -> dict:
+                                        user_paygate_tier: str = "PAYGATE_TIER_ONE",
+                                        batch_id: str = None) -> dict:
         """Omni Flash text-to-video: không ảnh nào, chỉ prompt.
 
         Endpoint + bảng key riêng (xem generate_video_omni). Body giống r2v trừ việc KHÔNG có
@@ -742,7 +748,7 @@ class FlowClient:
 
         body = {
             "mediaGenerationContext": {
-                "batchId": f"{uuid.uuid4()}",
+                "batchId": batch_id or f"{uuid.uuid4()}",
                 "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
             },
             "clientContext": self._client_context(project_id, user_paygate_tier),
@@ -771,7 +777,8 @@ class FlowClient:
                                        references: list[dict] = None,
                                        duration_s: int = VEO_LITE_DEFAULT_S,
                                        aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
-                                       user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
+                                       user_paygate_tier: str = "PAYGATE_TIER_TWO",
+                                       batch_id: str = None) -> dict:
         """**Veo 3.1 Lite [Lower Priority]** — 0 credit, chỉ tài khoản Gemini Ultra.
 
         Cùng ba endpoint như Veo thường, chỉ khác `videoModelKey`; kiểu sinh suy ra từ ảnh
@@ -815,25 +822,26 @@ class FlowClient:
         if gen_type == "text_2_video":
             return await self._generate_video_text_veo_lite(
                 prompt=prompt, project_id=project_id, aspect_ratio=aspect_ratio,
-                user_paygate_tier=user_paygate_tier)
+                user_paygate_tier=user_paygate_tier, batch_id=batch_id)
 
         if gen_type == "reference_frame_2_video":
             return await self.generate_video_from_references(
                 reference_media_ids=reference_media_ids or [],
                 prompt=prompt, project_id=project_id, scene_id=scene_id,
                 aspect_ratio=aspect_ratio, user_paygate_tier=user_paygate_tier,
-                references=references, video_model=model_key)
+                references=references, video_model=model_key, batch_id=batch_id)
 
         return await self.generate_video(
             start_image_media_id=start_media_id, prompt=prompt, project_id=project_id,
             scene_id=scene_id, aspect_ratio=aspect_ratio,
             end_image_media_id=end_media_id, user_paygate_tier=user_paygate_tier,
-            video_model=model_key, references=references)
+            video_model=model_key, references=references, batch_id=batch_id)
 
     async def _generate_video_text_veo_lite(
             self, prompt: str, project_id: str,
             aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE",
-            user_paygate_tier: str = "PAYGATE_TIER_TWO") -> dict:
+            user_paygate_tier: str = "PAYGATE_TIER_TWO",
+            batch_id: str = None) -> dict:
         """Veo 3.1 Lite text-to-video: không ảnh nào, chỉ prompt.
 
         Khuôn request bắt tận tay trên Flow UI (`video:batchAsyncGenerateVideoText`, key
@@ -851,7 +859,7 @@ class FlowClient:
 
         body = {
             "mediaGenerationContext": {
-                "batchId": f"{uuid.uuid4()}",
+                "batchId": batch_id or f"{uuid.uuid4()}",
                 "audioFailurePreference": "BLOCK_SILENCED_VIDEOS",
             },
             "clientContext": self._client_context(project_id, user_paygate_tier),

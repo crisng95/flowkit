@@ -508,8 +508,10 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
     (no Output node required, target not modified) — used by the per-node "⚡ tạo nhanh".
     propagate: with only_node, ALSO regenerate everything DOWNSTREAM of it (the "⏬ cập nhật
     xuôi dòng" button) so a change to one node flows through the whole chain.
-    batch_id: gộp lượt tạo ảnh vào MỘT batch Flow và bỏ single-flight lock, để job "Auto gen
-    all" bắn nhiều frame chạy chồng nhau thay vì tuần tự (xem _start_image_job).
+    batch_id: gộp cả lô vào MỘT batch Flow, để job "Auto gen all" chạy nhiều mục chồng nhau
+    thay vì tuần tự. Với ẢNH nó còn bỏ single-flight lock (xem _start_image_job); với VIDEO
+    thì KHÔNG — submit video vẫn nối đuôi qua lock, cái ăn tiền là poll song song, và bắn 4
+    submit video thật sự đồng thời từng bị Google chặn (xem VIDEO_BATCH_SIZE).
 
     Reuse rules (so iterating one node doesn't re-roll the rest):
     - full run (no only_node): a gen node reuses its stored result iff LOCKED.
@@ -844,7 +846,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                     prompt=prompt, project_id=flow_pid, reference_media_ids=ref_ids,
                     duration_s=dur_v, aspect_ratio=aspect_v,
                     user_paygate_tier=project["paygate_tier"],
-                    references=inp["references"] or None)
+                    references=inp["references"] or None, batch_id=batch_id)
             elif kind_v == "veo_lite":
                 # Hai kiểu, chọn bằng `lite_mode` trên node (mặc định "inference"):
                 #   "frames" — nội suy khung đầu→khung cuối, cần ĐÚNG hai ảnh nối vào; thứ tự
@@ -867,7 +869,7 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
                         start_media_id=start_v, end_media_id=end_v, duration_s=frame_dur,
                         aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"],
-                        references=imgs[:2])
+                        references=imgs[:2], batch_id=batch_id)
                 else:
                     if not imgs and inp["media_id"]:
                         imgs = [{"handle": "source", "media_id": inp["media_id"]}]
@@ -881,7 +883,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                         prompt=prompt, project_id=flow_pid, scene_id=target["id"],
                         reference_media_ids=[r["media_id"] for r in imgs],
                         duration_s=VEO_LITE_DEFAULT_S, aspect_ratio=aspect_v,
-                        user_paygate_tier=project["paygate_tier"], references=imgs or None)
+                        user_paygate_tier=project["paygate_tier"], references=imgs or None,
+                        batch_id=batch_id)
             else:   # Veo i2v — needs a start frame
                 if not inp["media_id"]:
                     raise GraphError("Veo i2v cần ảnh start (nối từ Nguồn ảnh / Tạo ảnh)")
@@ -889,7 +892,8 @@ async def run_graph(graph: dict, target: dict, project: dict, kind: str,
                 submit = lambda: client.generate_video(
                     start_image_media_id=start, prompt=prompt,
                     project_id=flow_pid, scene_id=target["id"],
-                    aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"])
+                    aspect_ratio=aspect_v, user_paygate_tier=project["paygate_tier"],
+                    batch_id=batch_id)
             mid, web = await _vid_gen_retry(submit, target["id"], pid, kind, flow_pid)
             outputs[nid] = {"media_id": mid, "web": web, "ext": "mp4",
                             "handle": _handle_of(data, "video"),
