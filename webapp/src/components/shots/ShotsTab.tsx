@@ -266,17 +266,25 @@ export default function ShotsTab({
   // Render all shots (have image, no video) as a server-side background job (§9):
   // survives tab close, throttled + verified server-side, streams to the banner.
   const genAll = async () => {
-    const all = scenes.flatMap((sc) => byScene[sc.id] || []);
-    const todo = all.filter((s) => s.image_media_id && !s.video_path);
-    if (!todo.length) {
-      setErr("Không có shot nào (có ảnh, chưa có video) để render.");
-      return;
-    }
-    // 0 credit với Veo 3.1 Lite [Lower Priority] → creditGuard tự bỏ qua, không hỏi thừa.
-    const per = videoCost(project.video_model, project.paygate_tier);
-    if (!(await creditGuard(confirm, todo.length, per, "Render video"))) return;
     setErr(null);
     try {
+      // Số lượng do SERVER đếm. Trước đây client tự lọc `image_media_id && !video_path`, tức
+      // chép lại luật của Veo i2v — nên với dự án Omni/Veo Lite, nút này báo "không có shot
+      // nào" đúng lúc ⚡ từng shot vẫn render được cả loạt shot chưa có ảnh (text-to-video).
+      const plan = await shotsApi.previewAllVideos(project.id);
+      if (!plan.total) {
+        setErr(
+          plan.reasons.length
+            ? `Không shot nào render được: ${plan.reasons.join(" ")}`
+            : plan.have_video
+              ? `Cả ${plan.have_video} shot đều đã có video rồi.`
+              : "Chưa có shot nào để render."
+        );
+        return;
+      }
+      // 0 credit với Veo 3.1 Lite [Lower Priority] → creditGuard tự bỏ qua, không hỏi thừa.
+      const per = videoCost(project.video_model, project.paygate_tier);
+      if (!(await creditGuard(confirm, plan.total, per, "Render video"))) return;
       await shotsApi.genAllVideos(project.id);
     } catch (e: any) {
       setErr(e.message);

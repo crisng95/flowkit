@@ -698,6 +698,12 @@ export const shots = {
       `/projects/${pid}/upscale/generate-all?force=${force}`, { method: "POST" }),
   genAllVideos: (pid: string) =>
     req<{ job_id: string; total: number }>(`/projects/${pid}/shots/generate-all`, { method: "POST" }),
+  // Đếm trước ✦ sẽ render bao nhiêu shot, chưa chạy gì cả — để hỏi credit và để báo ĐÚNG lý do
+  // khi con số là 0. Luật "shot nào render được" phụ thuộc engine của dự án nên nằm ở server
+  // (`_shot_video_blocker`); client chép lại là sớm muộn lệch.
+  previewAllVideos: (pid: string) =>
+    req<{ total: number; engine: string; have_video: number; blocked: number; reasons: string[] }>(
+      `/projects/${pid}/shots/generate-all/preview`),
   narration: (sid: string, language = "Vietnamese") =>
     req<Shot>(`/shots/${sid}/narration`, { method: "POST", body: JSON.stringify({ language }) }),
 };

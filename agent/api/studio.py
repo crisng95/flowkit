@@ -3893,6 +3893,40 @@ async def upscale_all_videos(pid: str, force: bool = False):
     return {"job_id": job.id, "total": len(todo), "resolution": label}
 
 
+async def _video_batch_plan(pid: str, force: bool) -> dict:
+    """Shot nào sẽ được ✦ sinh hàng loạt render, và shot nào không — kèm lý do.
+
+    Client KHÔNG tự lọc: luật phụ thuộc engine của dự án (`_shot_video_blocker`), chép sang
+    đó là sớm muộn lệch — đúng thứ vừa xảy ra khi nút ✦ báo "không có shot nào (có ảnh)"
+    trong lúc ⚡ từng shot vẫn render được cả loạt shot chưa có ảnh."""
+    project = await _project_or_404(pid)
+    engine, clip_max = _video_engine(project)
+    shots = await db.query_all(
+        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
+        "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
+    todo, skipped, reasons = [], 0, []
+    for sh in shots:
+        if not (force or not sh.get("video_path")):
+            skipped += 1               # đã có video rồi — không phải "bị chặn"
+            continue
+        why = _shot_video_blocker(sh, engine, clip_max)
+        if why:
+            reasons.append(why)
+            continue
+        todo.append(sh)
+    # Lý do gộp lại: 40 shot cùng một lý do thì hiện 40 dòng giống nhau chẳng ích gì.
+    uniq = list(dict.fromkeys(reasons))
+    return {"todo": todo, "total": len(todo), "engine": engine,
+            "have_video": skipped, "blocked": len(reasons), "reasons": uniq[:3]}
+
+
+@router.get("/projects/{pid}/shots/generate-all/preview")
+async def preview_all_videos(pid: str, force: bool = False):
+    """Đếm trước ✦ sẽ render bao nhiêu shot (để hỏi credit) mà chưa chạy gì cả."""
+    plan = await _video_batch_plan(pid, force)
+    return {k: v for k, v in plan.items() if k != "todo"}
+
+
 @router.post("/projects/{pid}/shots/generate-all")
 async def generate_all_videos(pid: str, force: bool = False):
     """✦ Auto gen video cho shot CHƯA có video → job nền (§9). Throttle 15–30s.
@@ -3900,14 +3934,8 @@ async def generate_all_videos(pid: str, force: bool = False):
     Trước đây lọc cứng "phải có ảnh frame". Nhưng Omni Flash và Veo Lite render được chỉ từ
     prompt, nên với hai engine ấy lọc như cũ là lặng lẽ bỏ qua đúng những shot ⚡ vẫn chạy
     được — vd cả loạt shot vừa thêm từ text. Luật ở `_shot_video_blocker`, chung với ⚡."""
-    project = await _project_or_404(pid)
-    engine, clip_max = _video_engine(project)
-    shots = await db.query_all(
-        "SELECT sh.* FROM shot sh JOIN scene sc ON sh.scene_id=sc.id "
-        "WHERE sc.project_id=? ORDER BY sc.idx, sh.idx", (pid,))
-    todo = [s for s in shots
-            if not _shot_video_blocker(s, engine, clip_max)
-            and (force or not s.get("video_path"))]
+    plan = await _video_batch_plan(pid, force)
+    todo = plan["todo"]
 
     async def _worker(s):
         await _generate_shot_video(s)
