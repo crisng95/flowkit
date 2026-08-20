@@ -404,6 +404,10 @@ export const api = {
       body: JSON.stringify({ heading: opts?.heading ?? null, shots: opts?.shots ?? 0 }),
     }),
   deleteScene: (sid: string) => req<{ ok: boolean }>(`/scenes/${sid}`, { method: "DELETE" }),
+  // Đổi tên scene (cột `heading` — chữ hiện trên đầu mỗi dải shot). Tên rỗng bị server bỏ
+  // qua, giữ tên cũ, nên xoá trắng ô rồi rời chuột không làm mất mốc nhận biết của dải.
+  renameScene: (sid: string, heading: string) =>
+    req<Scene>(`/scenes/${sid}`, { method: "PATCH", body: JSON.stringify({ heading }) }),
   generateScript: (id: string, idea: string, target_duration: number | null) =>
     req<ScriptResult>(`/projects/${id}/script/generate`, {
       method: "POST",

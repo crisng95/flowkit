@@ -15,6 +15,8 @@ import Lightbox from "../common/Lightbox";
 import CandidatePicker from "../common/CandidatePicker";
 import MediaHistory from "../common/MediaHistory";
 import BulkAddShots from "../common/BulkAddShots";
+import SceneHeading from "../common/SceneHeading";
+import { announceScene, announceShotRenamed, useSceneEvents } from "../../lib/scenebus";
 import { useConfirm } from "../common/Confirm";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
@@ -87,6 +89,29 @@ export default function StoryboardTab({
     setShotsByScene((m) => ({ ...m, [sid]: r.shots }));
   };
 
+  // Tab Shots hiển thị CÙNG danh sách scene này và cũng đang sống trong DOM (workspace giữ
+  // mọi tab đã mở). Đổi tên/thêm/xoá scene bên đó phải thấy được ở đây mà không cần bấm ⟳.
+  useSceneEvents(project.id, (e) => {
+    if (e.type === "renamed") {
+      setScenes((list) =>
+        list.map((x) => (x.id === e.id ? { ...x, heading: e.heading } : x)));
+      return;
+    }
+    if (e.type === "shot-renamed") {
+      setShotsByScene((m) => m[e.sceneId]
+        ? { ...m, [e.sceneId]: m[e.sceneId].map(
+              (x) => (x.id === e.id ? { ...x, title: e.title } : x)) }
+        : m);
+      return;
+    }
+    api.listScenes(project.id)
+      .then(async ({ scenes: list }) => {
+        setScenes(list);
+        for (const sc of list) if (!shotsByScene[sc.id]) await loadShots(sc.id);
+      })
+      .catch(() => {});
+  });
+
   useEffect(() => {
     storyboard.hiresStatus(project.id).then(setHiresInfo).catch(() => {});
     (async () => {
@@ -105,6 +130,9 @@ export default function StoryboardTab({
       ),
     }));
     if (sel?.id === updated.id) setSel(updated);
+    // Thẻ shot ở tab Shots cũng hiện `title` — báo sang để hai tab không gọi cùng một shot
+    // bằng hai cái tên. (Phát cả khi title không đổi: bên nhận đặt lại đúng giá trị cũ.)
+    announceShotRenamed(project.id, updated);
   };
 
   const genImage = async (shot: Shot): Promise<boolean> => {
@@ -262,6 +290,7 @@ export default function StoryboardTab({
     setScenes(reindexed);
     try {
       await storyboard.reorderScenes(project.id, reindexed.map((s) => s.id));
+      announceScene({ type: "list-changed", projectId: project.id });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -318,6 +347,7 @@ export default function StoryboardTab({
       const sc = await api.addScene(project.id, { shots });
       setScenes((list) => [...list, sc]);
       await loadShots(sc.id);
+      announceScene({ type: "list-changed", projectId: project.id });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -340,6 +370,7 @@ export default function StoryboardTab({
     setErr(null);
     try {
       await api.deleteScene(sc.id);
+      announceScene({ type: "list-changed", projectId: project.id });
       setScenes((list) => list.filter((x) => x.id !== sc.id).map((x, i) => ({ ...x, idx: i })));
       setShotsByScene((m) => {
         const n2 = { ...m };
@@ -560,7 +591,9 @@ export default function StoryboardTab({
     setErr(null);
     try {
       const r = await storyboard.splitScene(sc.id);
-      await reloadAll();
+      setScenes(r.scenes);
+      for (const x of r.scenes) await loadShots(x.id);
+      announceScene({ type: "list-changed", projectId: project.id });
       setNotice(`Đã tách thành ${r.split_into} scene (cùng địa điểm) — hãy '🎙 Dựng shots' lại.`);
       setTimeout(() => setNotice(null), 4000);
     } catch (e: any) {
@@ -728,10 +761,14 @@ export default function StoryboardTab({
           return (
             <section key={sc.id} className="mb-8">
               <div className="mb-3 flex items-center gap-3">
-                <h3 className="text-sm font-medium text-neutral-200">
-                  <span className="mr-1.5 text-neutral-500">{String(scenePos + 1).padStart(2, "0")}</span>
-                  {sc.heading}
-                </h3>
+                <SceneHeading
+                  scene={sc}
+                  index={scenePos}
+                  projectId={project.id}
+                  onRenamed={(u) =>
+                    setScenes((list) => list.map((x) => (x.id === u.id ? u : x)))
+                  }
+                />
                 {(() => {
                   const a = sceneAudio(sc);
                   if (!a.hasNarr) return null;

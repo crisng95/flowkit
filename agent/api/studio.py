@@ -2914,6 +2914,32 @@ async def add_scene(pid: str, body: AddSceneRequest = None):
     return await _scene_or_404(scene_id)
 
 
+class UpdateSceneRequest(BaseModel):
+    """Sửa phần văn bản của scene. `heading` = tên scene hiện trên đầu mỗi dải shot."""
+    heading: Optional[str] = None
+    action: Optional[str] = None
+
+
+@router.patch("/scenes/{sid}")
+async def update_scene(sid: str, body: UpdateSceneRequest):
+    """Đổi tên (heading) / sửa action của MỘT scene.
+
+    Không đụng `source_segment`: nó là lát cắt văn bản gốc do khâu align sinh ra, đổi tên
+    scene không làm nó sai."""
+    await _scene_or_404(sid)
+    data = body.model_dump(exclude_none=True)
+    if "heading" in data:
+        # Tên rỗng làm dải shot mất mốc nhận biết, mà người dùng xoá trắng ô rồi rời chuột là
+        # chuyện thường — giữ lại tên cũ thay vì lưu chuỗi rỗng.
+        data["heading"] = data["heading"].strip()
+        if not data["heading"]:
+            del data["heading"]
+    if data:
+        await db.execute("UPDATE scene SET " + ", ".join(f"{k}=?" for k in data) +
+                         " WHERE id=?", (*data.values(), sid))
+    return await _scene_or_404(sid)
+
+
 @router.delete("/scenes/{sid}")
 async def delete_scene(sid: str):
     """Xoá scene + toàn bộ shot của nó (file media giữ nguyên trong thư mục dự án)."""

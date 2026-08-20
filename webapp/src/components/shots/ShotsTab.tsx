@@ -6,6 +6,8 @@ import Lightbox from "../common/Lightbox";
 import type { DownloadChoice } from "../common/DownloadMenu";
 import { useConfirm } from "../common/Confirm";
 import BulkAddShots from "../common/BulkAddShots";
+import SceneHeading from "../common/SceneHeading";
+import { announceScene, announceShotRenamed, useSceneEvents } from "../../lib/scenebus";
 import { creditGuard, upscaleVideoCost, videoCost } from "../../lib/credits";
 import { downloadFile, slugName, pad3 } from "../../lib/download";
 import { useJobs, useJobWatcher } from "../../jobs/JobsContext";
@@ -65,6 +67,29 @@ export default function ShotsTab({
   const confirm = useConfirm();
   const { jobFor } = useJobs();
 
+  // Tab Storyboard hiển thị CÙNG danh sách scene này và cũng đang sống trong DOM (workspace
+  // giữ mọi tab đã mở). Đổi tên/thêm/xoá scene bên đó phải thấy được ở đây mà không cần ⟳.
+  useSceneEvents(project.id, (e) => {
+    if (e.type === "renamed") {
+      setScenes((list) =>
+        list.map((x) => (x.id === e.id ? { ...x, heading: e.heading } : x)));
+      return;
+    }
+    if (e.type === "shot-renamed") {
+      setByScene((m) => m[e.sceneId]
+        ? { ...m, [e.sceneId]: m[e.sceneId].map(
+              (x) => (x.id === e.id ? { ...x, title: e.title } : x)) }
+        : m);
+      return;
+    }
+    api.listScenes(project.id)
+      .then(async ({ scenes: list }) => {
+        setScenes(list);
+        for (const sc of list) if (!byScene[sc.id]) await loadShots(sc.id);
+      })
+      .catch(() => {});
+  });
+
   useEffect(() => {
     shotsApi
       .upscaleStatus(project.id)
@@ -109,6 +134,8 @@ export default function ShotsTab({
       [u.scene_id]: (m[u.scene_id] || []).map((x) => (x.id === u.id ? u : x)),
     }));
     if (sel?.id === u.id) setSel(u);
+    // Thẻ shot ở tab Storyboard cũng hiện `title` — xem chú thích cùng chỗ bên đó.
+    announceShotRenamed(project.id, u);
   };
 
   const mark = (id: string, on: boolean) =>
@@ -258,6 +285,7 @@ export default function ShotsTab({
       const sc = await api.addScene(project.id, { shots });
       setScenes((list) => [...list, sc]);
       await loadShots(sc.id);
+      announceScene({ type: "list-changed", projectId: project.id });
     } catch (e: any) {
       setErr(e.message);
     }
@@ -335,10 +363,16 @@ export default function ShotsTab({
           const list = byScene[sc.id] || [];
           return (
             <section key={sc.id} className="mb-8">
-              <h3 className="mb-3 text-sm font-medium text-neutral-200">
-                <span className="mr-1.5 text-neutral-500">{String(sc.idx + 1).padStart(2, "0")}</span>
-                {sc.heading}
-              </h3>
+              <div className="mb-3 flex items-center gap-3">
+                <SceneHeading
+                  scene={sc}
+                  index={sc.idx}
+                  projectId={project.id}
+                  onRenamed={(u) =>
+                    setScenes((l) => l.map((x) => (x.id === u.id ? u : x)))
+                  }
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {list.map((sh) => (
                   <MediaCard
@@ -441,6 +475,16 @@ export default function ShotsTab({
             </section>
           );
         })}
+        {!!scenes.length && (
+          <button
+            disabled={busy}
+            onClick={() => addScene(1)}
+            title="Thêm một scene rỗng vào cuối (kèm 1 shot để làm ngay)"
+            className="mb-8 w-full rounded-xl border border-dashed border-neutral-800 py-3 text-sm text-neutral-600 hover:border-neutral-600 hover:text-neutral-400 disabled:opacity-40"
+          >
+            + Thêm scene
+          </button>
+        )}
       </div>
 
       {bulk && (
@@ -503,6 +547,7 @@ function ShotPanel({
   onChange: (s: Shot) => void;
   onGenVideo: () => void;
 }) {
+  const [title, setTitle] = useState(shot.title);
   const [visual, setVisual] = useState(shot.visual_prompt ?? "");
   const [motion, setMotion] = useState(shot.motion_prompt ?? "");
   const [aiBusy, setAiBusy] = useState(false);
@@ -510,6 +555,7 @@ function ShotPanel({
   const [upErr, setUpErr] = useState<string | null>(null);
 
   useEffect(() => {
+    setTitle(shot.title);
     setVisual(shot.visual_prompt ?? "");
     setMotion(shot.motion_prompt ?? "");
     setUpErr(null);
@@ -519,7 +565,11 @@ function ShotPanel({
   const upscaled = !!currentUpscale(shot);
 
   const save = async () =>
-    onChange(await storyboard.updateShot(shot.id, { visual_prompt: visual, motion_prompt: motion }));
+    onChange(await storyboard.updateShot(shot.id, {
+      // Tên rỗng thì giữ tên cũ: thẻ trên lưới hiện `title`, để trắng là mất mốc nhận biết.
+      title: title.trim() || shot.title,
+      visual_prompt: visual, motion_prompt: motion,
+    }));
 
   const aiPrompts = async () => {
     setAiBusy(true);
@@ -563,6 +613,18 @@ function ShotPanel({
         <div className="flex items-center justify-between text-xs text-neutral-400">
           <span>Model: {project.video_model || "Veo i2v"}</span>
           <span>{shot.duration}s</span>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Tiêu đề</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={save}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-500"
+          />
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between">
