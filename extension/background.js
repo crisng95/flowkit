@@ -92,7 +92,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'reconnect') connectToAgent();
   if (alarm.name === 'keepAlive') keepAlive();
   if (alarm.name === 'token-refresh') {
-    await captureTokenFromFlowTab();
+    // Passive maintenance must never create browser tabs. If the user has no
+    // Flow tab open, wait for an explicit action or an actual RPC to open one.
+    await captureTokenFromFlowTab({ createIfMissing: false });
   }
 });
 
@@ -151,25 +153,29 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 
 let _openingFlowTab = false;
 
-async function captureTokenFromFlowTab() {
-  const tabs = await chrome.tabs.query({ url: flowUrls });
+async function captureTokenFromFlowTab({ createIfMissing = false } = {}) {
+  let tabs = await chrome.tabs.query({ url: flowUrls });
   if (!tabs.length) {
+    if (!createIfMissing) {
+      console.log('[FlowAgent] No Flow tab found — passive refresh skipped');
+      return { skipped: 'NO_FLOW_TAB' };
+    }
     if (_openingFlowTab) {
       console.log('[FlowAgent] Flow tab already opening, skipping');
       return;
     }
     _openingFlowTab = true;
     try {
-      console.log('[FlowAgent] No Flow tab found — opening one in background');
-      await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
+      console.log('[FlowAgent] No Flow tab found — opening one for explicit refresh');
+      const opened = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
       await sleep(3000);
-      const retryTabs = await chrome.tabs.query({ url: flowUrls });
-      if (!retryTabs.length) {
+      const target = opened?.id ? await chrome.tabs.get(opened.id).catch(() => null) : null;
+      if (!target) {
         console.log('[FlowAgent] Flow tab not ready yet after open');
         return;
       }
       await chrome.scripting.executeScript({
-        target: { tabId: retryTabs[0].id },
+        target: { tabId: target.id },
         files: ['content.js'],
       });
       console.log('[FlowAgent] Token refresh triggered on newly opened Flow tab');
@@ -218,6 +224,8 @@ function connectToAgent() {
     ws.send(JSON.stringify({
       type: 'extension_ready',
       flowKeyPresent: !!flowKey,
+      extensionVersion: chrome.runtime.getManifest().version,
+      flowUrlSupported: chrome.runtime.getManifest().host_permissions?.includes('https://flow.google.com/*') === true,
       tokenAge: flowKey && metrics.tokenCapturedAt ? Date.now() - metrics.tokenCapturedAt : null,
     }));
     if (flowKey) {
@@ -359,16 +367,19 @@ function captchaFromTab(tabId, requestId, captchaAction) {
 async function solveCaptcha(requestId, captchaAction) {
   let tabs = await chrome.tabs.query({ url: flowUrls });
 
-  // No Flow tab at all — spawn one and let it settle.
+  // No Flow tab at all — spawn one and let it settle. Keep the exact tab id:
+  // a redirected or stale tab must not make us select some older candidate.
   if (!tabs.length) {
+    let opened;
     try {
-      await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
+      opened = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
       await sleep(3000);
-      tabs = await chrome.tabs.query({ url: flowUrls });
     } catch (e) {
       return { error: e.message || 'NO_FLOW_TAB' };
     }
-    if (!tabs.length) return { error: 'NO_FLOW_TAB' };
+    const target = opened?.id ? await chrome.tabs.get(opened.id).catch(() => null) : null;
+    if (!target) return { error: 'NO_FLOW_TAB' };
+    tabs = [target];
   }
 
   // Try each Flow tab in turn. A tab that answers "no grecaptcha" is a tab
@@ -401,16 +412,25 @@ async function solveCaptcha(requestId, captchaAction) {
     }
   }
 
-  // Every candidate failed — last-ditch, spawn a fresh tab and try it once.
+  // Every candidate failed — last-ditch, spawn a fresh temporary tab and
+  // target THAT exact tab. Previously we re-queried all Flow tabs and picked
+  // fresh[0], which could select the same stale tab again while leaking the
+  // newly-created one on every retry.
+  let recoveryTab = null;
   try {
-    await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
+    recoveryTab = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
     await sleep(3000);
-    const fresh = await chrome.tabs.query({ url: flowUrls });
-    const target = fresh.find((t) => !t.discarded) || fresh[0];
-    if (!target) return { error: 'NO_FLOW_TAB' };
+    const target = await chrome.tabs.get(recoveryTab.id);
+    if (!target || target.discarded) return { error: 'NO_FLOW_TAB' };
     return await captchaFromTab(target.id, requestId, captchaAction);
   } catch (e) {
     return { error: e?.message || errors[0] || 'NO_FLOW_TAB' };
+  } finally {
+    // A recovery tab is disposable: there were already Flow tabs available
+    // for the signed RPC. Do not let CAPTCHA retries accumulate root tabs.
+    if (recoveryTab?.id) {
+      try { await chrome.tabs.remove(recoveryTab.id); } catch { /* already gone */ }
+    }
   }
 }
 
@@ -447,12 +467,13 @@ async function runBatchRpc(cmd) {
   let candidate = tabs.find((t) => !t.discarded) || tabs[0];
   if (!candidate) {
     // No Flow tab — open one and give the app a moment to boot, otherwise
-    // WIZ_global_data is not on the page yet and `at` comes back empty.
+    // WIZ_global_data is not on the page yet and `at` comes back empty. Keep
+    // the exact created tab id so redirects/stale tabs cannot hijack recovery.
+    let opened;
     try {
-      await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
+      opened = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
       await sleep(5000);
-      const fresh = await chrome.tabs.query({ url: flowUrls });
-      candidate = fresh.find((t) => !t.discarded) || fresh[0];
+      candidate = opened?.id ? await chrome.tabs.get(opened.id).catch(() => null) : null;
     } catch (e) {
       return { error: e?.message || 'NO_FLOW_TAB' };
     }
@@ -804,7 +825,7 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
   }
 
   if (msg.type === 'REFRESH_TOKEN') {
-    captureTokenFromFlowTab()
+    captureTokenFromFlowTab({ createIfMissing: true })
       .then(() => reply({ ok: true }))
       .catch((e) => reply({ error: e.message }));
     return true;

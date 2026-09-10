@@ -11,6 +11,7 @@ const source = fs.readFileSync(
 const lifecycleListeners = { alarm: [], installed: [], startup: [] };
 const sockets = [];
 let storageReads = 0;
+let tabCreates = 0;
 
 class FakeWebSocket {
   static CONNECTING = 0;
@@ -40,6 +41,12 @@ const chrome = {
   action: { setBadgeBackgroundColor() {}, setBadgeText() {} },
   alarms: { clear() {}, create() {}, onAlarm: event(lifecycleListeners.alarm) },
   runtime: {
+    getManifest() {
+      return {
+        version: '0.3.1',
+        host_permissions: ['https://flow.google.com/*'],
+      };
+    },
     onInstalled: event(lifecycleListeners.installed),
     onMessage: event(),
     onStartup: event(lifecycleListeners.startup),
@@ -60,8 +67,14 @@ const chrome = {
     },
   },
   tabs: {
-    create: async () => ({}),
+    create: async () => {
+      tabCreates += 1;
+      return { id: 123, discarded: false };
+    },
+    get: async (id) => ({ id, discarded: false }),
     query: async () => [],
+    reload: async () => {},
+    remove: async () => {},
     sendMessage: async () => {},
     update: async () => {},
   },
@@ -100,8 +113,13 @@ setImmediate(async () => {
   socket.readyState = FakeWebSocket.OPEN;
   socket.onopen();
 
+  await lifecycleListeners.alarm[0]({ name: 'token-refresh' });
+  assert.equal(tabCreates, 0, 'passive token refresh must never create a Flow tab');
+
   assert.equal(socket.messages[0].type, 'extension_ready');
   assert.equal(socket.messages[0].flowKeyPresent, true);
+  assert.equal(socket.messages[0].extensionVersion, '0.3.1');
+  assert.equal(socket.messages[0].flowUrlSupported, true);
   assert.ok(socket.messages[0].tokenAge > 0);
   assert.deepEqual(socket.messages[1], {
     type: 'token_captured',

@@ -62,6 +62,8 @@ class FlowClient:
             "connected_at": time.time(),
             "flow_key": None,
             "token_captured_at": None,
+            "extension_version": None,
+            "flow_url_supported": None,
             "unavailable_until": 0,
         }
         # A new unauthenticated profile must not displace an already
@@ -185,6 +187,16 @@ class FlowClient:
         uptime = None
         if self._ws_connected_at and self.connected:
             uptime = int(time.time() - self._ws_connected_at)
+        versions = sorted({
+            str(session["extension_version"])
+            for session in self._extensions.values()
+            if session.get("extension_version")
+        })
+        flow_url_support = [
+            session.get("flow_url_supported")
+            for session in self._extensions.values()
+            if session.get("flow_url_supported") is not None
+        ]
         return {
             "connected": self.connected,
             "active_connections": len(self._extensions),
@@ -192,6 +204,8 @@ class FlowClient:
                 1 for session in self._extensions.values()
                 if session.get("flow_key")
             ),
+            "extension_versions": versions,
+            "flow_url_supported": all(flow_url_support) if flow_url_support else None,
             "connects": self._ws_connect_count,
             "disconnects": self._ws_disconnect_count,
             "uptime_s": uptime,
@@ -212,7 +226,18 @@ class FlowClient:
             return
 
         if data.get("type") == "extension_ready":
-            logger.info("Extension ready, flowKey=%s", "yes" if data.get("flowKeyPresent") else "no")
+            source_ws = websocket or self._extension_ws
+            version = data.get("extensionVersion")
+            flow_supported = data.get("flowUrlSupported")
+            if source_ws is not None and source_ws in self._extensions:
+                self._extensions[source_ws]["extension_version"] = version
+                self._extensions[source_ws]["flow_url_supported"] = flow_supported
+            logger.info(
+                "Extension ready, flowKey=%s version=%s flow.google.com=%s",
+                "yes" if data.get("flowKeyPresent") else "no",
+                version or "unknown",
+                "yes" if flow_supported is True else "no" if flow_supported is False else "unknown",
+            )
             asyncio.create_task(self._sync_tier())
             return
 

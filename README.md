@@ -789,7 +789,7 @@ These arrive in the response body as `data.error.details[].reason`. The worker a
 | `Requested entity was not found` | Uploaded `media_id` expired (~1h TTL) | Auto-recover via `_recover_entity_not_found` — re-uploads from `image_url`, re-queues PENDING |
 | `Internal error encountered` | Flow backend transient 500 | Exponential backoff retry: `2^retry * 10s`, capped 300s |
 | `reCAPTCHA failed` / `captcha` | Extension couldn't solve CAPTCHA | Retry up to 10× without incrementing `retry_count` (processor.py:454-464) |
-| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (403, message `reCAPTCHA evaluation failed`) | Google flagged the session as bot-like — usually rapid bursts of submits, VPN/shared IP, or stale auth cookies | NOT auto-recoverable. Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in at `labs.google/fx/tools/flow`, then resubmit with ≥1s gap and ≤5 concurrent. See `/fk-doctor` for full playbook. |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (403, message `reCAPTCHA evaluation failed`) | Google flagged the session as bot-like — usually rapid bursts of submits, VPN/shared IP, or stale auth cookies | NOT auto-recoverable. Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in at `flow.google.com`, then resubmit with ≥1s gap and ≤5 concurrent. See `/fk-doctor` for full playbook. |
 
 ### HTTP Status Codes
 
