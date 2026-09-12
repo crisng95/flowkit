@@ -63,7 +63,7 @@ class UpscaleVideoRequest(BaseModel):
     media_id: str
     scene_id: str
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
-    resolution: str = "VIDEO_RESOLUTION_4K"
+    resolution: str = "VIDEO_RESOLUTION_1080P"
 
 
 class UploadImageRequest(BaseModel):

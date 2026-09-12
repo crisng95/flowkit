@@ -4,32 +4,22 @@ Usage: `/gen-chain-videos <project_id> <video_id>`
 
 This creates smooth transitions between scenes in a chain by using the **NEXT scene's image as the endImage** of the current scene's video, so the last frame of scene N matches the first frame of scene N+1 → seamless concat.
 
-## Before you start: chaining is not on the new Flow API
+## Current Flow transport
 
-Flow's `flow.google.com` payload has an aspect slot and a single source-image
-slot; the **end-image slot was never captured**, so a start+end frame request
-cannot be built. `GENERATE_VIDEO` with an `endImage` fails immediately with
-`UNSUPPORTED_ON_BATCH_API` (terminal — it is not retried).
+Start+end-frame chaining is supported on the current `batchexecute` transport.
+The worker submits the captured `nprQif` interpolation RPC with separate start and
+end image slots and polls the generated media id through `jwpduf`.
 
-```bash
-curl -s http://127.0.0.1:8100/api/flow/status | python3 -c "
-import sys, json
-s = json.load(sys.stdin)
-print('transport:', s['transport'], '| degraded fallback:', s['allow_degraded'])
-"
-```
+`FLOW_ALLOW_DEGRADED=1` is not required for chaining. It only enables the r2v
+fallback to plain i2v off the first reference. Do not remove the end frame or
+silently downgrade a chain request.
 
-Two honest options — tell the user which one you are taking:
+The captured payload uses these frame crops:
+- 16:9 output: `[0.3125, null, 0.6875, 1]`
+- 9:16 output: `[null, 0.078125, 1, 0.921875]`
 
-1. **`FLOW_ALLOW_DEGRADED=1`** (restart the agent with it): each scene renders as
-   plain i2v off its own start frame. The pipeline completes, but the cut
-   between scenes is **not** seamless — the chain invariant below does not hold.
-   Prefer `/fk-concat-fit-narrator` with a crossfade to hide the seams.
-2. **Restore chaining properly** by capturing the end-image slot off the Flow
-   UI — `docs/CAPTURE.md`. This is the only way to get the real behaviour back.
+The endpoint still requires a signed-in Flow tab and a fresh reCAPTCHA token.
 
-Everything below describes the intended behaviour, which is what option 2
-restores.
 
 ## How chaining works
 
@@ -82,7 +72,7 @@ Logic:
 
 ## Step 3: Submit ALL video requests at once
 
-The server handles throttling automatically (max 5 concurrent, 10s cooldown). The worker reads `${ori}_end_scene_media_id` from each scene (set in Step 2) and passes it as `endImage` to the API. This triggers `start_end_frame_2_video` (i2v_fl) instead of plain `frame_2_video` (i2v).
+The server handles throttling automatically (max 5 concurrent, 10s cooldown). The worker reads `${ori}_end_scene_media_id` from each scene (set in Step 2) and passes it as `endImage` to the API. On the batch transport this selects the captured `nprQif` interpolation RPC, which carries separate start/end frame slots and polls by the generated media id.
 
 ```bash
 curl -X POST http://127.0.0.1:8100/api/requests/batch \

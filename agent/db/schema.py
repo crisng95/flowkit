@@ -1,4 +1,6 @@
 """SQLite schema — async via aiosqlite."""
+from __future__ import annotations
+
 import asyncio
 import aiosqlite
 import logging

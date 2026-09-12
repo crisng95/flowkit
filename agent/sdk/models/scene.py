@@ -313,13 +313,19 @@ class Scene(DomainModel):
         *,
         orientation: str = "VERTICAL",
         project_id: str,
+        resolution: str = "1080p",
     ) -> GenerationResult:
-        """Upscale scene video directly (blocking, polls). Returns GenerationResult."""
+        """Upscale scene video directly (blocking, polls). Returns GenerationResult.
+
+        1080p by default; pass ``resolution="4k"`` to opt into the 4K upsampler
+        (it spends credits).
+        """
         from agent.sdk.services.operations import get_operations
         from agent.sdk.services.result_handler import parse_result, apply_scene_result
 
         ops = get_operations()
-        raw = await ops.upscale_scene_video(self.to_operation_dict(project_id), orientation)
+        raw = await ops.upscale_scene_video(
+            self.to_operation_dict(project_id), orientation, resolution=resolution)
         result = parse_result(raw, "UPSCALE_VIDEO")
         if result.success:
             await apply_scene_result(self.id, "UPSCALE_VIDEO", orientation, result)

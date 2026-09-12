@@ -18,10 +18,21 @@ OPERATION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 IMAGE_URL = f"https://{fb.MEDIA_HOST}/image/{MEDIA}?sig=x"
 VIDEO_URL = f"https://{fb.MEDIA_HOST}/video/{MEDIA}?sig=x"
 
+CHAIN_START = "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
+CHAIN_END = "cccccccc-1111-2222-3333-dddddddddddd"
+CHAIN_MEDIA = "eeeeeeee-1111-2222-3333-ffffffffffff"
+CHAIN_PROJECT = PROJECT
+
 
 def envelope(rpcid: str, payload) -> str:
     chunk = json.dumps([["wrb.fr", rpcid, json.dumps(payload)]])
     return f")]}}'\n{len(chunk)}\n{chunk}"
+
+
+def error_envelope(rpcid: str, detail) -> str:
+    chunk = json.dumps([["wrb.fr", rpcid, None, None, None, detail]])
+    return f")]}}'\n{len(chunk)}\n{chunk}"
+
 
 
 @pytest.fixture
@@ -111,9 +122,16 @@ class TestEditImage:
         assert [ref[0] for ref in item[2]] == ["src-1", "ref-a"]
 
 
+
 class TestGenerateVideo:
     def _submitted(self, client):
         return {"data": envelope(fb.RPC_GEN_VIDEO, [None, 50, [[OPERATION, PROJECT, "scene", None]]])}
+
+    def _interpolation_submitted(self, client):
+        return {"data": envelope(
+            fb.RPC_GEN_VIDEO_CHAIN,
+            [None, 9337, [], [[CHAIN_MEDIA, CHAIN_PROJECT, "workflow", "CAE"]]],
+        )}
 
     async def test_returns_an_operation_the_poller_can_carry(self, client):
         client.responses[fb.RPC_GEN_VIDEO] = self._submitted(client)
@@ -128,22 +146,95 @@ class TestGenerateVideo:
         await client.generate_video("mid", "go", PROJECT, "scene-1")
         assert client._operation_projects[OPERATION] == PROJECT
 
-    async def test_chaining_fails_loudly_rather_than_dropping_the_end_frame(self, client):
-        result = await client.generate_video("mid", "go", PROJECT, "scene-1",
-                                             end_image_media_id="end-mid")
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
-        assert not client.calls, "nothing should have been sent"
+    async def test_chaining_submits_interpolation_without_dropping_end_frame(self, client):
+        client.responses[fb.RPC_GEN_VIDEO_CHAIN] = self._interpolation_submitted(client)
 
-    async def test_degraded_mode_runs_i2v_off_the_start_frame(self, client, monkeypatch):
+        result = await client.generate_video(
+            "start-mid", "go", PROJECT, "scene-1",
+            aspect_ratio="VIDEO_ASPECT_RATIO_LANDSCAPE",
+            end_image_media_id="end-mid",
+        )
+
+        assert not _is_error(result)
+        assert result["data"]["operations"][0]["operation"]["name"] == CHAIN_MEDIA
+        assert client.calls[0]["rpcid"] == fb.RPC_GEN_VIDEO_CHAIN
+        payload = json.loads(json.loads(client.calls[0]["freq"])[0][0][1])
+        item = payload[0][0]
+        assert item[1] == fb.INTERPOLATION_MODEL
+        assert item[2] == fb.VIDEO_ASPECT_LANDSCAPE
+        assert item[4][1] == "start-mid"
+        assert item[5][1] == "end-mid"
+
+    @pytest.mark.parametrize(
+        ("configured", "wire"),
+        [
+            ("veo_3_1_i2v_lite_low_priority",
+             "veo_3_1_interpolation_lite_low_priority"),
+            ("veo_3_1_i2v_lite", "veo_3_1_interpolation_lite"),
+            ("veo_3_1_i2v_s_fast_portrait_ultra_fl",
+             "veo_3_1_i2v_s_fast_portrait_ultra_fl"),
+            ("veo_3_1_i2v_s_portrait_fl", "veo_3_1_i2v_s_portrait_fl"),
+            ("veo_3_1_i2v_s_fast_ultra_fl", "veo_3_1_i2v_s_fast_ultra_fl"),
+            ("veo_3_1_i2v_s_fl", "veo_3_1_i2v_s_fl"),
+        ],
+    )
+    async def test_chaining_uses_the_configured_captured_model(
+        self, client, monkeypatch, configured, wire
+    ):
+        import agent.services.flow_client as module
+        monkeypatch.setattr(module, "VIDEO_MODELS", {
+            "PAYGATE_TIER_TWO": {
+                "start_end_frame_2_video": {
+                    "VIDEO_ASPECT_RATIO_PORTRAIT": configured,
+                },
+            },
+        })
+        client.responses[fb.RPC_GEN_VIDEO_CHAIN] = self._interpolation_submitted(client)
+
+        await client.generate_video(
+            "start-mid", "go", PROJECT, "scene-1",
+            aspect_ratio="VIDEO_ASPECT_RATIO_PORTRAIT",
+            end_image_media_id="end-mid",
+        )
+
+        payload = json.loads(json.loads(client.calls[0]["freq"])[0][0][1])
+        assert payload[0][0][1] == wire
+
+
+    async def test_chaining_unverified_model_uses_safe_fallback(self, client, monkeypatch):
+        import agent.services.flow_client as module
+        monkeypatch.setattr(module, "VIDEO_MODELS", {
+            "PAYGATE_TIER_ONE": {
+                "start_end_frame_2_video": {
+                    "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait_fl",
+                },
+            },
+        })
+        client.responses[fb.RPC_GEN_VIDEO_CHAIN] = self._interpolation_submitted(client)
+
+        await client.generate_video(
+            "start-mid", "go", PROJECT, "scene-1",
+            aspect_ratio="VIDEO_ASPECT_RATIO_PORTRAIT",
+            end_image_media_id="end-mid",
+            user_paygate_tier="PAYGATE_TIER_ONE",
+        )
+
+        payload = json.loads(json.loads(client.calls[0]["freq"])[0][0][1])
+        assert payload[0][0][1] == fb.INTERPOLATION_MODEL
+
+
+    async def test_degraded_mode_also_preserves_end_frame(self, client, monkeypatch):
         import agent.services.flow_client as module
         monkeypatch.setattr(module, "FLOW_ALLOW_DEGRADED", True)
-        client.responses[fb.RPC_GEN_VIDEO] = self._submitted(client)
+        client.responses[fb.RPC_GEN_VIDEO_CHAIN] = self._interpolation_submitted(client)
 
-        result = await client.generate_video("start-mid", "go", PROJECT, "scene-1",
-                                             end_image_media_id="end-mid")
+        result = await client.generate_video(
+            "start-mid", "go", PROJECT, "scene-1", end_image_media_id="end-mid")
+
         assert not _is_error(result)
         payload = json.loads(json.loads(client.calls[0]["freq"])[0][0][1])
         assert payload[0][0][4][1] == "start-mid"
+        assert payload[0][0][5][1] == "end-mid"
 
     async def test_r2v_fails_loudly_by_default(self, client):
         result = await client.generate_video_from_references(["a", "b"], "go", PROJECT, "s")
@@ -158,11 +249,27 @@ class TestGenerateVideo:
         payload = json.loads(json.loads(client.calls[0]["freq"])[0][0][1])
         assert payload[0][0][4][1] == "ref-a"
 
-    async def test_upscale_is_unported_and_has_no_fallback(self, client, monkeypatch):
-        import agent.services.flow_client as module
-        monkeypatch.setattr(module, "FLOW_ALLOW_DEGRADED", True)
+    async def test_upscale_submits_and_returns_the_derived_media_operation(self, client):
+        client.responses[fb.RPC_MEDIA] = {
+            "data": envelope(fb.RPC_MEDIA, [MEDIA, PROJECT, OPERATION, "CAE"])
+        }
+        client.responses[fb.RPC_UPSCALE] = {
+            "data": envelope(fb.RPC_UPSCALE, [])
+        }
+
         result = await client.upscale_video(MEDIA, "scene-1")
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
+
+        assert not _is_error(result)
+        assert result["data"]["operations"][0]["operation"]["name"] == f"{MEDIA}_upsampled"
+        assert [call["rpcid"] for call in client.calls] == [
+            fb.RPC_MEDIA,
+            fb.RPC_UPSCALE,
+        ]
+        payload = json.loads(json.loads(client.calls[1]["freq"])[0][0][1])
+        item = payload[0][0]
+        assert item[0][1] == MEDIA
+        assert item[4][1] == OPERATION
+        assert item[6] == 2
 
 
 class TestCheckVideoStatus:
@@ -259,6 +366,7 @@ class TestCheckVideoStatus:
         assert not [c for c in client.calls if c["rpcid"] == fb.RPC_PROJECT_MEDIA]
         assert not [c for c in client.calls if c["rpcid"] == fb.RPC_OPERATION]
 
+
     async def test_a_finished_operation_stays_finished_when_re_polled(self, client):
         """A batch re-polls its finished operations alongside its pending ones."""
         client.responses[fb.RPC_OPERATION] = self._poll(status="CAE")
@@ -267,6 +375,30 @@ class TestCheckVideoStatus:
 
         assert (await self._status(client))["status"] == "MEDIA_GENERATION_STATUS_SUCCESSFUL"
         assert (await self._status(client))["status"] == "MEDIA_GENERATION_STATUS_SUCCESSFUL"
+
+    async def test_media_lookup_failure_forces_media_reresolution(self, client):
+        """A stale media id must not poison every later poll round."""
+        client.responses[fb.RPC_OPERATION] = self._poll(status="CAE")
+        client.responses[fb.RPC_PROJECT_MEDIA] = self._listing()
+        media_calls = 0
+
+        def media_response(_match):
+            nonlocal media_calls
+            media_calls += 1
+            if media_calls == 1:
+                return {"data": error_envelope(fb.RPC_MEDIA, [5])}
+            return {"data": envelope(fb.RPC_MEDIA, [VIDEO_URL])}
+
+        client.responses[fb.RPC_MEDIA] = media_response
+
+        first = await self._status(client)
+        assert first["status"] == "MEDIA_GENERATION_STATUS_PENDING"
+        assert first["complaint"] == "as29s failed: [5]"
+
+        second = await self._status(client)
+        assert second["status"] == "MEDIA_GENERATION_STATUS_SUCCESSFUL"
+        assert media_calls == 2
+        assert len([c for c in client.calls if c["rpcid"] == fb.RPC_PROJECT_MEDIA]) == 2
 
     async def test_a_nameless_operation_fails_instead_of_polling_forever(self, client):
         result = await client.check_video_status([{"operation": {}}])

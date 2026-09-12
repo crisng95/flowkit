@@ -14,6 +14,7 @@ the September 2026 migration, so it is a post-mortem tool, not a fallback.
 Both shape their answers the same way, so everything downstream — the worker's
 parsers, the operation poller, the scene/character updaters — is transport-blind.
 """
+from __future__ import annotations
 import asyncio
 import json
 import logging
@@ -531,6 +532,12 @@ class FlowClient:
         legacy = VIDEO_MODELS.get(tier, {}).get(gen_type, {}).get(aspect_ratio)
         return fb.resolve_video_model(legacy)
 
+    def _batch_interpolation_model(self, tier: str, aspect_ratio: str) -> str:
+        """Resolve the configured key to the captured ``nprQif`` model."""
+        legacy = VIDEO_MODELS.get(tier, {}).get(
+            "start_end_frame_2_video", {}).get(aspect_ratio)
+        return fb.resolve_interpolation_model(legacy)
+
     def _remember_operation(self, operation_id: str, project_id: str):
         """Which project an operation belongs to — the listing lookup needs it.
 
@@ -675,30 +682,40 @@ class FlowClient:
                 aspect_ratio, end_image_media_id, user_paygate_tier)
 
         if end_image_media_id:
-            if not FLOW_ALLOW_DEGRADED:
-                return {"error": _unsupported(
-                    "start+end frame chaining",
-                    "the new payload's end-image slot was never captured",
-                )}
-            logger.warning(
-                "Scene %s: dropping end frame %s — chaining is not on the batch path, "
-                "running plain i2v because FLOW_ALLOW_DEGRADED=1",
-                str(scene_id)[:12], end_image_media_id[:12])
+            logger.info(
+                "Scene %s: submitting start+end-frame interpolation",
+                str(scene_id)[:12],
+            )
 
-        gen_type = "start_end_frame_2_video" if end_image_media_id else "frame_2_video"
+        gen_type = "frame_2_video"
         try:
             pid = self._batch_project_id(project_id)
-            freq = fb.video_request(
-                prompt, pid, start_image_media_id, aspect=aspect_ratio,
-                model=self._batch_video_model(user_paygate_tier, gen_type, aspect_ratio),
-            )
-            payload = await self._batch_payload(
-                fb.RPC_GEN_VIDEO, freq, fb.CAPTCHA_VIDEO, timeout=120)
-            operation = fb.read_operation(payload)
+            if end_image_media_id:
+                freq = fb.interpolation_request(
+                    prompt, pid, start_image_media_id, end_image_media_id,
+                    aspect=aspect_ratio,
+                    model=self._batch_interpolation_model(
+                        user_paygate_tier, aspect_ratio),
+                )
+                payload = await self._batch_payload(
+                    fb.RPC_GEN_VIDEO_CHAIN, freq, fb.CAPTCHA_VIDEO, timeout=120)
+                # nprQif returns a workflow summary plus a media record. The UI
+                # polls jwpduf with the media id, not the workflow id.
+                operation = fb.read_interpolation_operation(payload)
+            else:
+                freq = fb.video_request(
+                    prompt, pid, start_image_media_id, aspect=aspect_ratio,
+                    model=self._batch_video_model(user_paygate_tier, gen_type, aspect_ratio),
+                )
+                payload = await self._batch_payload(
+                    fb.RPC_GEN_VIDEO, freq, fb.CAPTCHA_VIDEO, timeout=120)
+                operation = fb.read_operation(payload)
         except Exception as e:
             return _batch_error(e)
 
         self._remember_operation(operation.operation_id, pid)
+        if end_image_media_id:
+            self._operation_media[operation.operation_id] = operation.operation_id
         return {"status": 200, "data": {"operations": [_as_pending_operation(operation.operation_id)]}}
 
     async def generate_video_from_references(self, reference_media_ids: list[str],
@@ -730,14 +747,37 @@ class FlowClient:
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
-                             resolution: str = "VIDEO_RESOLUTION_4K") -> dict:
-        """Upscale a video."""
+                             resolution: str = "VIDEO_RESOLUTION_1080P") -> dict:
+        """Upscale a video. 1080p by default; 4K is opt-in (it spends credits).
+
+        The submit (rpcid ``p0UkFb``) needs the source video's workflow id and
+        project id, so this reads the source media record first, then submits and
+        hands the poller the upsampled media id — ``<id>_upsampled`` for 1080p,
+        ``<id>_4k_upsampled`` for 4K — which ``jwpduf``/``as29s`` both key on.
+        """
         if not USE_BATCH_RPC:
             return await self._legacy_upscale_video(media_id, scene_id, aspect_ratio, resolution)
-        return {"error": _unsupported(
-            "video upscale",
-            "no upsampler rpc appears in the new frontend's captures",
-        )}
+
+        res = fb.resolve_upscale_resolution(resolution)
+        try:
+            source = fb.read_media_record(
+                await self._batch_payload(fb.RPC_MEDIA, fb.media_request(media_id), timeout=60))
+            if not source.workflow_id:
+                return {"error": f"upscale: source media {media_id[:12]} carries no workflow id"}
+            pid = source.project_id or self._batch_project_id(source.project_id)
+            freq = fb.upscale_request(
+                media_id, pid, workflow_id=source.workflow_id, resolution=res)
+            await self._batch_payload(fb.RPC_UPSCALE, freq, fb.CAPTCHA_VIDEO, timeout=120)
+        except Exception as e:
+            return _batch_error(e)
+
+        upsampled = fb.upsampled_media_id(media_id, res)
+        # The upscale poll and url resolve both key on the upsampled id itself,
+        # so seed the operation→media cache with it: there is no separate
+        # operation name to look up in the listing.
+        self._remember_operation(upsampled, pid)
+        self._operation_media[upsampled] = upsampled
+        return {"status": 200, "data": {"operations": [_as_pending_operation(upsampled)]}}
 
     async def check_video_status(self, operations: list[dict]) -> dict:
         """One poll round for each submitted operation.
@@ -769,7 +809,10 @@ class FlowClient:
             try:
                 out.append(await self._poll_batch_operation(op_id))
             except Exception as e:
-                # A hiccup on one poll round costs a round, not the job.
+                # A media-URL lookup failure (e.g. `as29s failed: [5]`) can mean the cached media id is
+                # stale. Drop the candidate so the next round re-resolves it from the project listing
+                # instead of hammering the same dead id until the outer timeout.
+                self._operation_media.pop(op_id, None)
                 logger.warning("Operation %s poll failed: %s", op_id[:20], e)
                 out.append(_as_pending_operation(op_id, error=str(e)))
         return {"status": 200, "data": {"operations": out}}
@@ -779,9 +822,15 @@ class FlowClient:
         complaint = None
 
         if not media_id:
-            media_id, complaint = await self._find_operation_media(operation_id)
-            if not media_id:
-                return _as_pending_operation(operation_id, error=complaint)
+            # An upscale's operation id IS its media id (``<src>_upsampled`` /
+            # ``<src>_4k_upsampled``) — it never gets a separate operation name in
+            # the listing, so resolve it directly instead of hunting for one.
+            if operation_id.endswith("_upsampled"):
+                media_id = operation_id
+            else:
+                media_id, complaint = await self._find_operation_media(operation_id)
+                if not media_id:
+                    return _as_pending_operation(operation_id, error=complaint)
             self._operation_media[operation_id] = media_id
 
         urls = await self._batch_media_urls(media_id)

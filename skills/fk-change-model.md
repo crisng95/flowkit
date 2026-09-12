@@ -25,9 +25,31 @@ three names the new path accepts:
 | `veo_3_1_i2v_lite` | anything whose key mentions `lite` |
 | `veo_3_1_i2v_lite_low_priority` | the default, and anything unrecognised |
 
-So changing a Landscape vs Portrait key has **no effect** on the batch path —
-only the quality tier survives the fold. `r2v` and `start_end` keys are moot
-there too: both are unported.
+So changing a Landscape vs Portrait key has **no effect** on ordinary batch i2v —
+only the quality tier survives the fold. Start+end chaining is the exception: it
+uses the captured `nprQif` interpolation RPC with its aspect-specific frame crop.
+
+For start+end chaining, the same `nprQif` RPC uses a model-specific value:
+
+| Configured key | `nprQif` model value | Captured cost |
+|---|---|---:|
+| `veo_3_1_i2v_lite_low_priority` | `veo_3_1_interpolation_lite_low_priority` | 0 credits |
+| `veo_3_1_i2v_lite` | `veo_3_1_interpolation_lite` | 5 credits |
+| `veo_3_1_i2v_s_fast_portrait_ultra_fl` | `veo_3_1_i2v_s_fast_portrait_ultra_fl` | 10 credits |
+| `veo_3_1_i2v_s_fast_ultra_fl` | `veo_3_1_i2v_s_fast_ultra_fl` | 10 credits |
+| `veo_3_1_i2v_s_portrait_fl` | `veo_3_1_i2v_s_portrait_fl` | 100 credits |
+| `veo_3_1_i2v_s_fl` | `veo_3_1_i2v_s_fl` | 100 credits |
+
+Fast and Quality values above were captured for both portrait and landscape
+Frames mode. Unknown chaining keys deliberately fall back to Lite Low Priority
+instead of guessing an unverified wire value.
+
+The existing TIER_ONE standard Fast key `veo_3_1_i2v_s_fast_portrait_fl`
+remains unverified for `nprQif` and therefore keeps that safe fallback; it is
+not aliased to the 100-credit Quality value.
+
+
+`r2v` remains unported.
 
 Image models are unaffected: `GEM_PIX_2` (Nano Banana Pro) and `NARWHAL`
 (Banana 2) are both accepted, and `default_image_model` in `models.json` picks

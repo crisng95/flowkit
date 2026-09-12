@@ -121,10 +121,83 @@ class TestVideoRequest:
         crop = [None, 0.1, 1, 0.9]
         assert inner(fb.video_request("go", self.PID, "mid", crop=crop))[0][0][4][5] == crop
 
+    @pytest.mark.parametrize(
+        ("aspect", "wire_aspect", "crop"),
+        [
+            ("VIDEO_ASPECT_RATIO_PORTRAIT", fb.VIDEO_ASPECT_PORTRAIT,
+             fb.INTERPOLATION_CROP_PORTRAIT),
+            ("VIDEO_ASPECT_RATIO_LANDSCAPE", fb.VIDEO_ASPECT_LANDSCAPE,
+             fb.INTERPOLATION_CROP_LANDSCAPE),
+        ],
+    )
+    def test_interpolation_uses_two_positional_frame_slots(self, aspect, wire_aspect, crop):
+        payload = inner(fb.interpolation_request(
+            "move", self.PID, "start-id", "end-id", aspect=aspect))
+        item = payload[0][0]
+
+        assert item[1] == fb.INTERPOLATION_MODEL
+        assert item[2] == wire_aspect
+        assert item[4][1] == "start-id" and item[4][5] == crop
+        assert item[5][1] == "end-id" and item[5][5] == crop
+        assert json.loads(fb.interpolation_request(
+            "move", self.PID, "start-id", "end-id", aspect=aspect)
+        )[0][0][0] == fb.RPC_GEN_VIDEO_CHAIN
+
+
+    @pytest.mark.parametrize(
+        ("configured", "wire"),
+        [
+            ("veo_3_1_i2v_lite_low_priority",
+             "veo_3_1_interpolation_lite_low_priority"),
+            ("veo_3_1_i2v_lite", "veo_3_1_interpolation_lite"),
+            ("veo_3_1_i2v_s_fast_portrait_ultra_fl",
+             "veo_3_1_i2v_s_fast_portrait_ultra_fl"),
+            ("veo_3_1_i2v_s_portrait_fl", "veo_3_1_i2v_s_portrait_fl"),
+            ("veo_3_1_i2v_s_fast_ultra_fl", "veo_3_1_i2v_s_fast_ultra_fl"),
+            ("veo_3_1_i2v_s_fl", "veo_3_1_i2v_s_fl"),
+        ],
+    )
+    def test_interpolation_model_resolver_uses_captured_values(self, configured, wire):
+        assert fb.resolve_interpolation_model(configured) == wire
+
+
+    def test_unverified_interpolation_model_falls_back_to_free_model(self):
+        assert fb.resolve_interpolation_model(
+            "veo_3_1_i2v_s_fast_portrait_fl") == fb.INTERPOLATION_MODEL
+
+
+
+
+class TestOmniVideoRequests:
+    PID = "11111111-2222-3333-4444-555555555555"
+
+    def test_reference_request_uses_ingredients_rpc_and_reference_pairs(self):
+        payload = inner(fb.omni_reference_request(
+            "move", self.PID, ["ref-1", "ref-2"],
+            aspect="VIDEO_ASPECT_RATIO_LANDSCAPE",
+            model="abra_r2v_8s",
+        ))
+        item = payload[0][0]
+        assert json.loads(fb.omni_reference_request(
+            "move", self.PID, ["ref-1"]))[0][0][0] == fb.RPC_GEN_VIDEO_REFS
+        assert item[1] == [[None, "ref-1"], [None, "ref-2"]]
+        assert item[2] == "abra_r2v_8s"
+        assert item[3] == fb.VIDEO_ASPECT_LANDSCAPE
 
 class TestReaders:
     OP = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     MID = "12345678-1234-1234-1234-1234567890ab"
+
+
+    def test_interpolation_reader_uses_media_record_as_poll_operation(self):
+        op = fb.read_interpolation_operation([
+            None,
+            9337,
+            [["workflow-id", None, None, ["title"]]],
+            [[self.MID, "project-id", "workflow-id", "CAE"]],
+        ])
+        assert (op.operation_id, op.project_id, op.status) == (
+            self.MID, "project-id", "CAE")
 
     def test_images_are_read_out_of_the_url_path(self):
         url = f"https://{fb.MEDIA_HOST}/image/{self.MID}?sig=x"

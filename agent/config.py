@@ -34,10 +34,11 @@ USE_BATCH_RPC = os.environ.get("USE_BATCH_RPC", "1") == "1"
 # uuid pinned here; POST /api/projects falls back to it when no id is given.
 FLOW_PROJECT_ID = os.environ.get("FLOW_PROJECT_ID", "")
 
-# Capabilities whose payloads were never captured off the new UI (4K upscale,
-# reference-to-video, start+end-frame chaining) fail loudly by default. With
-# this on, the two that have a sane fallback degrade instead: chaining and r2v
-# both drop to plain i2v off the start frame. Upscale has no fallback.
+# Capabilities without a complete new-UI submit/response adapter still fail
+# loudly: Veo r2v. Omni Flash is enabled only for the captured 8s payloads.
+# Start+end-frame chaining uses the captured nprQif interpolation RPC; video
+# upscale uses p0UkFb. FLOW_ALLOW_DEGRADED only enables the r2v fallback to
+# plain i2v off the first reference.
 FLOW_ALLOW_DEGRADED = os.environ.get("FLOW_ALLOW_DEGRADED", "0") == "1"
 
 # The tier no longer picks a model — aspect is its own slot and the model names

@@ -42,6 +42,25 @@ RPC_MEDIA = "as29s"
 RPC_UPLOAD_IMAGE = "maseQ"
 RPC_CREATE_PROJECT = "jHPbke"
 RPC_DELETE_PROJECT = "QI2zvc"
+RPC_UPSCALE = "p0UkFb"
+RPC_GEN_VIDEO_CHAIN = "nprQif"
+RPC_GEN_VIDEO_REFS = "MZZa6b"
+
+INTERPOLATION_MODEL = "veo_3_1_interpolation_lite_low_priority"
+
+#: ``nprQif`` does not use the ordinary i2v model names for every tier. These
+#: are the exact model values captured from Flow's Frames UI; unknown legacy
+#: keys intentionally fall back to the free low-priority model rather than
+#: guessing a wire name that Flow may accept and silently ignore.
+INTERPOLATION_MODEL_BY_KEY = {
+    "veo_3_1_i2v_lite_low_priority": INTERPOLATION_MODEL,
+    "veo_3_1_i2v_lite": "veo_3_1_interpolation_lite",
+    "veo_3_1_i2v_s_fast_portrait_ultra_fl":
+        "veo_3_1_i2v_s_fast_portrait_ultra_fl",
+    "veo_3_1_i2v_s_fast_ultra_fl": "veo_3_1_i2v_s_fast_ultra_fl",
+    "veo_3_1_i2v_s_portrait_fl": "veo_3_1_i2v_s_portrait_fl",
+    "veo_3_1_i2v_s_fl": "veo_3_1_i2v_s_fl",
+}
 
 CAPTCHA_IMAGE = "IMAGE_GENERATION"
 CAPTCHA_VIDEO = "VIDEO_GENERATION"
@@ -90,6 +109,24 @@ VIDEO_MODELS = {
     "veo_3_1_i2v_s_fast_ultra",
 }
 
+#: Upscale (upsampler) models and the resolution they map to. Captured off the
+#: UI's Download → "1080p Upscaled" / "4K Upscaled" actions (rpcid ``p0UkFb``).
+#: The submit payload carries no aspect slot — an upscale preserves the source
+#: video's aspect — only a resolution tier int and the model key.
+#:
+#: The tier int lives in slot 6 of the request object: 2 = 1080p, 3 = 4K. Slot 2
+#: is a constant 1. Measured directly from a 1080p AND a 4K capture — do not
+#: assume 4K is (2,3): the real 4K submit is (1,3), same slot-2 as 1080p.
+UPSCALE_MODEL_1080P = "veo_3_1_upsampler_1080p"
+UPSCALE_MODEL_4K = "veo_3_1_upsampler_4k"
+
+#: resolution key -> (slot-6 tier int, model key). 1080p is the default; 4K is
+#: opt-in (it costs credits — "4K Upscaled · 50 credits" in the UI).
+UPSCALE_TIER = {
+    "1080p": (2, UPSCALE_MODEL_1080P),
+    "4k": (3, UPSCALE_MODEL_4K),
+}
+
 #: Video aspect, and note it does NOT share the image encoding: here 1 is
 #: portrait, where for an image 1 is square. Measured by rendering one of each
 #: from the same portrait still — 720x1280 against 1280x720.
@@ -118,6 +155,12 @@ SURFACE_ID = 22
 #: Crop box on the reference image, verbatim from the UI when nothing was
 #: reframed by hand: a hair inside the edges, spanning 128/129 of the frame.
 FULL_FRAME_CROP = [None, 0.0038759689922481244, 1, 0.9961240310077519]
+
+#: Frame crops captured from Flow's Frames mode for the two supported video
+#: aspects. The source images in the capture were portrait; Flow center-crops
+#: them to the selected output aspect before interpolation.
+INTERPOLATION_CROP_PORTRAIT = [None, 0.078125, 1, 0.921875]
+INTERPOLATION_CROP_LANDSCAPE = [0.3125, None, 0.6875, 1]
 
 #: A reference image, as the UI sends it: the media id FIRST and a type flag
 #: four slots later. Probing never found this — the id sat in the wrong
@@ -179,6 +222,20 @@ class MediaUrls:
     image: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class MediaRecord:
+    """The head of an ``as29s`` payload: ``[mediaId, projectId, workflowId, status, …]``.
+
+    The workflow id (slot 2) is what an upscale submit needs alongside the media
+    id, and the project id (slot 1) scopes the submit — both are read from the
+    source video's own media record.
+    """
+    media_id: Optional[str] = None
+    project_id: Optional[str] = None
+    workflow_id: Optional[str] = None
+    status: Optional[str] = None
+
+
 # ── model / aspect resolvers ─────────────────────────────────────────────────
 
 def resolve_image_model(key: Optional[str]) -> str:
@@ -210,6 +267,13 @@ def resolve_video_model(key: Optional[str]) -> str:
         if "lite" in key:
             return "veo_3_1_i2v_lite"
     return VIDEO_MODEL
+
+
+def resolve_interpolation_model(key: Optional[str]) -> str:
+    """Map a configured video key onto the captured ``nprQif`` model value."""
+    if isinstance(key, str):
+        return INTERPOLATION_MODEL_BY_KEY.get(key, INTERPOLATION_MODEL)
+    return INTERPOLATION_MODEL
 
 
 def resolve_aspect(aspect: Any) -> int:
@@ -359,6 +423,29 @@ def video_request(prompt: str, project_id: str, source_media_id: str,
     return build_envelope(RPC_GEN_VIDEO, inner)
 
 
+def omni_reference_request(prompt: str, project_id: str,
+                           reference_media_ids: list[str],
+                           aspect: Any = VIDEO_ASPECT_LANDSCAPE,
+                           model: str = "abra_r2v_8s") -> str:
+    """Submit Omni reference-to-video generation (rpcid ``MZZa6b``).
+
+    The reference slot is a compact ``[null, mediaId]`` pair, distinct from
+    Veo's image reference slot. This shape was captured from Ingredients mode.
+    """
+    ratio = resolve_video_aspect(aspect)
+    references = [[None, media_id] for media_id in reference_media_ids]
+    request = [
+        [None, None, [[[prompt]]]],
+        references,
+        model,
+        ratio,
+        None,
+        [None, None, None, None, _client_uuid(), _client_uuid()],
+    ]
+    inner = [[request], _context(project_id), [_client_uuid(), 2]]
+    return build_envelope(RPC_GEN_VIDEO_REFS, inner)
+
+
 def upload_request(image_b64: str, project_id: str, mime_type: str = "image/jpeg",
                    file_name: str = "upload.jpg") -> str:
     """Put a local image into the project so it can be used as a reference.
@@ -372,6 +459,39 @@ def upload_request(image_b64: str, project_id: str, mime_type: str = "image/jpeg
     ])
 
 
+def interpolation_request(prompt: str, project_id: str, start_media_id: str,
+                          end_media_id: str,
+                          aspect: Any = VIDEO_ASPECT_LANDSCAPE,
+                          crop: Optional[list] = None,
+                          model: str = INTERPOLATION_MODEL) -> str:
+    """Submit a start+end-frame interpolation (rpcid ``nprQif``).
+
+    This is a separate interpolation RPC from ordinary i2v. The two frame
+    blocks are positional and both carry the same crop. These positions were
+    captured from Flow's Frames mode; do not replace this with the ordinary
+    video request and an extra reference, which Flow accepts but does not use
+    as an end frame.
+    """
+    ratio = resolve_video_aspect(aspect)
+    frame_crop = crop if crop is not None else (
+        INTERPOLATION_CROP_PORTRAIT
+        if ratio == VIDEO_ASPECT_PORTRAIT else INTERPOLATION_CROP_LANDSCAPE
+    )
+    frame_start = [None, start_media_id, None, None, None, frame_crop]
+    frame_end = [None, end_media_id, None, None, None, frame_crop]
+    request = [
+        [None, None, [[[prompt]]]],
+        model,
+        ratio,
+        None,
+        frame_start,
+        frame_end,
+        [None, None, None, None, _client_uuid(), _client_uuid()],
+    ]
+    inner = [[request], _context(project_id), [_client_uuid(), 2]]
+    return build_envelope(RPC_GEN_VIDEO_CHAIN, inner)
+
+
 def operation_request(operation_id: str) -> str:
     return build_envelope(RPC_OPERATION, [None, None, [[operation_id]]])
 
@@ -382,6 +502,47 @@ def project_media_request(project_id: str) -> str:
 
 def media_request(media_id: str) -> str:
     return build_envelope(RPC_MEDIA, [media_id])
+
+
+def resolve_upscale_resolution(resolution: Any) -> str:
+    """Normalise a caller's resolution to ``"1080p"`` or ``"4k"``.
+
+    Accepts the REST-era names (``VIDEO_RESOLUTION_4K`` / ``…_1080P``), the bare
+    keys, or ``None``. 1080p is the default — 4K has to be asked for, because it
+    spends credits.
+    """
+    if isinstance(resolution, str) and "4k" in resolution.lower():
+        return "4k"
+    return "1080p"
+
+
+def upsampled_media_id(source_media_id: str, resolution: str = "1080p") -> str:
+    """The media id an upscale produces: the source id with a suffix.
+
+    Confirmed off the wire: 1080p -> ``<id>_upsampled``, 4K -> ``<id>_4k_upsampled``.
+    The upscale poll (``jwpduf``) and url resolve (``as29s``) both key on this id.
+    """
+    return f"{source_media_id}_4k_upsampled" if resolution == "4k" else f"{source_media_id}_upsampled"
+
+
+def upscale_request(source_media_id: str, project_id: str, *,
+                    workflow_id: str, resolution: str = "1080p") -> str:
+    """Submit a video upscale (rpcid ``p0UkFb``).
+
+    Captured off Download -> "1080p Upscaled" / "4K Upscaled". The request object
+    is 32 slots wide: the source media id (slot 0), a constant 1 (slot 2), the
+    source media's workflow id plus a fresh client uuid (slot 4), the resolution
+    tier int (slot 6: 2=1080p, 3=4K), and the upsampler model key (slot 31).
+    There is no aspect slot — the upscale keeps the source video's aspect.
+    """
+    tier, model = UPSCALE_TIER[resolution]
+    obj = (
+        [[None, source_media_id], None, 1, None,
+         [None, workflow_id, None, None, _client_uuid()], None, tier]
+        + [None] * 24
+        + [model]
+    )
+    return build_envelope(RPC_UPSCALE, [[obj], _context(project_id), [_client_uuid()]])
 
 
 def create_project_request(title: str) -> str:
@@ -485,6 +646,25 @@ def read_operation(payload: Any) -> Operation:
     )
 
 
+def read_interpolation_operation(payload: Any) -> Operation:
+    """Read the media record returned by the ``nprQif`` submit.
+
+    Unlike ordinary ``eb1hJf`` generation, interpolation returns a workflow
+    summary at payload slot 2 and the usable media record at slot 3. Flow's UI
+    polls ``jwpduf`` with that media id, not the workflow id.
+    """
+    records = payload[3] if isinstance(payload, list) and len(payload) > 3 else None
+    record = records[0] if isinstance(records, list) and records else None
+    if not isinstance(record, list) or not record:
+        raise FlowBatchError("interpolation response carried no media record")
+    media_id = record[0] if isinstance(record[0], str) else None
+    project_id = record[1] if len(record) > 1 and isinstance(record[1], str) else None
+    status = record[3] if len(record) > 3 and isinstance(record[3], str) else None
+    if not media_id or not project_id:
+        raise FlowBatchError("interpolation response carried no media/project id")
+    return Operation(media_id, project_id, status, read_operation_error(record))
+
+
 def read_operation_error(record: list) -> Optional[str]:
     """The complaint attached to this operation, if it carries one.
 
@@ -550,3 +730,20 @@ def read_media_urls(payload: Any, media_id: str) -> MediaUrls:
         elif MEDIA_HOST + "/image/" in text and image is None:
             image = text
     return MediaUrls(media_id=media_id, video=video, image=image)
+
+
+def read_media_record(payload: Any) -> MediaRecord:
+    """Read the id/project/workflow/status head of an ``as29s`` payload.
+
+    ``[mediaId, projectId, workflowId, status, …]`` — only the first four slots,
+    and only if they are strings. An upscale submit needs the workflow id and
+    project id from the source video's own record.
+    """
+    if not isinstance(payload, list):
+        raise FlowBatchError("media record payload was not a list")
+
+    def _str(index: int) -> Optional[str]:
+        value = payload[index] if len(payload) > index else None
+        return value if isinstance(value, str) else None
+
+    return MediaRecord(_str(0), _str(1), _str(2), _str(3))

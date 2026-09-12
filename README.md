@@ -241,22 +241,25 @@ You can also pass `flow_project_id` per project on `POST /api/projects`.
 |---------|---------|--------------|
 | `FLOW_PROJECT_ID` | — | The Flow project every RPC is scoped to. Required. |
 | `USE_BATCH_RPC` | `1` | `0` falls back to the pre-migration REST path (dead auth). |
-| `FLOW_ALLOW_DEGRADED` | `0` | `1` lets scene chaining and r2v fall back to plain i2v instead of failing. |
+| `FLOW_ALLOW_DEGRADED` | `0` | `1` lets r2v fall back to plain i2v; captured chaining uses the real start+end RPC. |
 | `DEFAULT_PAYGATE_TIER` | `PAYGATE_TIER_TWO` | Carried for the DB and dashboard; no longer selects a model. |
 
-### What does not work on the new API yet
+### New API capability status
 
-Three capabilities have no captured payload, so they fail with
-`UNSUPPORTED_ON_BATCH_API` rather than quietly producing the wrong thing:
+The current batchexecute transport supports video generation, start+end-frame chaining,
+1080p/4K upscale, and the captured Omni Flash 8s/16:9 surfaces. Veo r2v remains
+unported. Omni durations without captured model payloads remain explicitly rejected:
 
 | Capability | Status | Workaround |
 |---|---|---|
-| 4K/1080p upscale (`/fk-pipeline` last step) | unported | none — keep the 1080p render |
+| 4K/1080p upscale (`/fk-pipeline` last step) | supported | 1080p default; 4K optional |
 | Reference-to-video (r2v) | unported | `FLOW_ALLOW_DEGRADED=1` → i2v off the first reference |
-| Start+end-frame chaining (`/fk-gen-chain-videos`) | unported | `FLOW_ALLOW_DEGRADED=1` → i2v off the start frame |
-| Omni Flash (`model_family=omni_flash`) | unported | use `model_family=veo` |
+| Start+end-frame chaining (`/fk-gen-chain-videos`) | supported | uses `nprQif` interpolation RPC |
+| Omni Flash 8s/16:9 (`model_family=omni_flash`) | supported | other durations are rejected until captured |
 
-Restoring one starts with a capture, not a guess: [`docs/CAPTURE.md`](docs/CAPTURE.md).
+The Omni adapter uses the captured response media/workflow record and the existing
+authenticated project-media poller; it does not send Omni operation-looking handles
+to the legacy operation endpoint.
 
 ## End-to-End Example: "Pippip the Fish Merchant"
 
@@ -582,7 +585,7 @@ Or just run `/fk-change-provider` for an interactive picker. Full details in `sk
 | Technique | API Type | Use Case |
 |-----------|----------|----------|
 | **i2v** | `GENERATE_VIDEO` | Image → video (standard) |
-| **i2v_fl** | `GENERATE_VIDEO` + endImage | Start+end frame → smooth scene transitions |
+| **i2v_fl** | `GENERATE_VIDEO` + endImage (`nprQif` on batch) | Start+end frame → smooth scene transitions |
 | **r2v** | `GENERATE_VIDEO_REFS` | Reference images → video (intros, dream sequences) |
 | **Upscale** | `UPSCALE_VIDEO` | Video → 4K (TIER_TWO only) |
 
@@ -836,7 +839,7 @@ String patterns in `error_message` that the worker recognizes:
 | `NO_FLOW_KEY` | Extension has no captured bearer token — **legacy path only**, expected on the batch path | Only meaningful with `USE_BATCH_RPC=0` |
 | `NO_AT_TOKEN` | Flow tab is signed out, on an interstitial, or still booting | Open `flow.google.com`, sign in, let the app load |
 | `NO_FLOW_PROJECT` | No Flow project to scope the RPC to | Pin `FLOW_PROJECT_ID` — **terminal, not retried** |
-| `UNSUPPORTED_ON_BATCH_API` | Upscale / r2v / chaining — payload never captured | See `docs/CAPTURE.md` — **terminal, not retried** |
+| `UNSUPPORTED_ON_BATCH_API` | r2v / Omni Flash — payload not captured | See `docs/CAPTURE.md` — **terminal, not retried** |
 | `NO_FLOW_TAB` | No Google Flow tab available for reCAPTCHA | User must open a Flow tab |
 | `Failed to fetch` | Network drop inside extension service worker | Retry with backoff |
 | `timeout` / WS 60s no response | Extension hung mid-request | Re-queue PENDING |

@@ -27,28 +27,60 @@ from pathlib import Path
 from urllib.parse import quote
 
 from agent.config import USE_BATCH_RPC
+from agent.services import flow_batch as fb
 from agent.services.flow_client import get_flow_client
 from agent.services.headers import random_headers
 
 _MODELS_FILE = Path(__file__).parent.parent / "models.json"
 
-#: Every Omni surface here rides the pre-migration transports — the REST
-#: endpoints on aisandbox-pa and the labs.google tRPC snapshot it polls
-#: through. Flow moved to flow.google.com in September 2026 and stopped
-#: minting the bearer both of those need, and no Omni payload has been
-#: captured off the new frontend, so on the batch path these fail with a
-#: name rather than dying on a 401 five retries deep.
-_UNSUPPORTED_ON_BATCH = (
-    "UNSUPPORTED_ON_BATCH_API: Omni Flash — it speaks the pre-migration REST "
-    "and tRPC endpoints, and no batchexecute payload for it has been captured; "
-    "see docs/CAPTURE.md. Use the Veo path (model_family=veo), or set "
-    "USE_BATCH_RPC=0 on a profile that still holds a bearer token."
-)
+# Only these wire model values and durations have been captured from the
+# authenticated Omni Flash UI. Do not infer other duration/model combinations.
+_BATCH_OMNI_MODELS = {
+    "frame_to_video": {8: "abra_i2v_8s"},
+    "start_end_frame_to_video": {8: "omni_flash_i2v_8s_first_last"},
+    "reference_to_video": {8: "abra_r2v_8s"},
+}
 
 
-def _batch_path_blocks_omni() -> dict | None:
-    """The error to return instead of reaching for auth that is gone."""
-    return {"error": _UNSUPPORTED_ON_BATCH} if USE_BATCH_RPC else None
+def _batch_model_key(duration_s: int, mode: str) -> str | None:
+    return _BATCH_OMNI_MODELS.get(mode, {}).get(duration_s)
+
+
+def _batch_unsupported(duration_s: int, mode: str) -> dict:
+    return {
+        "error": (
+            "UNSUPPORTED_ON_BATCH_API: Omni Flash "
+            f"{mode} at {duration_s}s is not captured; "
+            "only the verified 8s model payload is enabled."
+        )
+    }
+
+
+def _batch_workflow_response(payload: object, project_id: str) -> dict:
+    """Normalize a captured Omni submit response for the existing poller."""
+    operation = fb.read_interpolation_operation(payload)
+    records = payload[3] if isinstance(payload, list) and len(payload) > 3 else None
+    record = records[0] if isinstance(records, list) and records else None
+    workflow_name = record[2] if isinstance(record, list) and len(record) > 2 else None
+    if not workflow_name:
+        raise fb.FlowBatchError("Omni batch response did not include a workflow id")
+    workflow = {
+        "name": workflow_name,
+        "primary_media_id": operation.operation_id,
+        "project_id": project_id,
+    }
+    return {
+        "status": 200,
+        "data": {
+            "workflows": [workflow],
+            "flowkitPolling": {
+                "mode": "project_media",
+                "project_id": project_id,
+                "workflows": [workflow],
+            },
+        },
+    }
+
 
 OMNI_FLASH_VALID_DURATIONS = (4, 6, 8, 10)
 OMNI_FLASH_VALID_ASPECTS = {
@@ -129,6 +161,81 @@ def _load_model_key(duration_s: int, mode: str = "reference_to_video") -> str:
             f"No Omni Flash model key configured for mode {mode!r}, {duration_s}s"
         )
     return key
+
+async def _submit_omni_frame_batch(
+    *,
+    start_image_media_id: str,
+    end_image_media_id: str | None,
+    prompt: str,
+    project_id: str,
+    duration_s: int,
+    aspect_ratio: str,
+) -> dict:
+    mode = (
+        "start_end_frame_to_video"
+        if end_image_media_id is not None
+        else "frame_to_video"
+    )
+    model = _batch_model_key(duration_s, mode)
+    if model is None:
+        return _batch_unsupported(duration_s, mode)
+    client = get_flow_client()
+    flow_project_id = client._batch_project_id(project_id)
+    if end_image_media_id is None:
+        rpcid = fb.RPC_GEN_VIDEO
+        freq = fb.video_request(
+            prompt,
+            flow_project_id,
+            start_image_media_id,
+            aspect=aspect_ratio,
+            crop=(
+                fb.INTERPOLATION_CROP_PORTRAIT
+                if aspect_ratio == "VIDEO_ASPECT_RATIO_PORTRAIT"
+                else fb.INTERPOLATION_CROP_LANDSCAPE
+            ),
+            model=model,
+        )
+    else:
+        rpcid = fb.RPC_GEN_VIDEO_CHAIN
+        freq = fb.interpolation_request(
+            prompt,
+            flow_project_id,
+            start_image_media_id,
+            end_image_media_id,
+            aspect=aspect_ratio,
+            model=model,
+        )
+    payload = await client._batch_payload(
+        rpcid, freq, fb.CAPTCHA_VIDEO, timeout=120
+    )
+    return _batch_workflow_response(payload, flow_project_id)
+
+
+async def _submit_omni_reference_batch(
+    *,
+    reference_media_ids: list[str],
+    prompt: str,
+    project_id: str,
+    duration_s: int,
+    aspect_ratio: str,
+) -> dict:
+    mode = "reference_to_video"
+    model = _batch_model_key(duration_s, mode)
+    if model is None:
+        return _batch_unsupported(duration_s, mode)
+    client = get_flow_client()
+    flow_project_id = client._batch_project_id(project_id)
+    freq = fb.omni_reference_request(
+        prompt,
+        flow_project_id,
+        reference_media_ids,
+        aspect=aspect_ratio,
+        model=model,
+    )
+    payload = await client._batch_payload(
+        fb.RPC_GEN_VIDEO_REFS, freq, fb.CAPTCHA_VIDEO, timeout=120
+    )
+    return _batch_workflow_response(payload, flow_project_id)
 
 
 def _validate_reference_inputs(
@@ -230,15 +337,21 @@ async def _submit_omni_frame_video(
     seed: int | None = None,
 ) -> dict:
     """Submit Omni first-frame or First+Last generation."""
-    blocked = _batch_path_blocks_omni()
-    if blocked:
-        return blocked
     _validate_frame_inputs(
         start_image_media_id,
         end_image_media_id,
         duration_s,
         aspect_ratio,
     )
+    if USE_BATCH_RPC:
+        return await _submit_omni_frame_batch(
+            start_image_media_id=start_image_media_id,
+            end_image_media_id=end_image_media_id,
+            prompt=prompt,
+            project_id=project_id,
+            duration_s=duration_s,
+            aspect_ratio=aspect_ratio,
+        )
 
     mode = (
         "start_end_frame_to_video"
@@ -352,10 +465,15 @@ async def generate_omni_flash_video(
     the workflow names and primary media IDs required by the Omni polling path.
     Do not feed Omni operation handles to ``check_video_status``.
     """
-    blocked = _batch_path_blocks_omni()
-    if blocked:
-        return blocked
     refs = _validate_reference_inputs(reference_media_ids, duration_s, aspect_ratio)
+    if USE_BATCH_RPC:
+        return await _submit_omni_reference_batch(
+            reference_media_ids=refs,
+            prompt=prompt,
+            project_id=project_id,
+            duration_s=duration_s,
+            aspect_ratio=aspect_ratio,
+        )
     model_key = _load_model_key(duration_s, mode="reference_to_video")
     client = get_flow_client()
 
@@ -409,9 +527,6 @@ async def check_omni_flash_status(
     ``flow.projectInitialData`` tRPC response. The old ``/v1/media`` transport
     currently returns ``INVALID_ARGUMENT`` for these workflow media IDs.
     """
-    blocked = _batch_path_blocks_omni()
-    if blocked:
-        return blocked
     normalized = []
     for workflow in workflows or []:
         item = _normalize_workflow(workflow)

@@ -30,11 +30,12 @@ that change how you work:
 
 - **Projects are not created by Flow Kit any more.** Make one in the Flow UI and
   pin its uuid as `FLOW_PROJECT_ID`, or pass `flow_project_id` to `POST /api/projects`.
-- **Four capabilities are unported** because their payloads were never captured:
-  4K upscale, r2v, start+end-frame chaining, and Omni Flash. They fail with
-  `UNSUPPORTED_ON_BATCH_API` rather than silently producing the wrong thing.
-  `FLOW_ALLOW_DEGRADED=1` drops chaining and r2v to plain i2v; upscale has no
-  fallback. To restore one properly, see `docs/CAPTURE.md`.
+- **Veo r2v remains unported. Omni Flash is enabled for the captured 8s/16:9
+  first-frame, first+last, and reference surfaces.** Other Omni durations remain
+  explicitly rejected rather than guessed.
+- **Start+end-frame chaining is supported** through the captured `nprQif` interpolation RPC;
+  `FLOW_ALLOW_DEGRADED` is not needed for chaining.
+- **Video upscale is supported** through `p0UkFb`; 1080p is the default and 4K is opt-in.
 - **A poll saying "Media not found." is not a failure.** Finished jobs report it.
 
 ## Skills

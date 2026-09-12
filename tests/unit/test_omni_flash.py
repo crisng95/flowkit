@@ -1,13 +1,12 @@
 """Unit tests for Gemini Omni Flash Flow submissions and workflow polling.
 
-Omni speaks the pre-migration transports — the REST endpoints on aisandbox-pa
-and the labs.google tRPC snapshot it polls through — so the wire contracts
-asserted here are legacy-path contracts and the module is pinned to that path
-for the file. What happens on the batch path is one test at the bottom.
+Legacy tests cover the pre-migration REST path. Batch tests cover the verified
+8s batchexecute payloads captured from the authenticated Flow UI.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import json
 import pytest
 
 import agent.services.omni_flash as omni_flash
@@ -477,11 +476,7 @@ async def test_submit_rejects_empty_reference_set():
         )
 
 
-class TestBatchPathIsRefusedRatherThanAttempted:
-    """Flow stopped minting the bearer these endpoints need, and no Omni
-    payload has been captured off the new frontend. Saying so beats a 401
-    five retries deep."""
-
+class TestBatchPath:
     @pytest.fixture(autouse=True)
     def batch_transport(self, monkeypatch):
         monkeypatch.setattr(omni_flash, "USE_BATCH_RPC", True)
@@ -490,37 +485,80 @@ class TestBatchPathIsRefusedRatherThanAttempted:
     def client(self):
         with patch("agent.services.omni_flash.get_flow_client") as factory:
             stub = MagicMock()
-            stub._send = AsyncMock()
+            stub._batch_project_id.return_value = "pid"
+            stub._batch_payload = AsyncMock(
+                return_value=[
+                    None,
+                    0,
+                    [["request-media", None, None]],
+                    [["media-1", "pid", "workflow-1", "CAE"]],
+                ]
+            )
             factory.return_value = stub
             yield stub
 
-    async def test_first_frame_names_the_gap_and_sends_nothing(self, client):
+    @pytest.mark.asyncio
+    async def test_first_frame_returns_media_workflow_polling_descriptor(self, client):
         result = await generate_omni_flash_first_frame_video(
-            start_image_media_id="mid", prompt="go", project_id="pid")
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
-        client._send.assert_not_called()
+            start_image_media_id="start",
+            prompt="go",
+            project_id="pid",
+        )
+        freq = client._batch_payload.await_args.args[1]
+        payload = json.loads(json.loads(freq)[0][0][1])
+        assert payload[0][0][1] == "abra_i2v_8s"
+        assert payload[0][0][2] == 1
+        assert result["data"]["flowkitPolling"]["workflows"] == [
+            {
+                "name": "workflow-1",
+                "primary_media_id": "media-1",
+                "project_id": "pid",
+            }
+        ]
 
-    async def test_first_last_names_the_gap_and_sends_nothing(self, client):
+    @pytest.mark.asyncio
+    async def test_first_last_uses_interpolation_rpc_and_workflow_polling(self, client):
         result = await generate_omni_flash_first_last_video(
-            start_image_media_id="a", end_image_media_id="b",
-            prompt="go", project_id="pid")
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
-        client._send.assert_not_called()
+            start_image_media_id="start",
+            end_image_media_id="end",
+            prompt="go",
+            project_id="pid",
+        )
+        freq = client._batch_payload.await_args.args[1]
+        payload = json.loads(json.loads(freq)[0][0][1])
+        assert result["data"]["flowkitPolling"]["workflows"][0]["name"] == "workflow-1"
+        assert client._batch_payload.await_args.args[0] == "nprQif"
+        assert payload[0][0][1] == "omni_flash_i2v_8s_first_last"
 
-    async def test_reference_to_video_names_the_gap_and_sends_nothing(self, client):
+    @pytest.mark.asyncio
+    async def test_reference_uses_ingredients_rpc_and_workflow_polling(self, client):
         result = await generate_omni_flash_video(
-            reference_media_ids=["a"], prompt="go", project_id="pid")
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
-        client._send.assert_not_called()
+            reference_media_ids=["ref"],
+            prompt="go",
+            project_id="pid",
+        )
+        freq = client._batch_payload.await_args.args[1]
+        payload = json.loads(json.loads(freq)[0][0][1])
+        assert result["data"]["flowkitPolling"]["workflows"][0]["primary_media_id"] == "media-1"
+        assert client._batch_payload.await_args.args[0] == "MZZa6b"
+        assert payload[0][0][2] == "abra_r2v_8s"
 
-    async def test_polling_names_the_gap_and_sends_nothing(self, client):
+    @pytest.mark.asyncio
+    async def test_unverified_duration_is_rejected_without_submit(self, client):
+        result = await generate_omni_flash_video(
+            reference_media_ids=["ref"],
+            prompt="go",
+            project_id="pid",
+            duration_s=4,
+        )
+        assert "only the verified 8s model payload" in result["error"]
+        client._batch_payload.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_polling_remains_available_on_batch_transport(self, client):
+        client._send = AsyncMock(return_value=_project_response())
         result = await check_omni_flash_status(
-            [{"name": "wf", "primary_media_id": "mid", "project_id": "pid"}])
-        assert "UNSUPPORTED_ON_BATCH_API" in result["error"]
-        client._send.assert_not_called()
-
-    async def test_the_message_points_at_both_ways_out(self, client):
-        result = await generate_omni_flash_video(
-            reference_media_ids=["a"], prompt="go", project_id="pid")
-        assert "docs/CAPTURE.md" in result["error"]
-        assert "USE_BATCH_RPC=0" in result["error"]
+            [{"name": "workflow-1", "primary_media_id": "media-1", "project_id": "pid"}]
+        )
+        assert result["done"] is False
+        client._send.assert_awaited_once()

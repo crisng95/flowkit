@@ -615,7 +615,7 @@ class OperationService:
         return await _poll_operations(self._client, operations)
 
     async def upscale_scene_video(self, scene: dict, orientation: str,
-                                  request_id: str = "") -> dict:
+                                  request_id: str = "", resolution: str = "1080p") -> dict:
         """Upscale a completed scene video. Submits + polls.
 
         If a previous attempt already submitted (op_name saved in DB), skip
@@ -644,6 +644,7 @@ class OperationService:
             media_id=video_media_id,
             scene_id=scene.get("id", ""),
             aspect_ratio=aspect,
+            resolution="VIDEO_RESOLUTION_4K" if resolution == "4k" else "VIDEO_RESOLUTION_1080P",
         )
 
         if _is_error(submit_result):

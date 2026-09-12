@@ -20,9 +20,16 @@ request bodies to disk, so it goes in for one session and comes straight back ou
 | operation → media id | `Zzl0ze` | `projects/<id>`; the listing is ~17 MB |
 | media id → urls | `as29s` | signed `/video/` + poster `/image/` |
 | upload an image | `maseQ` | base64 in the payload, captcha like a generate |
+| start+end-frame interpolation | `nprQif` | separate start/end frame slots; aspect-specific crops |
+| Omni first-frame video (8s, 16:9) | `eb1hJf` | model `abra_i2v_8s`; start-frame slot |
+| Omni first+last video (8s, 16:9) | `nprQif` | model `omni_flash_i2v_8s_first_last`; two frame slots |
+| Omni reference video (8s, 16:9) | `MZZa6b` | model `abra_r2v_8s`; reference list slot |
 
-Missing, and each blocked behind a capture: **video upscale**, **r2v**,
-**start+end-frame chaining**, and the **base-image** variant of the image edit.
+Omni submit request and response payloads are captured for all three verified
+8s/16:9 surfaces, and workflow polling uses the authenticated project snapshot.
+The batch adapter is enabled for those exact model/duration combinations.
+The remaining missing captures are **Veo r2v** and the **base-image** variant
+of image edit.
 
 ## Recording one
 
