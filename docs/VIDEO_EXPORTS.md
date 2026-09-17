@@ -25,12 +25,15 @@ curl -sS -X POST http://127.0.0.1:8100/api/flow/export-video \
 
 `quality` defaults to `1080p`. `4k` remains an explicit API option, but it is plan-gated by Google Flow; the currently verified account exposes 4K as disabled while 1080p is available.
 
+If `project_id` is omitted, FlowKit uses the current ad-hoc Flow session project.
+Pass `project_id` explicitly when exporting media from an existing Flow project.
+
 The response contains `flowkitPolling.workflows`. Poll those descriptors:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:8100/api/flow/check-export-status \
+curl -sS -X POST http://127.0.0.1:8100/api/flow/check-status \
   -H 'Content-Type: application/json' \
-  -d '{"workflows": <FLOWKIT_POLLING_WORKFLOWS>}'
+  -d '{"mode":"export","workflows": <FLOWKIT_POLLING_WORKFLOWS>}'
 ```
 
 When `download_ready` becomes `true`, use
@@ -39,12 +42,4 @@ When `download_ready` becomes `true`, use
 
 ## Compatibility
 
-The older endpoints remain supported:
-
-- `POST /api/flow/upscale-video`
-- `POST /api/flow/check-upscale-status`
-
-They are aliases/low-level surfaces for the same Google Flow capability. New
-integrations should use `export-video` and `check-export-status`, because those
-names describe the user-visible operation: selecting the downloadable output
-quality.
+`POST /api/flow/upscale-video` remains the low-level submit surface. New integrations should use `export-video`, then poll the returned workflows through the existing `POST /api/flow/check-status` endpoint with `mode: "export"`. This keeps all Flow polling behind one API surface.

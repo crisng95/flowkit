@@ -23,6 +23,7 @@ import logging
 import time
 import uuid
 from typing import Optional
+from urllib.parse import quote
 
 from agent.config import (
     VIDEO_MODELS,
@@ -1163,6 +1164,21 @@ class FlowClient:
         if urls.image:
             data["image"] = {"fifeUrl": urls.image}
         return {"status": 200, "data": data}
+
+    async def resolve_media_url(self, media_id: str) -> dict:
+        """Resolve a signed Flow video URL through the authenticated batch media API."""
+        result = await self.get_media(media_id)
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        video = data.get("video") if isinstance(data, dict) else None
+        candidate = video.get("fifeUrl") if isinstance(video, dict) else None
+        return {
+            "status": result.get("status", 200),
+            "data": {
+                "url": candidate,
+                "contentType": "video/mp4" if candidate else None,
+            },
+            "error": result.get("error"),
+        }
 
     async def upload_image(self, image_base64: str, mime_type: str = "image/jpeg",
                             project_id: str = "", file_name: str = "image.jpg") -> dict:
