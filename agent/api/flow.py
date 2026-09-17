@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 from agent.config import USE_BATCH_RPC, FLOW_PROJECT_ID, FLOW_ALLOW_DEGRADED
 from agent.services.flow_client import get_flow_client
+from agent.services.flow_poll import annotate_polling, check_workflow_status
 from agent.services.omni_flash import (
     check_omni_flash_status,
     generate_omni_flash_first_frame_video,
@@ -78,6 +79,15 @@ class UpscaleVideoRequest(BaseModel):
     scene_id: str
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
     resolution: str = "VIDEO_RESOLUTION_4K"
+    project_id: Optional[str] = None
+
+
+class ExportVideoRequest(BaseModel):
+    media_id: str
+    scene_id: str = "export"
+    quality: Literal["1080p", "4k"] = "1080p"
+    aspect_ratio: str = "VIDEO_ASPECT_RATIO_LANDSCAPE"
+    project_id: Optional[str] = None
 
 
 class UploadImageRequest(BaseModel):
@@ -94,6 +104,7 @@ class CheckStatusRequest(BaseModel):
     workflows: Optional[list[dict]] = None
     project_id: str = ""
     include_encoded_video: bool = False
+    mode: Literal["omni", "export"] = "omni"
 
 
 class CheckOmniStatusRequest(BaseModel):
@@ -300,12 +311,44 @@ async def upscale_video(body: UpscaleVideoRequest):
     return result.get("data", result)
 
 
+@router.post("/export-video")
+async def export_video(body: ExportVideoRequest):
+    """Start Google's native Full HD/4K export and return workflow polling data."""
+    client = get_flow_client()
+    if not client.connected:
+        raise HTTPException(503, "Extension not connected")
+    resolution = "VIDEO_RESOLUTION_1080P" if body.quality == "1080p" else "VIDEO_RESOLUTION_4K"
+    result = await client.upscale_video(
+        media_id=body.media_id,
+        scene_id=body.scene_id,
+        aspect_ratio=body.aspect_ratio,
+        resolution=resolution,
+        project_id=body.project_id,
+    )
+    if result.get("error") or (
+        isinstance(result.get("status"), int) and result["status"] >= 400
+    ):
+        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+
+    annotated = annotate_polling(result, mode="media_redirect")
+    data = annotated.get("data", annotated)
+    if isinstance(data, dict):
+        data["export"] = {
+            "quality": body.quality,
+            "resolution": resolution,
+            "native_flow_export": True,
+            "next": "/api/flow/check-status",
+            "check_status_mode": "export",
+        }
+    return data
+
+
 @router.post("/check-status")
 async def check_status(body: CheckStatusRequest):
-    """Check Veo operation status or Omni workflow/media status.
+    """Check Veo operations, Omni workflows, or native export workflows.
 
-    Veo: pass ``operations``.
-    Omni Flash: pass ``workflows`` from submit ``flowkitPolling.workflows``.
+    Veo: pass ``operations``. Workflow callers pass ``workflows``; native video
+    export additionally sets ``mode=\"export\"``.
     """
     client = get_flow_client()
     if not client.connected:
@@ -313,6 +356,16 @@ async def check_status(body: CheckStatusRequest):
 
     if body.workflows:
         try:
+            if body.mode == "export":
+                result = await check_workflow_status(
+                    body.workflows,
+                    mode="media_redirect",
+                    include_encoded_video=body.include_encoded_video,
+                    project_id=body.project_id,
+                    client=client,
+                )
+                result["download_ready"] = result.get("status") == "COMPLETED"
+                return result
             return await check_omni_flash_status(
                 body.workflows,
                 include_encoded_video=body.include_encoded_video,

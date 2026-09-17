@@ -20,6 +20,7 @@ import logging
 import time
 import uuid
 from typing import Optional
+from urllib.parse import quote
 
 from agent.config import (
     GOOGLE_FLOW_API, GOOGLE_API_KEY, ENDPOINTS,
@@ -839,14 +840,33 @@ class FlowClient:
 
     async def upscale_video(self, media_id: str, scene_id: str,
                              aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT",
-                             resolution: str = "VIDEO_RESOLUTION_4K") -> dict:
-        """Upscale a video."""
+                             resolution: str = "VIDEO_RESOLUTION_4K",
+                             project_id: str | None = None) -> dict:
+        """Upscale/export a video using Flow's migrated p0UkFb RPC."""
         if not USE_BATCH_RPC:
             return await self._legacy_upscale_video(media_id, scene_id, aspect_ratio, resolution)
-        return {"error": _unsupported(
-            "video upscale",
-            "no upsampler rpc appears in the new frontend's captures",
-        )}
+
+        model = UPSCALE_MODELS.get(resolution)
+        if not model:
+            return {"status": 400, "error": f"Unsupported upscale resolution: {resolution}"}
+        try:
+            pid = self._batch_project_id(project_id or "")
+            freq = fb.upscale_request(media_id, pid, aspect=aspect_ratio, model=model)
+            payload = await self._batch_payload(
+                fb.RPC_UPSCALE, freq, fb.CAPTCHA_VIDEO, timeout=120)
+            upscaled_media_id = fb.read_upscaled_media_id(payload)
+        except Exception as e:
+            return _batch_error(e)
+
+        workflow = {
+            "name": upscaled_media_id,
+            "primary_media_id": upscaled_media_id,
+            "project_id": pid,
+        }
+        return {"status": 200, "data": {
+            "media": [{"name": upscaled_media_id}],
+            "workflows": [workflow],
+        }}
 
     async def check_video_status(self, operations: list[dict]) -> dict:
         """One poll round for each submitted operation.
@@ -1015,6 +1035,54 @@ class FlowClient:
         if urls.image:
             data["image"] = {"fifeUrl": urls.image}
         return {"status": 200, "data": data}
+
+    async def resolve_media_url(self, media_id: str) -> dict:
+        """Resolve a signed Flow media URL without downloading the media body."""
+        if USE_BATCH_RPC:
+            result = await self.get_media(media_id)
+            data = result.get("data") if isinstance(result.get("data"), dict) else {}
+            video = data.get("video") if isinstance(data, dict) else None
+            candidate = video.get("fifeUrl") if isinstance(video, dict) else None
+            return {
+                "status": result.get("status", 200),
+                "data": {
+                    "url": candidate,
+                    "contentType": "video/mp4" if candidate else None,
+                },
+                "error": result.get("error"),
+            }
+
+        url = (
+            "https://labs.google/fx/api/trpc/media.getMediaUrlRedirect"
+            f"?name={quote(media_id, safe='')}"
+        )
+        return await self._send(
+            "trpc_request",
+            {
+                "url": url,
+                "method": "GET",
+                "headers": {"content-type": "application/json"},
+                "responseMode": "url",
+            },
+            timeout=15,
+        )
+
+    async def get_project_initial_data(self, project_id: str) -> dict:
+        """Fetch the authenticated legacy Flow project snapshot used for polling."""
+        query = quote(
+            json.dumps({"json": {"projectId": project_id}}, separators=(",", ":")),
+            safe="",
+        )
+        url = f"https://labs.google/fx/api/trpc/flow.projectInitialData?input={query}"
+        return await self._send(
+            "trpc_request",
+            {
+                "url": url,
+                "method": "GET",
+                "headers": {"content-type": "application/json"},
+            },
+            timeout=15,
+        )
 
     async def upload_image(self, image_base64: str, mime_type: str = "image/jpeg",
                             project_id: str = "", file_name: str = "image.jpg") -> dict:

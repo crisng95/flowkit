@@ -342,55 +342,35 @@ def _project_response(generation_status="MEDIA_GENERATION_STATUS_PENDING", inclu
 
 
 @pytest.mark.asyncio
-async def test_project_poll_fetch_matches_live_flow_trpc_contract():
+async def test_project_poll_fetch_uses_public_flow_client_surface():
     client = MagicMock()
-    client._send = AsyncMock(return_value={"status": 200, "data": {}})
+    client.get_project_initial_data = AsyncMock(return_value={"status": 200, "data": {}})
 
     await _fetch_project_initial_data(client, "project-1")
 
-    client._send.assert_awaited_once_with(
-        "trpc_request",
-        {
-            "url": (
-                "https://labs.google/fx/api/trpc/flow.projectInitialData?input="
-                "%7B%22json%22%3A%7B%22projectId%22%3A%22project-1%22%7D%7D"
-            ),
-            "method": "GET",
-            "headers": {"content-type": "application/json"},
-        },
-        timeout=15,
-    )
+    client.get_project_initial_data.assert_awaited_once_with("project-1")
 
 
 @pytest.mark.asyncio
-async def test_media_redirect_fetch_requests_url_only_mode():
+async def test_media_redirect_fetch_uses_public_flow_client_surface():
     client = MagicMock()
-    client._send = AsyncMock(return_value={"status": 200, "data": {}})
+    client.resolve_media_url = AsyncMock(return_value={"status": 200, "data": {}})
 
     await _fetch_media_url(client, "media-1")
 
-    client._send.assert_awaited_once_with(
-        "trpc_request",
-        {
-            "url": (
-                "https://labs.google/fx/api/trpc/media.getMediaUrlRedirect"
-                "?name=media-1"
-            ),
-            "method": "GET",
-            "headers": {"content-type": "application/json"},
-            "responseMode": "url",
-        },
-        timeout=15,
-    )
+    client.resolve_media_url.assert_awaited_once_with("media-1")
 
 
 @pytest.mark.asyncio
 async def test_batch_omni_poll_uses_as29s_media(monkeypatch):
     monkeypatch.setattr(omni_flash, "USE_BATCH_RPC", True)
     client = MagicMock()
-    client.get_media = AsyncMock(return_value={
+    client.resolve_media_url = AsyncMock(return_value={
         "status": 200,
-        "data": {"video": {"fifeUrl": "https://flow-content.google/video/media-1?Signature=test"}},
+        "data": {
+            "url": "https://flow-content.google/video/media-1?Signature=test",
+            "contentType": "video/mp4",
+        },
     })
     with patch("agent.services.omni_flash.get_flow_client", return_value=client):
         result = await check_omni_flash_status([{
@@ -398,14 +378,15 @@ async def test_batch_omni_poll_uses_as29s_media(monkeypatch):
         }])
     assert result["done"] is True
     assert result["workflows"][0]["media"]["resolved_via"] == "as29s"
-    client.get_media.assert_awaited_once_with("media-1")
+    client.resolve_media_url.assert_awaited_once_with("media-1")
 
 
 @pytest.mark.asyncio
 async def test_omni_poll_pending_uses_project_snapshot_not_legacy_transports():
     client = MagicMock()
-    client._send = AsyncMock(return_value=_project_response())
-    client.get_media = AsyncMock(side_effect=AssertionError("legacy get_media forbidden"))
+    client.get_project_initial_data = AsyncMock(return_value=_project_response())
+    client.resolve_media_url = AsyncMock(side_effect=AssertionError("URL lookup should wait for success"))
+    client.get_media = AsyncMock(side_effect=AssertionError("direct media lookup forbidden"))
     client.check_video_status = AsyncMock(side_effect=AssertionError("operation poll forbidden"))
 
     with patch("agent.services.omni_flash.get_flow_client", return_value=client):
@@ -419,9 +400,10 @@ async def test_omni_poll_pending_uses_project_snapshot_not_legacy_transports():
             ]
         )
 
+    client.get_project_initial_data.assert_awaited_once_with("project-1")
+    client.resolve_media_url.assert_not_awaited()
     client.get_media.assert_not_awaited()
     client.check_video_status.assert_not_awaited()
-    client._send.assert_awaited_once()
     assert result["done"] is False
     assert result["status"] == "PENDING"
     assert result["workflows"][0]["status"] == "PENDING"
@@ -430,17 +412,15 @@ async def test_omni_poll_pending_uses_project_snapshot_not_legacy_transports():
 @pytest.mark.asyncio
 async def test_omni_poll_completed_returns_signed_url_without_buffering_video():
     client = MagicMock()
-    client._send = AsyncMock(
-        side_effect=[
-            _project_response("MEDIA_GENERATION_STATUS_SUCCESSFUL"),
-            {
-                "status": 200,
-                "data": {
-                    "url": "https://flow-content.google/video/media-1?Signature=test"
-                },
-            },
-        ]
+    client.get_project_initial_data = AsyncMock(
+        return_value=_project_response("MEDIA_GENERATION_STATUS_SUCCESSFUL")
     )
+    client.resolve_media_url = AsyncMock(return_value={
+        "status": 200,
+        "data": {
+            "url": "https://flow-content.google/video/media-1?Signature=test"
+        },
+    })
 
     with patch("agent.services.omni_flash.get_flow_client", return_value=client):
         result = await check_omni_flash_status(
@@ -456,12 +436,17 @@ async def test_omni_poll_completed_returns_signed_url_without_buffering_video():
     assert item["media"]["url"].startswith("https://flow-content.google/video/")
     assert item["media"]["encoded_video_available"] is False
     assert "encoded_video" not in item["media"]
+    client.get_project_initial_data.assert_awaited_once_with("project-1")
+    client.resolve_media_url.assert_awaited_once_with("media-1")
 
 
 @pytest.mark.asyncio
 async def test_omni_poll_missing_media_is_pending():
     client = MagicMock()
-    client._send = AsyncMock(return_value=_project_response(include_media=False))
+    client.get_project_initial_data = AsyncMock(
+        return_value=_project_response(include_media=False)
+    )
+    client.resolve_media_url = AsyncMock(side_effect=AssertionError("missing media must stay pending"))
 
     with patch("agent.services.omni_flash.get_flow_client", return_value=client):
         result = await check_omni_flash_status(
@@ -471,6 +456,8 @@ async def test_omni_poll_missing_media_is_pending():
 
     assert result["done"] is False
     assert result["workflows"][0]["status"] == "PENDING"
+    client.get_project_initial_data.assert_awaited_once_with("project-1")
+    client.resolve_media_url.assert_not_awaited()
 
 
 @pytest.mark.asyncio

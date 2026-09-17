@@ -169,6 +169,19 @@ class TestVideoRequest:
         assert len(request[4]) == 6
         assert payload[1][5] == self.PID
         assert payload[2][1] == 1
+    def test_upscale_matches_the_captured_1080p_slots(self):
+        payload = inner(fb.upscale_request(
+            "media-1", self.PID,
+            aspect="VIDEO_ASPECT_RATIO_LANDSCAPE",
+            model="veo_3_1_upsampler_1080p",
+        ))
+        item = payload[0][0]
+        assert len(item) == 32
+        assert item[0] == [None, "media-1"]
+        assert item[2] == 1
+        assert item[6] == fb.VIDEO_ASPECT_LANDSCAPE
+        assert item[31] == "veo_3_1_upsampler_1080p"
+        assert payload[1][5] == self.PID
         assert fb.CAPTCHA_SLOT in json.dumps(payload)
 
 
@@ -198,6 +211,8 @@ class TestReaders:
         assert fb.read_upscaled_image([["media"], "A" * 200]) == "A" * 200
         with pytest.raises(fb.FlowBatchError):
             fb.read_upscaled_image([["media"], "short"])
+    def test_upscale_submit_reads_the_new_media_id(self):
+        assert fb.read_upscaled_media_id([[self.MID + "_upsampled"]]) == self.MID + "_upsampled"
 
     def test_operation_reads_the_id_and_status(self):
         op = fb.read_operation([None, 50, [[self.OP, "proj", "scene", "CAE"]]])
