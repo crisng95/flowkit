@@ -6,7 +6,7 @@ __pycache__/
 *.db-journal
 .env
 output/
-youtube
+youtube/channels/
 agent/active_project.json
 
 # Generated AI tool configs (run: python setup.py)

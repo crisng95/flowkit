@@ -326,9 +326,9 @@ async def get_output_dir(pid: str):
     }
     meta_path = output_dir / "meta.json"
     if meta_path.exists():
-        existing = json.loads(meta_path.read_text())
+        existing = json.loads(meta_path.read_text(encoding="utf-8"))
         meta["created_at"] = existing.get("created_at", now)
-    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return {"slug": slug, "path": f"output/{slug}", "meta": meta}
 

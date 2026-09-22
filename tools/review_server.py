@@ -80,7 +80,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
         if path == "/api/feedback":
             data = {}
             if FEEDBACK_FILE.exists():
-                data = json.loads(FEEDBACK_FILE.read_text())
+                data = json.loads(FEEDBACK_FILE.read_text(encoding="utf-8"))
             self._json_response(data)
             return
 
@@ -120,7 +120,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(length)
             try:
                 data = json.loads(body)
-                FEEDBACK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+                FEEDBACK_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
                 self._json_response({"ok": True, "saved": str(FEEDBACK_FILE)})
             except Exception as e:
                 self.send_error(400, str(e))

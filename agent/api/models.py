@@ -14,12 +14,12 @@ _MODELS_FILE = Path(__file__).parent.parent / "models.json"
 
 
 def _read_models() -> dict:
-    with open(_MODELS_FILE) as f:
+    with open(_MODELS_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 
 def _write_models(data: dict):
-    with open(_MODELS_FILE, "w") as f:
+    with open(_MODELS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
 

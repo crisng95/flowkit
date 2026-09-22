@@ -242,7 +242,7 @@ async def _process_one(req: dict, deferred: dict = None, retry_after: dict = Non
             char = await crud.get_character(req.get("character_id"))
             if char:
                 skip_kwargs["media_id"] = char.get("media_id")
-                skip_kwargs["output_url"] = char.get("image_url")
+                skip_kwargs["output_url"] = char.get("reference_image_url") or char.get("image_url")
         else:
             scene = await crud.get_scene(req.get("scene_id"))
             if scene:
@@ -508,16 +508,24 @@ async def _mark_scene_failed(req: dict):
 
 
 async def _is_already_completed(req: dict, orientation: str) -> bool:
-    scene_id = req.get("scene_id")
     req_type = req.get("type", "")
-    if not scene_id or req_type == "GENERATE_CHARACTER_IMAGE":
+    if req_type in ("EDIT_IMAGE", "REGENERATE_IMAGE", "REGENERATE_VIDEO", "REGENERATE_CHARACTER_IMAGE", "EDIT_CHARACTER_IMAGE"):
+        return False  # Always run — explicitly requesting new generation
+
+    if req_type == "GENERATE_CHARACTER_IMAGE":
+        char_id = req.get("character_id")
+        if not char_id:
+            return False
+        char = await crud.get_character(char_id)
+        return bool(char and char.get("media_id"))
+
+    scene_id = req.get("scene_id")
+    if not scene_id:
         return False
     scene = await crud.get_scene(scene_id)
     if not scene:
         return False
     prefix = "vertical" if orientation == "VERTICAL" else "horizontal"
-    if req_type in ("EDIT_IMAGE", "REGENERATE_IMAGE", "REGENERATE_VIDEO", "REGENERATE_CHARACTER_IMAGE", "EDIT_CHARACTER_IMAGE"):
-        return False  # Always run — explicitly requesting new generation
     if req_type == "GENERATE_IMAGE":
         return scene.get(f"{prefix}_image_status") == "COMPLETED"
     if req_type in ("GENERATE_VIDEO", "GENERATE_VIDEO_REFS"):

@@ -298,9 +298,13 @@ function keepAlive() {
 function sendToAgent(msg) {
   // API responses (with msg.id) go via HTTP — immune to WS disconnect
   if (msg.id) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (callbackSecret) {
+      headers['X-Callback-Secret'] = callbackSecret;
+    }
     fetch('http://127.0.0.1:8100/api/ext/callback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(msg),
     }).catch(() => {
       // HTTP failed — fallback to WS

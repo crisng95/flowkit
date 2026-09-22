@@ -36,13 +36,13 @@ _PROVIDERS_FILE = Path(__file__).parent.parent / "providers.json"
 
 
 def _read() -> dict:
-    """Read providers.json and hot-reload it into `config.CLI_PROVIDERS`.
+    """Read providers.json from disk and refresh config.CLI_PROVIDERS in place.
 
     The file is the source of truth, and it is editable by hand (the skills
     do), so re-reading it here is what makes a hand edit take effect without a
     restart — and what stops a GET describing a state the worker is not in.
     """
-    with open(_PROVIDERS_FILE) as f:
+    with open(_PROVIDERS_FILE, encoding="utf-8") as f:
         data = json.load(f)
     data.setdefault("active", "claude")
     data.setdefault("roles", {})
@@ -63,7 +63,7 @@ def _write(data: dict):
     """
     tmp = _PROVIDERS_FILE.with_suffix(".json.tmp")
     try:
-        with open(tmp, "w") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
             f.flush()

@@ -415,7 +415,7 @@ class TestAnalyzeCliPromptBranching:
         assert "BASE_PROMPT" in captured["prompt"]
         # The sheets live outside the server cwd, so the directory holding them
         # is named to the CLI rather than left to be discovered.
-        assert captured["add_dirs"] == ("/tmp",)
+        assert captured["add_dirs"] == (str(contact_sheets[0].parent),)
         assert result == {"dimensions": {}, "errors": [], "usable_segments": []}
 
     @pytest.mark.asyncio
@@ -473,7 +473,7 @@ class TestAnalyzeCliPromptBranching:
                    new=AsyncMock(side_effect=capture_runner(captured))):
             await _analyze_cli(contact_sheets, 9, 4.0, {}, timestamped=True)
 
-        assert captured["prompt"].startswith("Read the image at /tmp/sheet_00.jpg.")
+        assert captured["prompt"].startswith(f"Read the image at {contact_sheets[0]}.")
         assert "Read the images at:" not in captured["prompt"]
         assert "sequential contact sheets" not in captured["prompt"]
         assert "It is a contact sheet of 9 video frames at 4.0fps with timestamps." in captured["prompt"]
