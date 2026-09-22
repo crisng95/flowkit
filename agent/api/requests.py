@@ -36,13 +36,14 @@ async def create(body: RequestCreate):
     data = body.model_dump(exclude_none=True)
     data["req_type"] = data.pop("type")
 
-    # Reject if there's already an active request for the same scene + type
     scene_id = data.get("scene_id")
     req_type = data.get("req_type")
+    orient = data.get("orientation")
     if scene_id and req_type:
         existing = await crud.list_requests(scene_id=scene_id)
         active = [r for r in existing
                   if r.get("type") == req_type
+                  and (not orient or r.get("orientation") == orient)
                   and r.get("status") in ("PENDING", "PROCESSING")]
         if active:
             raise HTTPException(
@@ -79,11 +80,13 @@ async def create_batch(body: BatchRequestCreate):
         scene_id = data.get("scene_id")
         character_id = data.get("character_id")
         req_type = data.get("req_type")
+        orient = data.get("orientation")
         # Idempotent: skip if active request already exists
         if scene_id and req_type:
             existing = await crud.list_requests(scene_id=scene_id)
             active = [r for r in existing
                       if r.get("type") == req_type
+                      and (not orient or r.get("orientation") == orient)
                       and r.get("status") in ("PENDING", "PROCESSING")]
             if active:
                 results.append(active[0])

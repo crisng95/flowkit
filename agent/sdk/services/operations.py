@@ -209,9 +209,8 @@ async def _poll_workflows(
             for op in operations:
                 mid = op.get("_primary_media_id", "")
                 wf_name = op.get("operation", {}).get("name", "")
-                local = completed.get(mid, {}).get("path", "")
-                # Use file:// so downstream sees a URL-shaped string
-                local_url = f"file://{_os.path.abspath(local)}" if local else ""
+                from pathlib import Path as _Path
+                local_url = _Path(local).resolve().as_uri() if local else ""
                 synth_ops.append({
                     "operation": {
                         "name": wf_name,
