@@ -1,9 +1,24 @@
-"""Post-processing: trim, merge, add music via ffmpeg."""
+import os
+import shutil
 import subprocess
 import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _ffmpeg_bin() -> str:
+    env_bin = os.environ.get("FFMPEG_BIN")
+    if env_bin:
+        return env_bin
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
 
 _FLOAT_MIN = 0.0
 _FLOAT_MAX = 2.0
@@ -24,7 +39,7 @@ def trim_video(input_path: str, output_path: str, start: float, end: float) -> b
         return False
     duration = end - start
     cmd = [
-        "ffmpeg", "-y", "-i", input_path,
+        _ffmpeg_bin(), "-y", "-i", input_path,
         "-ss", str(start), "-t", str(duration),
         "-c:v", "libx264", "-preset", "fast", "-crf", "18",
         "-force_key_frames", "expr:gte(t,0)",
@@ -43,14 +58,14 @@ def merge_videos(video_paths: list[str], output_path: str) -> bool:
     """Concatenate videos using ffmpeg concat demuxer."""
     concat_file = output_path + ".concat.txt"
     try:
-        with open(concat_file, "w") as f:
+        with open(concat_file, "w", encoding="utf-8") as f:
             for p in video_paths:
-                # Escape single quotes to prevent path injection in concat file
-                escaped = str(p).replace("'", "'\\''")
+                # Escape single quotes and use POSIX forward slashes for ffmpeg concat demuxer
+                escaped = Path(p).as_posix().replace("'", "'\\''")
                 f.write(f"file '{escaped}'\n")
 
         cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            _ffmpeg_bin(), "-y", "-f", "concat", "-safe", "0",
             "-i", concat_file,
             "-c:v", "copy", "-c:a", "copy",
             "-movflags", "+faststart",
@@ -94,7 +109,7 @@ def add_narration(video_path: str, narration_path: str, output_path: str,
     fade_start = max(0, duration - fade_out)
 
     cmd = [
-        "ffmpeg", "-y", "-i", video_path, "-i", narration_path,
+        _ffmpeg_bin(), "-y", "-i", video_path, "-i", narration_path,
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
         "-filter_complex",
         f"[0:a]volume={sfx_volume}[sfx];[1:a]volume={narration_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_start}:d={fade_out}[narr];[sfx][narr]amerge=inputs=2,pan=stereo|c0=c0+c2|c1=c1+c3[aout]",
@@ -137,7 +152,7 @@ def add_music(video_path: str, music_path: str, output_path: str,
     fade_start = max(0, duration - fade_out)
 
     cmd = [
-        "ffmpeg", "-y", "-i", video_path, "-i", music_path,
+        _ffmpeg_bin(), "-y", "-i", video_path, "-i", music_path,
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
         "-filter_complex",
         f"[0:a]volume=1.0[orig];[1:a]volume={music_volume},afade=t=in:st=0:d={fade_in},afade=t=out:st={fade_start}:d={fade_out}[music];[orig][music]amerge=inputs=2,pan=stereo|c0=c0+c2|c1=c1+c3[aout]",

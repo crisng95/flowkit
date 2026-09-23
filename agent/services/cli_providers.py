@@ -244,7 +244,7 @@ def _list_codex_models() -> list[dict]:
     """
     if not _CODEX_MODELS_CACHE.exists():
         return []
-    with open(_CODEX_MODELS_CACHE) as f:
+    with open(_CODEX_MODELS_CACHE, encoding="utf-8") as f:
         data = json.load(f)
     models = []
     for entry in data.get("models") or []:

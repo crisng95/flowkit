@@ -18,7 +18,7 @@ _STATE_FILE = Path(__file__).parent.parent / "active_project.json"
 def _read_state() -> dict | None:
     if _STATE_FILE.exists():
         try:
-            with open(_STATE_FILE) as f:
+            with open(_STATE_FILE, encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Corrupt active_project.json, clearing: %s", e)
@@ -28,10 +28,10 @@ def _read_state() -> dict | None:
 
 def _write_state(data: dict):
     """Atomic write — temp file + os.replace to avoid partial reads."""
-    content = json.dumps(data, indent=2) + "\n"
+    content = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
     fd, tmp = tempfile.mkstemp(dir=_STATE_FILE.parent, suffix=".tmp")
     try:
-        os.write(fd, content.encode())
+        os.write(fd, content.encode("utf-8"))
         os.close(fd)
         os.replace(tmp, _STATE_FILE)
     except BaseException:

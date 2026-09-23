@@ -1,7 +1,7 @@
 """Direct Flow API endpoints — for manual operations outside the queue."""
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from agent.config import (
     FLOW_PROJECT_ID, FLOW_ALLOW_DEGRADED,
@@ -19,6 +19,12 @@ from agent.services.omni_flash import (
 )
 
 router = APIRouter(prefix="/flow", tags=["flow"])
+
+
+def _safe_status_code(status: Any, default: int = 502) -> int:
+    if isinstance(status, int) and 400 <= status <= 599:
+        return status
+    return default
 
 
 class GenerateImageRequest(BaseModel):
@@ -194,7 +200,7 @@ async def generate_image(body: GenerateImageRequest):
     data["character_media_ids"] = refs or None
     result = await client.generate_images(**data)
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -244,7 +250,7 @@ async def generate_video(body: GenerateVideoRequest):
         result = await client.generate_video(**payload)
 
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -282,7 +288,7 @@ async def generate_video_refs(body: GenerateVideoRefsRequest):
         result = await client.generate_video_from_references(**payload)
 
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -306,7 +312,7 @@ async def generate_video_omni_text(body: GenerateOmniFlashTextVideoRequest):
         isinstance(result.get("status"), int) and result["status"] >= 400
     ):
         raise HTTPException(
-            result.get("status", 502),
+            _safe_status_code(result.get("status")),
             result.get("error", result.get("data")),
         )
     return result.get("data", result)
@@ -330,7 +336,7 @@ async def generate_video_omni(body: GenerateOmniFlashVideoRequest):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -342,7 +348,7 @@ async def upscale_video(body: UpscaleVideoRequest):
         raise HTTPException(503, "Extension not connected")
     result = await client.upscale_video(**body.model_dump())
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -376,7 +382,7 @@ async def check_status(body: CheckStatusRequest):
     if result.get("error"):
         raise HTTPException(502, result["error"])
     if isinstance(result.get("status"), int) and result["status"] >= 400:
-        raise HTTPException(result["status"], result.get("data", "Flow polling failed"))
+        raise HTTPException(_safe_status_code(result["status"]), result.get("data", "Flow polling failed"))
     return result.get("data", result)
 
 
@@ -425,7 +431,7 @@ async def get_media(media_id: str):
         raise HTTPException(502, result["error"])
     status = result.get("status", 200)
     if isinstance(status, int) and status >= 400:
-        raise HTTPException(status, result.get("data", "Media not found"))
+        raise HTTPException(_safe_status_code(status, 404), result.get("data", "Media not found"))
     return result.get("data", result)
 
 
@@ -447,7 +453,7 @@ async def edit_image(body: EditImageRequest):
         seed=body.seed,
     )
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     return result.get("data", result)
 
 
@@ -467,7 +473,7 @@ async def export_image(body: UpscaleImageRequest):
         resolution=body.quality.upper(),
     )
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     data = result.get("data", result)
     try:
         content = base64.b64decode(data["encodedImage"], validate=True)
@@ -501,6 +507,6 @@ async def upload_image(body: UploadImageRequest):
     mime = mimetypes.guess_type(body.file_path)[0] or "image/png"
     result = await client.upload_image(b64, mime_type=mime, project_id=project_id, file_name=body.file_name)
     if result.get("error") or (isinstance(result.get("status"), int) and result["status"] >= 400):
-        raise HTTPException(result.get("status", 502), result.get("error", result.get("data")))
+        raise HTTPException(_safe_status_code(result.get("status")), result.get("error", result.get("data")))
     media_id = result.get("_mediaId")
     return {"media_id": media_id, "raw": result.get("data", result)}

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -11,8 +12,9 @@ from agent.config import TTS_MODEL, TTS_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
-# Default to python3.10 (has torch/torchaudio/omnivoice); override with TTS_PYTHON_BIN if needed
-PYTHON_BIN = os.environ.get("TTS_PYTHON_BIN", "python3.10")
+# Default to python3.10 on POSIX or sys.executable on Windows; override with TTS_PYTHON_BIN if needed
+_DEFAULT_PYTHON = sys.executable if sys.platform == "win32" else "python3.10"
+PYTHON_BIN = os.environ.get("TTS_PYTHON_BIN", _DEFAULT_PYTHON)
 
 # Inline script template for TTS generation via subprocess
 _TTS_SCRIPT = """

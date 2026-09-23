@@ -63,7 +63,7 @@ STALE_PROCESSING_TIMEOUT = int(os.environ.get("STALE_PROCESSING_TIMEOUT", "600")
 
 # ─── Model Keys (loaded from models.json for easy updates) ──
 _MODELS_FILE = Path(__file__).parent / "models.json"
-with open(_MODELS_FILE) as _f:
+with open(_MODELS_FILE, encoding="utf-8") as _f:
     _MODELS = json.load(_f)
 
 VIDEO_MODELS = _MODELS["video_models"]
@@ -96,7 +96,7 @@ REVIEW_SHEET_ROWS = int(os.environ.get("REVIEW_SHEET_ROWS", "3"))
 
 # ─── CLI Providers (video review vision analysis) ────────────
 _PROVIDERS_FILE = Path(__file__).parent / "providers.json"
-with open(_PROVIDERS_FILE) as _pvf:
+with open(_PROVIDERS_FILE, encoding="utf-8") as _pvf:
     CLI_PROVIDERS = json.load(_pvf)  # mutable dict, hot-reloaded like VIDEO_MODELS
 REVIEW_CLI_TIMEOUT_S = float(os.environ.get("REVIEW_CLI_TIMEOUT_S", "120"))
 
@@ -110,7 +110,7 @@ def _load_suno_key() -> str:
     if channels_dir.exists():
         for rules_file in channels_dir.glob("*/channel_rules.json"):
             try:
-                rules = json.loads(rules_file.read_text())
+                rules = json.loads(rules_file.read_text(encoding="utf-8"))
                 key = rules.get("api_keys", {}).get("suno", "")
                 if key:
                     return key
