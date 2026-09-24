@@ -239,6 +239,21 @@ native 2K image export. Exact future Flow image model wire ids pass through
 without being silently replaced by the default model. See
 [`docs/IMAGE_API.md`](docs/IMAGE_API.md).
 
+### Upload images from API callers
+
+External callers should upload bytes instead of passing caller-local filesystem paths. The recommended direct-file endpoint is multipart:
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/flow/upload-image-file \
+  -F 'file=@./source.jpg;type=image/jpeg'
+```
+
+JSON-only clients can use `POST /api/flow/upload-image` with `image_base64`. Base64 costs roughly 33% more request bytes than multipart, but avoids filesystem visibility problems.
+
+`file_path` remains a server-local convenience mode only. The path is opened by the FlowKit service user, so it must be readable and visible inside that service's namespace. In systemd deployments with `PrivateTmp=yes`, a caller's `/tmp/...` is not the same `/tmp` seen by FlowKit. Permission failures return 403; paths invisible in the service namespace return a descriptive 404.
+
+When `project_id` is omitted on the maintained session-project path, the upload uses/creates the current Flow session project.
+
 ### What does not work on the new API yet
 
 Three capabilities have no captured payload, so they fail with
