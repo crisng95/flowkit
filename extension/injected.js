@@ -36,6 +36,85 @@ window.fetch = async function (...args) {
 
 let captchaMintTail = Promise.resolve();
 
+// ─── reCAPTCHA mint (ported from FlowBridge2 — live-verified on the 2026-09-22 build) ───
+// Flow's current build rejects a token obtained by calling
+// `grecaptcha.enterprise.execute(SITE_KEY, {action})` directly with
+// PUBLIC_ERROR_UNUSUAL_ACTIVITY ("reCAPTCHA evaluation failed"), even though the
+// site key and action match the UI byte for byte, while the same account's UI
+// still generates. The working recipe is the one the page itself uses: ready() →
+// render an invisible widget bound to the page's own site key → execute(widgetId).
+// Prefer the site key the page is currently configured with; the constant is only
+// a fallback for a page that has not configured one yet.
+function resolveSitekey() {
+  try {
+    const cfg = window.___grecaptcha_cfg || {};
+    const clients = cfg.clients || {};
+    for (const k of Object.keys(clients)) {
+      const c = clients[k];
+      if (c && c.sitekey) return c.sitekey;
+    }
+  } catch (e) { /* fall through to the constant */ }
+  return SITE_KEY;
+}
+
+function waitReady(timeout = 5000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; resolve(); } };
+    try { window.grecaptcha?.enterprise?.ready?.(fin); } catch (e) { /* ignore */ }
+    setTimeout(fin, timeout);
+  });
+}
+
+let _widgetPromise = null;
+function ensureWidget(sitekey) {
+  if (_widgetPromise) return _widgetPromise;
+  _widgetPromise = (async () => {
+    await waitReady(5000);
+    let host = document.getElementById('flowkit-recaptcha-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'flowkit-recaptcha-host';
+      host.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;';
+      document.documentElement.appendChild(host);
+    }
+    return await new Promise((resolve, reject) => {
+      try {
+        const widgetId = window.grecaptcha.enterprise.render(host, {
+          sitekey,
+          size: 'invisible',
+          callback: () => {},
+          'error-callback': (m) => reject(new Error('render_error: ' + m)),
+        });
+        resolve(widgetId);
+      } catch (e) {
+        reject(new Error('render_threw: ' + (e && e.message || e)));
+      }
+    });
+  })().catch((e) => { _widgetPromise = null; throw e; });
+  return _widgetPromise;
+}
+
+async function executeWithRetry(sitekey, action, attempts = 2) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await waitReady(2500);
+      const widgetId = await ensureWidget(sitekey);
+      const token = await Promise.race([
+        window.grecaptcha.enterprise.execute(widgetId, { action }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('execute_hang')), 8000)),
+      ]);
+      if (token) return String(token);
+      lastErr = new Error('empty_token');
+    } catch (e) {
+      lastErr = e;
+    }
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  throw lastErr || new Error('execute_failed');
+}
+
 async function mintCaptcha(pageAction) {
   const previous = captchaMintTail.catch(() => {});
   let release;
@@ -43,9 +122,7 @@ async function mintCaptcha(pageAction) {
   await previous;
   try {
     await waitForGrecaptcha();
-    return await window.grecaptcha.enterprise.execute(SITE_KEY, {
-      action: pageAction,
-    });
+    return await executeWithRetry(resolveSitekey(), pageAction);
   } finally {
     release();
   }
