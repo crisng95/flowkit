@@ -359,3 +359,30 @@ Frozen SHA remains:
 - 1ff9383d713dfaab309d3f36cc83cf05e8932c1bc07f68682e2e12a488c77287
 
 NEXT_EXACT_ACTION = "COMMIT → PUSH → PR → UBUNTU CI → REVIEW → MERGE → MAIN VERIFIED"
+
+---
+
+## IMP-001 MAIN VERIFIED - 2026-09-25
+
+IMP-001 = MAIN VERIFIED
+
+Verified writable main:
+- repo = nguyenkhactang922-bot/flowkit
+- main SHA = bca229eee5a159a59cc880f48a0d62f1ac78fcc5
+- fork-main push CI = SUCCESS
+- Windows frozen baseline guard = PASS
+
+Portability repair:
+- first merge exposed core.autocrlf CRLF representation mismatch during real main verification.
+- repair commit f5d6ee1116a6485eacc0754b47abd2cdacf40d52 accepts only CRLF->LF normalization while preserving exact frozen semantic byte hash.
+- PR #2 CI: Python 3.10 + 3.13 PASS.
+- final main push run 36112979014: PASS.
+
+Evidence:
+- evidence/tests/IMP-001_MAIN_VERIFICATION_EVIDENCE.md
+
+Upstream:
+- crisng95/flowkit#65 remains pending maintainer/admin workflow approval.
+- upstream main is NOT claimed verified.
+
+NEXT_EXACT_ACTION = "CLAIM IMP-002 CANONICAL CONTRACT PRIMITIVES"
