@@ -555,10 +555,32 @@ class FlowClient:
 
             result = await self._send("batch_rpc", params, timeout=timeout)
             blob = f"{result.get('error', '')} {result.get('data', '')}"
-            if (
+            is_hijack = "extension_hijack" in blob.lower()
+            is_unusual = (
                 "PUBLIC_ERROR_UNUSUAL_ACTIVITY" in blob
                 or "unusual activity" in blob.lower()
-            ):
+            )
+            if is_hijack:
+                # x2a trap: the token was poisoned with action
+                # "extension_hijack_detected". This is a system-level trap,
+                # NOT an account issue — don't apply the long cooldown.
+                # Short pause lets the bypass re-initialise on next tab.
+                self._generation_unusual_until = max(
+                    self._generation_unusual_until,
+                    time.monotonic() + 30.0,
+                )
+                self._generation_last_unusual_at = time.time()
+                self._generation_last_unusual_rpc = rpcid
+                logger.error(
+                    "[HIJACK] extension_hijack_detected — captcha bypass may "
+                    "have failed; pausing generation submits for 30s"
+                )
+                # Tag the result so processor can distinguish it
+                if isinstance(result.get("error"), str):
+                    result["error"] = f"[HIJACK] {result['error']}"
+                else:
+                    result["error"] = "[HIJACK] extension_hijack_detected"
+            elif is_unusual:
                 self._generation_unusual_until = max(
                     self._generation_unusual_until,
                     time.monotonic() + FLOW_UNUSUAL_ACTIVITY_COOLDOWN_S,

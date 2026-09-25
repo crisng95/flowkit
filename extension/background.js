@@ -554,9 +554,17 @@ async function handleBatchRpc(msg) {
   // Polls and listing lookups run constantly; only the generates are worth
   // a row in the log the popup shows.
   const visible = hasCaptcha;
+  const _RPC_LABELS = {
+    ogiZ0b: 'Gen Image', eb1hJf: 'Gen Video', YhhmEf: 'Gen Video (text)',
+    nprQif: 'Gen Video (chain)', MZZa6b: 'Gen Video (refs)',
+    maseQ: 'Upload Image', SPrCad: 'Upscale Image',
+    jHPbke: 'Create Project', jwpduf: 'Poll Operation',
+    Zzl0ze: 'Project Media', as29s: 'Get Media',
+  };
+  const logType = _RPC_LABELS[rpcid] || `RPC:${rpcid}`;
   if (visible) {
     addRequestLog({
-      id, type: `RPC:${rpcid}`, time: new Date().toISOString(),
+      id, type: logType, time: new Date().toISOString(),
       status: 'processing', error: null, outputUrl: null, url: rpcid,
       payloadSummary: freq.slice(0, 200),
     });
