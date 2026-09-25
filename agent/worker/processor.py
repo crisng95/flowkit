@@ -444,6 +444,19 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
 
     error_lower = str(error_msg).lower()
 
+    # [HIJACK] extension_hijack_detected — the captcha bypass failed and the
+    # token was poisoned by x2a. This is a system-level trap, NOT an account
+    # issue. Don't burn retry count — the bypass may succeed on the next
+    # attempt once the tab re-initializes.
+    if "[hijack]" in error_lower or "extension_hijack" in error_lower:
+        await crud.update_request(rid, status="PENDING", error_message=str(error_msg))
+        logger.error(
+            "Request %s [HIJACK] captcha bypass failed — will retry without "
+            "counting (system error, not account error): %s",
+            rid[:8], error_msg,
+        )
+        return
+
     # PUBLIC_ERROR_UNUSUAL_ACTIVITY is a Google anti-abuse/session trust block,
     # not an ordinary CAPTCHA mint failure. Retrying it in the generic CAPTCHA
     # loop only creates more generation submits while Google is asking us to

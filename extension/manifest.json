@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Flow Kit",
-  "version": "0.3.4",
-  "description": "Local agent bridge for Google Flow \u2014 runs batchexecute RPCs inside a signed-in flow.google.com tab, mints reCAPTCHA, proxies API calls",
+  "version": "0.5.2",
+  "description": "Local agent bridge for Google Flow — runs batchexecute RPCs inside a signed-in flow.google.com tab, mints reCAPTCHA with hijack bypass, proxies API calls",
   "permissions": [
     "storage",
     "alarms",
@@ -23,6 +23,21 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://flow.google.com/*",
+        "https://labs.google/fx/tools/flow*",
+        "https://labs.google/fx/*/tools/flow*"
+      ],
+      "js": [
+        "hijack_bypass.js",
+        "recaptcha_enterprise.js",
+        "recaptcha__en.js",
+        "injected.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://flow.google.com/*",
