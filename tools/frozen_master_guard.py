@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed guard for the frozen AI Film Studio Master baseline.
 
-This module intentionally performs read-only verification.  The frozen Master
-is a design authority; implementation code may depend on it but must not
-silently update it.
+The frozen SHA is defined over the canonical Git/text bytes (LF newlines).
+Windows checkouts may materialize the same text as CRLF when core.autocrlf is
+enabled, so verification permits newline normalization only. Any other byte
+change still fails closed.
 """
 
 from __future__ import annotations
@@ -38,14 +39,38 @@ class FrozenBaselineResult:
     master_path: Path
     manifest_path: Path
     sha256: str
+    raw_sha256: str
+    newline_normalized: bool
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _canonical_master_hash(path: Path) -> tuple[str, str, bool]:
+    """Return canonical SHA, raw SHA, and whether CRLF normalization was used.
+
+    The freeze manifest records the Git/text LF byte hash. A Windows checkout
+    may contain CRLF bytes solely because of Git's checkout conversion. The
+    only tolerated transformation is CRLF -> LF; all other content changes
+    remain detectable by the canonical SHA.
+    """
+
+    raw = path.read_bytes()
+    raw_sha = _sha256_bytes(raw)
+    if raw_sha == EXPECTED_MASTER_SHA256:
+        return raw_sha, raw_sha, False
+
+    normalized = raw.replace(b"\r\n", b"\n")
+    normalized_sha = _sha256_bytes(normalized)
+    if normalized_sha != EXPECTED_MASTER_SHA256:
+        raise FrozenBaselineError(
+            "frozen Master SHA-256 mismatch: "
+            f"expected {EXPECTED_MASTER_SHA256}, got raw {raw_sha} "
+            f"and newline-normalized {normalized_sha}"
+        )
+
+    return normalized_sha, raw_sha, True
 
 
 def _require_file(path: Path, label: str) -> None:
@@ -71,12 +96,7 @@ def _manifest_declared_sha(text: str) -> str:
 
 
 def verify_frozen_baseline(repo_root: Path | str) -> FrozenBaselineResult:
-    """Verify the exact frozen Master and freeze-manifest contract.
-
-    The check is deliberately stricter than simply finding the expected hash
-    somewhere in the manifest.  It parses the manifest's declared Path and
-    Frozen SHA-256 fields and requires the frozen verdict.
-    """
+    """Verify the exact frozen Master and freeze-manifest contract."""
 
     root = Path(repo_root).resolve()
     master_path = root / MASTER_RELATIVE_PATH
@@ -85,12 +105,7 @@ def verify_frozen_baseline(repo_root: Path | str) -> FrozenBaselineResult:
     _require_file(master_path, "frozen Master")
     _require_file(manifest_path, "freeze manifest")
 
-    actual_sha = _sha256(master_path)
-    if actual_sha != EXPECTED_MASTER_SHA256:
-        raise FrozenBaselineError(
-            "frozen Master SHA-256 mismatch: "
-            f"expected {EXPECTED_MASTER_SHA256}, got {actual_sha}"
-        )
+    canonical_sha, raw_sha, newline_normalized = _canonical_master_hash(master_path)
 
     try:
         manifest_text = manifest_path.read_text(encoding="utf-8")
@@ -123,7 +138,9 @@ def verify_frozen_baseline(repo_root: Path | str) -> FrozenBaselineResult:
         repo_root=root,
         master_path=master_path,
         manifest_path=manifest_path,
-        sha256=actual_sha,
+        sha256=canonical_sha,
+        raw_sha256=raw_sha,
+        newline_normalized=newline_normalized,
     )
 
 
@@ -156,6 +173,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print("FROZEN_MASTER_GUARD=PASS")
     print(f"MASTER={result.master_path.relative_to(result.repo_root).as_posix()}")
     print(f"SHA256={result.sha256}")
+    if result.newline_normalized:
+        print(f"RAW_SHA256={result.raw_sha256}")
+        print("NEWLINE_NORMALIZED=CRLF_TO_LF")
     return 0
 
 

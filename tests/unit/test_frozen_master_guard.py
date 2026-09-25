@@ -22,7 +22,7 @@ def guard_mod():
 
 @pytest.fixture
 def frozen_copy(guard_mod, tmp_path):
-    """Copy the real frozen authority into an isolated tree for mutation tests."""
+    """Create a canonical-LF isolated copy for mutation tests."""
     master_src = REPO_ROOT / guard_mod.MASTER_RELATIVE_PATH
     manifest_src = REPO_ROOT / guard_mod.MANIFEST_RELATIVE_PATH
 
@@ -30,8 +30,14 @@ def frozen_copy(guard_mod, tmp_path):
     manifest_dst = tmp_path / guard_mod.MANIFEST_RELATIVE_PATH
     master_dst.parent.mkdir(parents=True)
     manifest_dst.parent.mkdir(parents=True, exist_ok=True)
-    master_dst.write_bytes(master_src.read_bytes())
-    manifest_dst.write_bytes(manifest_src.read_bytes())
+
+    canonical_master = master_src.read_bytes().replace(b"\r\n", b"\n")
+    master_dst.write_bytes(canonical_master)
+    manifest_dst.write_text(
+        manifest_src.read_text(encoding="utf-8"),
+        encoding="utf-8",
+        newline="\n",
+    )
     return tmp_path
 
 
@@ -44,6 +50,20 @@ def test_real_repository_frozen_baseline_passes(guard_mod):
 def test_isolated_frozen_copy_passes(guard_mod, frozen_copy):
     result = guard_mod.verify_frozen_baseline(frozen_copy)
     assert result.sha256 == guard_mod.EXPECTED_MASTER_SHA256
+    assert result.raw_sha256 == guard_mod.EXPECTED_MASTER_SHA256
+    assert result.newline_normalized is False
+
+
+def test_crlf_checkout_of_same_master_passes(guard_mod, frozen_copy):
+    master = frozen_copy / guard_mod.MASTER_RELATIVE_PATH
+    lf_bytes = master.read_bytes()
+    master.write_bytes(lf_bytes.replace(b"\n", b"\r\n"))
+
+    result = guard_mod.verify_frozen_baseline(frozen_copy)
+
+    assert result.sha256 == guard_mod.EXPECTED_MASTER_SHA256
+    assert result.raw_sha256 != guard_mod.EXPECTED_MASTER_SHA256
+    assert result.newline_normalized is True
 
 
 def test_missing_master_fails_closed(guard_mod, frozen_copy):
@@ -55,6 +75,13 @@ def test_missing_master_fails_closed(guard_mod, frozen_copy):
 def test_tampered_master_fails_closed(guard_mod, frozen_copy):
     master = frozen_copy / guard_mod.MASTER_RELATIVE_PATH
     master.write_bytes(master.read_bytes() + b"\nTAMPERED\n")
+    with pytest.raises(guard_mod.FrozenBaselineError, match="SHA-256 mismatch"):
+        guard_mod.verify_frozen_baseline(frozen_copy)
+
+
+def test_tampered_crlf_master_still_fails_closed(guard_mod, frozen_copy):
+    master = frozen_copy / guard_mod.MASTER_RELATIVE_PATH
+    master.write_bytes(master.read_bytes().replace(b"\n", b"\r\n") + b"TAMPERED")
     with pytest.raises(guard_mod.FrozenBaselineError, match="SHA-256 mismatch"):
         guard_mod.verify_frozen_baseline(frozen_copy)
 
@@ -112,3 +139,14 @@ def test_cli_exit_codes_are_fail_closed(guard_mod, frozen_copy, capsys):
     assert guard_mod.main(["--repo-root", str(frozen_copy)]) == 1
     out = capsys.readouterr()
     assert "FROZEN_MASTER_GUARD=FAIL" in out.err
+
+
+def test_cli_reports_newline_normalization(guard_mod, frozen_copy, capsys):
+    master = frozen_copy / guard_mod.MASTER_RELATIVE_PATH
+    master.write_bytes(master.read_bytes().replace(b"\n", b"\r\n"))
+
+    assert guard_mod.main(["--repo-root", str(frozen_copy)]) == 0
+    out = capsys.readouterr()
+
+    assert "FROZEN_MASTER_GUARD=PASS" in out.out
+    assert "NEWLINE_NORMALIZED=CRLF_TO_LF" in out.out
