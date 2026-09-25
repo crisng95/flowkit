@@ -1,0 +1,60 @@
+{
+  "profile_id": "local:wan2.2:t2v-a14b:2026-09-20",
+  "profile_version": "2026-09-20.1",
+  "provider": "LOCAL",
+  "provider_surface": "WAN2_2_LOCAL",
+  "region": null,
+  "account_scope": "machine",
+  "model_family": "WAN_2_2",
+  "model_version": "t2v-A14B",
+  "verified_at": "2026-09-20T13:12:00Z",
+  "capabilities": {
+    "t2v": true,
+    "resolutions": [
+      "480P",
+      "720P"
+    ]
+  },
+  "quota": {
+    "kind": "LOCAL_RESOURCE_POOL",
+    "rpm": null,
+    "rps": null,
+    "concurrency": null,
+    "queue_behavior": "local scheduler",
+    "source_scope": "machine hardware"
+  },
+  "task_lifecycle": {
+    "async": false,
+    "handle_kind": "LOCAL_PROCESS_JOB",
+    "handle_retention_seconds": null,
+    "list_supported": true,
+    "cancel_queued": true,
+    "cancel_running": true,
+    "delete_terminal": true
+  },
+  "billing": {
+    "billing_surface": "LOCAL_COMPUTE",
+    "unit_kind": "LOCAL_COMPUTE_ESTIMATE",
+    "currency": null,
+    "unit_price": null,
+    "charge_on_success_only": null,
+    "effective_at": null
+  },
+  "recovery": {
+    "idempotency_mode": "LOCAL_CONTROLLED",
+    "reconcile_methods": [
+      "LOCAL_JOB_STATE",
+      "ARTIFACT_STATE"
+    ],
+    "ambiguous_resubmit_policy": "RECONCILE_FIRST",
+    "reconciliation_deadline_seconds": null
+  },
+  "evidence": [
+    {
+      "grade": "C",
+      "source": "https://github.com/Wan-Video/Wan2.2",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "official open-source implementation"
+    }
+  ]
+}

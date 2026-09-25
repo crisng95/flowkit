@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "studio.evidence-ledger.v1",
+  "type": "object",
+  "required": [
+    "ledger_version",
+    "generated_at",
+    "entries"
+  ],
+  "properties": {
+    "ledger_version": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "gate_id",
+          "evidence_class",
+          "source_file",
+          "sha256",
+          "status",
+          "claims_supported",
+          "limitations"
+        ],
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "gate_id": {
+            "type": "string"
+          },
+          "evidence_class": {
+            "enum": [
+              "RESEARCH",
+              "STATIC_ANALYSIS",
+              "LOCAL_SIMULATION",
+              "HARNESS_VALIDATION",
+              "TARGET_RUNTIME",
+              "LIVE_PROVIDER",
+              "VISUAL_CALIBRATION",
+              "LIVE_GENERATION_BENCHMARK",
+              "LIVE_ACCOUNT_OBSERVATION"
+            ]
+          },
+          "source_file": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "PARTIAL",
+              "FAIL",
+              "READY_ONLY"
+            ]
+          },
+          "claims_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "review_rounds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,247 @@
+{
+  "ledger_version": "1.1.0",
+  "generated_at": "2026-09-21",
+  "entries": [
+    {
+      "evidence_id": "EV-PERSIST-LOCAL-001",
+      "gate_id": "PERSISTENCE_WINDOWS",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/SQLITE_WAL_DESIGN_SPIKE_EVIDENCE.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "SQLite WAL short-transaction design is feasible in sandbox",
+        "optimistic revision detects stale writer",
+        "artifact reconciliation design is implementable"
+      ],
+      "limitations": [
+        "Not target Windows",
+        "Not physical power-loss test"
+      ],
+      "review_rounds": [
+        33,
+        34,
+        35
+      ],
+      "sha256": "3c944b4cec510398bfa279f315dbc8ad43f41d537d2b8db17a4df9155a951e5d",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-PROVIDER-AMB-001",
+      "gate_id": "PROVIDER_AMBIGUITY",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/PROVIDER_AMBIGUITY_PROOF_V0_5.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "No-blind-resubmit state machine avoids duplicate submit in simulator",
+        "FlowKit submit-persist ambiguity identified"
+      ],
+      "limitations": [
+        "No live provider fault injection",
+        "No real billing-side-effect proof"
+      ],
+      "review_rounds": [
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42
+      ],
+      "sha256": "a0256cc5aa06f86a1422c4a8699d3ade519f55152c75ea86cb8460d2bdbe8e60",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-CRED-LOCAL-001",
+      "gate_id": "CREDENTIAL_BROKER_WINDOWS",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/CREDENTIAL_BROKER_PROOF_V0_6.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "Renderer denial/scoped lease design behaves correctly in local simulation",
+        "secret canary absent from simulated durable outputs"
+      ],
+      "limitations": [
+        "Not Electron runtime",
+        "Not Windows DPAPI/safeStorage proof"
+      ],
+      "review_rounds": [
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50
+      ],
+      "sha256": "9a25b4001cf60001920df4dcddd3b7a7df144657a494403c018c01186fc52510",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-QA-POLICY-001",
+      "gate_id": "STATIC_QA_CALIBRATION",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/STATIC_QA_POLICY_SPIKE_EVIDENCE_V0_7.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "Blocking defects must not be averaged away by weighted score"
+      ],
+      "limitations": [
+        "No real images",
+        "No vision-model recall evidence"
+      ],
+      "review_rounds": [
+        51,
+        52
+      ],
+      "sha256": "5fce03380457e3a754a16b378b9569685fcc8d39759c55f30c41347438aa43f1",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-REPAIR-PLAN-001",
+      "gate_id": "TARGETED_REPAIR_LIVE",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/TARGETED_REPAIR_PLANNER_SPIKE_EVIDENCE_V0_7.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "Typed preserve/patch/invalidate planner invariants hold in synthetic cases"
+      ],
+      "limitations": [
+        "No real generative repair evidence",
+        "Synthetic logical cost units"
+      ],
+      "review_rounds": [
+        53,
+        54,
+        55
+      ],
+      "sha256": "25e227db1f8cfb1927d7dba23ebca59e366dc2a4177fe027c37985a2f28c19ba",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-PERF-LOCAL-001",
+      "gate_id": "PERFORMANCE_TARGET",
+      "evidence_class": "LOCAL_SIMULATION",
+      "source_file": "docs/research/spikes/PERFORMANCE_COST_CONCURRENCY_SPIKE_EVIDENCE_V0_8.md",
+      "status": "PARTIAL",
+      "claims_supported": [
+        "300-shot metadata scale is inexpensive in sandbox",
+        "hierarchical admission avoids configured cap violations in simulation"
+      ],
+      "limitations": [
+        "Synthetic provider caps/durations",
+        "Not target Windows/media/provider throughput"
+      ],
+      "review_rounds": [
+        59,
+        60,
+        61,
+        62,
+        64,
+        65,
+        66
+      ],
+      "sha256": "85d48c0916d2d2c07a17d1711be918b663dc473ba38b0b9c4bb374045ec5faa1",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-CONTRACT-001",
+      "gate_id": "CONTRACT_TRACEABILITY",
+      "evidence_class": "STATIC_ANALYSIS",
+      "source_file": "docs/research/spikes/CONTRACT_AND_TRACEABILITY_VALIDATION_V0_11.md",
+      "status": "PASS",
+      "claims_supported": [
+        "Provider profile fixtures validate against JSON Schema",
+        "requirement IDs and traceability IDs are synchronized"
+      ],
+      "limitations": [
+        "Does not prove runtime implementation"
+      ],
+      "review_rounds": [
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84
+      ],
+      "sha256": "25cd5e56e8242df65dd2a3e8678eef5082625e26c7bedc45bd0b01d5551ce99a",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-HARNESS-001",
+      "gate_id": "HARNESS_SET",
+      "evidence_class": "HARNESS_VALIDATION",
+      "source_file": "docs/research/spikes/HARNESS_VALIDATION_V0_12.md",
+      "status": "PASS",
+      "claims_supported": [
+        "Harness syntax/analyzers execute locally"
+      ],
+      "limitations": [
+        "Harness readiness is not target/live proof"
+      ],
+      "review_rounds": [
+        93,
+        94,
+        96,
+        98,
+        99,
+        104
+      ],
+      "sha256": "52f80263bd08af57f0eea44e5bd37a57508f213ea9bdac1ecc089c784cce764f",
+      "environment": {
+        "scope": "current sandbox/design package"
+      }
+    },
+    {
+      "evidence_id": "EV-PERSIST-WIN-RUN1-001",
+      "gate_id": "PERSISTENCE_WINDOWS",
+      "evidence_class": "TARGET_RUNTIME",
+      "source_file": "docs/research/evidence/windows/EVIDENCE_WINDOWS_PERSISTENCE_20260921_RUN1.json",
+      "sha256": "27209750c447f6e1e79a10c56f93a62507dc4607e6d4b80723ca656e9702467e",
+      "status": "FAIL",
+      "claims_supported": [
+        "Target Windows WAL database remained structurally intact under Run 1",
+        "Abrupt-exit committed/uncommitted behavior passed",
+        "Interrupted migration resume passed",
+        "Backup/restore logical integrity passed",
+        "Newer-schema write block passed",
+        "Run-1 direct 12-writer acceptance lane failed: 2888/3000 committed with 112 reported errors"
+      ],
+      "limitations": [
+        "Run 1 did not record exception class/message for the 112 errors",
+        "Run 1 direct 12-writer topology is not the intended V1 production write ownership after V0.14 patch"
+      ],
+      "environment": {
+        "platform": "win32",
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "source": "user target Windows machine"
+      },
+      "review_rounds": [
+        117,
+        118,
+        119,
+        120
+      ]
+    }
+  ]
+}

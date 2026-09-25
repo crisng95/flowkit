@@ -1,0 +1,4 @@
+{"fixture_id": "F1", "classes": ["IDENTITY_DRIFT"], "predicted_classes": ["IDENTITY_DRIFT"], "blocking_classes": ["IDENTITY_DRIFT"], "dataset_version": "demo", "reviewer_version": "demo-r1"}
+{"fixture_id": "F2", "classes": ["PROP_MISSING_CRITICAL"], "predicted_classes": [], "blocking_classes": ["PROP_MISSING_CRITICAL"], "dataset_version": "demo", "reviewer_version": "demo-r1"}
+{"fixture_id": "F3", "classes": [], "predicted_classes": ["STYLE_DRIFT"], "blocking_classes": [], "dataset_version": "demo", "reviewer_version": "demo-r1"}
+{"fixture_id": "F4", "classes": ["CAMERA_ANGLE_FAIL"], "predicted_classes": ["CAMERA_ANGLE_FAIL"], "blocking_classes": [], "dataset_version": "demo", "reviewer_version": "demo-r1"}
