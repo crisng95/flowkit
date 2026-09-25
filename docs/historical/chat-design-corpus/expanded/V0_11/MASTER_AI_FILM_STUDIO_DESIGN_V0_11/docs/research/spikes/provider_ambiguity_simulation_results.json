@@ -1,0 +1,63 @@
+{
+  "explicit_scenarios": {
+    "legacy_flow_like_lost_response": 2,
+    "legacy_flow_like_normal": 1,
+    "safe_handle_only_lost_response": {
+      "jobs": 1,
+      "local": {
+        "status": "AMBIGUOUS_HOLD",
+        "remote_op": null,
+        "submission_key": "sub-S1-abc",
+        "client_token": "client-S1-abc"
+      }
+    },
+    "safe_idempotent_lost_response": {
+      "jobs": 1,
+      "local": {
+        "status": "SUBMITTED",
+        "remote_op": "op-1",
+        "submission_key": "sub-S1-abc",
+        "client_token": "client-S1-abc"
+      }
+    },
+    "safe_client_lookup_lost_response": {
+      "jobs": 1,
+      "local": {
+        "status": "SUBMITTED",
+        "remote_op": "op-1",
+        "submission_key": "sub-S1-abc",
+        "client_token": "client-S1-abc"
+      }
+    },
+    "safe_before_transport": {
+      "jobs": 1,
+      "local": {
+        "status": "SUBMITTED",
+        "remote_op": "op-1",
+        "submission_key": "sub-S1-abc",
+        "client_token": "client-S1-abc"
+      }
+    }
+  },
+  "property_runs": {
+    "HANDLE_ONLY": {
+      "runs": 500,
+      "duplicates": 0,
+      "ambiguous_holds": 173,
+      "submitted_or_recovered": 327
+    },
+    "SERVER_IDEMPOTENCY": {
+      "runs": 500,
+      "duplicates": 0,
+      "ambiguous_holds": 0,
+      "submitted_or_recovered": 500
+    },
+    "CLIENT_TOKEN_LOOKUP": {
+      "runs": 500,
+      "duplicates": 0,
+      "ambiguous_holds": 0,
+      "submitted_or_recovered": 500
+    }
+  },
+  "safety_invariant": "No automatic duplicate remote submit after ambiguous acceptance."
+}

@@ -1,0 +1,13 @@
+{
+  "name": "master-studio-electron-credential-broker-spike",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Design-spike harness only; not production code.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^39.0.0"
+  }
+}

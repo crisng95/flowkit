@@ -75,6 +75,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Verify frozen Master baseline
+        run: python tools/frozen_master_guard.py
+
       - name: Run unit tests
         env:
           PYTHONUNBUFFERED: "1"

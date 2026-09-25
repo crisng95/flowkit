@@ -1,0 +1,85 @@
+{
+  "environment": {
+    "platform": "posix",
+    "python": "3.13.5",
+    "note": "Sandbox benchmark; not target Windows hardware."
+  },
+  "metadata_300_shots": {
+    "shots": 300,
+    "dependency_edges": 314,
+    "jobs": 300,
+    "db_size_bytes": 4096,
+    "wal_size_bytes_at_measurement": 189552,
+    "integrity_check": "ok",
+    "ready_job_query_ms_mean": 0.0241,
+    "ready_job_query_ms_p95": 0.0234,
+    "ready_job_query_ms_max": 1.7917,
+    "pagination_ms_mean": 0.0705,
+    "pagination_ms_max": 0.1363,
+    "descendant_query_ms_mean": 0.2849,
+    "descendant_query_ms_max": 0.5537,
+    "descendant_counts_sample": [
+      299,
+      275,
+      250,
+      225,
+      200,
+      175,
+      150,
+      125,
+      100,
+      75,
+      50
+    ]
+  },
+  "scheduler": {
+    "global_cap": 12,
+    "provider_caps": {
+      "FLOW": 4,
+      "VEO": 3,
+      "SEEDANCE": 3
+    },
+    "model_caps": {
+      "FLOW/flow-video": 3,
+      "VEO/veo": 2,
+      "SEEDANCE/seedance": 2
+    },
+    "flat_global_only": {
+      "makespan_sim_seconds": 1549.13,
+      "max_provider_concurrency": {
+        "FLOW": 5,
+        "VEO": 7,
+        "SEEDANCE": 6
+      },
+      "provider_cap_violations": 190
+    },
+    "hierarchical": {
+      "makespan_sim_seconds": 3495.34,
+      "max_provider_concurrency": {
+        "FLOW": 3,
+        "VEO": 2,
+        "SEEDANCE": 2
+      },
+      "max_model_concurrency": {
+        "FLOW/flow-video": 3,
+        "VEO/veo": 2,
+        "SEEDANCE/seedance": 2
+      },
+      "provider_cap_violations": 0,
+      "model_cap_violations": 0,
+      "mean_start_by_project": {
+        "P1": 1366.79,
+        "P2": 1359.93,
+        "P3": 1425.01
+      },
+      "fairness_mean_start_spread": 65.07
+    }
+  },
+  "budget": {
+    "synthetic_hard_budget_units": 100.0,
+    "accepted_submissions": 94,
+    "blocked_new_submissions": 206,
+    "spent_units": 100.0,
+    "note": "Synthetic cost units only; no provider pricing claim."
+  }
+}
