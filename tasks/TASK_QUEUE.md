@@ -266,3 +266,30 @@ IMP-001 verification:
 - [ ] Review exact PR head.
 - [ ] Merge main.
 - [ ] Verify main and mark MAIN VERIFIED.
+
+---
+
+## IMP-001 Final Verification - 2026-09-25
+
+- [x] Implement durable frozen baseline guard.
+- [x] Add fail-closed unit tests.
+- [x] Integrate guard into CI.
+- [x] Commit initial implementation: efb3f280b4a91cde4de557283c65ecb52bac9b2b.
+- [x] Push to writable fork.
+- [x] Fork PR #1 opened and exact-head reviewed.
+- [x] Fork PR #1 Ubuntu CI Python 3.10/3.13 PASS.
+- [x] Fork PR #1 merged.
+- [x] Post-merge Windows main verification executed.
+- [x] Detected CRLF portability defect before false MAIN VERIFIED claim.
+- [x] Repair exact CRLF-only normalization semantics.
+- [x] Targeted repair tests 12/12 PASS.
+- [x] Fork PR #2 exact-head review PASS.
+- [x] Fork PR #2 Ubuntu CI Python 3.10/3.13 PASS.
+- [x] Fork PR #2 merged to main at bca229eee5a159a59cc880f48a0d62f1ac78fcc5.
+- [x] Windows main frozen guard PASS.
+- [x] Fork main push workflow run 36112979014 PASS.
+- [x] IMP-001 = MAIN VERIFIED on nguyenkhactang922-bot/flowkit:main.
+- [ ] Upstream crisng95/flowkit PR #65 maintainer workflow approval/merge - EXTERNAL PENDING, not claimed complete.
+
+NEXT DEPENDENCY-READY TASK:
+- [ ] IMP-002 - Canonical Contract Primitives.

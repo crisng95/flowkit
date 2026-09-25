@@ -525,3 +525,31 @@ status = LOCAL VERIFIED / REMOTE CI GATE PENDING
 - evidence = evidence/tests/IMP-001_FROZEN_BASELINE_GUARD_EVIDENCE.md
 
 NEXT_EXACT_ACTION = "COMMIT INTENTIONAL FROZEN BASELINE + IMP-001 FILES, PUSH BRANCH, OPEN PR, VERIFY UBUNTU CI"
+
+---
+
+## IMP-001 MAIN VERIFIED - 2026-09-25
+
+task = IMP-001 FROZEN BASELINE GUARD
+status = MAIN VERIFIED
+verified_repository = nguyenkhactang922-bot/flowkit
+verified_main_sha = bca229eee5a159a59cc880f48a0d62f1ac78fcc5
+frozen_master_sha = 1ff9383d713dfaab309d3f36cc83cf05e8932c1bc07f68682e2e12a488c77287
+
+Evidence:
+- evidence/tests/IMP-001_FROZEN_BASELINE_GUARD_EVIDENCE.md
+- evidence/tests/IMP-001_MAIN_VERIFICATION_EVIDENCE.md
+- fork PR #1 exact-head CI = SUCCESS
+- post-merge Windows CRLF portability finding = FIXED
+- fork PR #2 exact-head CI = SUCCESS
+- fork main push workflow run 36112979014 = SUCCESS
+- Python 3.10 guard + full unit suite = SUCCESS
+- Python 3.13 guard + full unit suite = SUCCESS
+- Windows main guard = PASS with CRLF->LF canonical normalization
+
+Upstream status:
+- crisng95/flowkit PR #65 remains OPEN / workflow approval required.
+- Connected account cannot approve upstream fork workflow: HTTP 403 admin rights required.
+- Upstream crisng95/flowkit:main is NOT claimed MAIN VERIFIED.
+
+NEXT_EXACT_ACTION = "CLAIM IMP-002 CANONICAL CONTRACT PRIMITIVES"
