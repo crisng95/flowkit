@@ -20,8 +20,10 @@ shape and never learns where it came from.
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
 
 from agent.config import (
@@ -30,6 +32,8 @@ from agent.config import (
     DEFAULT_PAYGATE_TIER,
     FLOW_GENERATION_MIN_INTERVAL_S, FLOW_GENERATION_MAX_CONCURRENT,
     FLOW_UNUSUAL_ACTIVITY_COOLDOWN_S,
+    FLOW_ENABLE_CAPTCHA_GENERATION, FLOW_GENERATION_SAFETY_FILE,
+    FLOW_MANUAL_UI_STATUS,
 )
 from agent import config as _config
 from agent.services import flow_batch as fb
@@ -66,12 +70,16 @@ class FlowClient:
         self._operation_projects: dict[str, str] = {}
         self._operation_media: dict[str, str] = {}
         self._operation_polls: dict[str, int] = {}
-        self._generation_slots = asyncio.Semaphore(FLOW_GENERATION_MAX_CONCURRENT)
+        # During the account-safety investigation, only one token-bearing
+        # request may be in flight per agent, regardless of old user settings.
+        self._generation_slots = asyncio.Semaphore(1)
         self._generation_rate_gate = asyncio.Lock()
         self._generation_last_submit_at = 0.0
         self._generation_unusual_until = 0.0
         self._generation_last_unusual_at: Optional[float] = None
         self._generation_last_unusual_rpc: Optional[str] = None
+        self._generation_safety_owner = uuid.uuid4().hex
+        self._generation_safety_hold = self._read_generation_safety_hold()
         # WS stats
         self._ws_connect_count = 0
         self._ws_disconnect_count = 0
@@ -206,13 +214,109 @@ class FlowClient:
 
     @property
     def generation_guard_status(self) -> dict:
+        if self._generation_safety_hold is None:
+            self._generation_safety_hold = self._read_generation_safety_hold()
         remaining = max(0.0, self._generation_unusual_until - time.monotonic())
         return {
+            "captcha_generation_opted_in": FLOW_ENABLE_CAPTCHA_GENERATION,
+            "safety_hold_active": self._generation_safety_hold is not None,
+            "safety_hold_reason": (self._generation_safety_hold or {}).get("reason"),
+            "manual_flow_ui_status": FLOW_MANUAL_UI_STATUS,
             "cooldown_active": remaining > 0,
             "cooldown_remaining_s": round(remaining, 3),
             "last_unusual_activity_at": self._generation_last_unusual_at,
             "last_unusual_activity_rpc": self._generation_last_unusual_rpc,
         }
+
+    def _read_generation_safety_hold(self) -> dict | None:
+        path = Path(FLOW_GENERATION_SAFETY_FILE)
+        if not path.exists():
+            return None
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(record, dict) and record.get("state") == "inflight":
+                if record.get("owner") == self._generation_safety_owner:
+                    return None
+                # An interrupted or concurrent process may have submitted a
+                # request whose outcome is unknown. Never guess it was safe.
+                return {"reason": "interrupted_generation", "rpcid": record.get("rpcid")}
+            if isinstance(record, dict) and record.get("reason"):
+                return record
+        except (OSError, ValueError):
+            pass
+        # An unreadable hold is still a hold; restarting must not clear it.
+        return {"reason": "unreadable_safety_state"}
+
+    def _begin_generation_attempt(self, rpcid: str) -> bool:
+        """Durably mark an in-flight submit before any CAPTCHA can be minted.
+
+        An unclean restart or failed hold write leaves this marker behind; a
+        new client treats it as an account-safety hold. Exclusive creation also
+        prevents another agent process from sending at the same time.
+        """
+        path = Path(FLOW_GENERATION_SAFETY_FILE)
+        record = {"schema": "flowkit.generation-safety-inflight.v1", "state": "inflight",
+                  "owner": self._generation_safety_owner, "rpcid": rpcid,
+                  "started_at": time.time()}
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("x", encoding="utf-8") as stream:
+                json.dump(record, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            return True
+        except FileExistsError:
+            self._generation_safety_hold = (self._read_generation_safety_hold()
+                                            or {"reason": "generation_state_conflict"})
+        except OSError:
+            self._generation_safety_hold = {"reason": "safety_state_unwritable"}
+            logger.exception("Could not persist pre-submit safety marker; generation was not sent")
+        return False
+
+    def _finish_generation_attempt(self) -> bool:
+        """Remove only this client's successful in-flight marker."""
+        path = Path(FLOW_GENERATION_SAFETY_FILE)
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            if record.get("state") != "inflight" or record.get("owner") != self._generation_safety_owner:
+                self._generation_safety_hold = {"reason": "generation_state_conflict"}
+                return False
+            path.unlink()
+            return True
+        except (OSError, ValueError):
+            self._generation_safety_hold = {"reason": "safety_state_unwritable"}
+            logger.exception("Could not clear pre-submit safety marker; generation remains held")
+            return False
+
+    def _latch_generation_safety(self, reason: str, rpcid: str) -> None:
+        if self._generation_safety_hold is not None:
+            return
+        record = {"schema": "flowkit.generation-safety-hold.v1", "reason": reason,
+                  "rpcid": rpcid, "detected_at": time.time(),
+                  "manual_flow_ui_status": FLOW_MANUAL_UI_STATUS}
+        self._generation_safety_hold = record
+        path = Path(FLOW_GENERATION_SAFETY_FILE)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+            temporary.write_text(json.dumps(record, indent=2), encoding="utf-8")
+            temporary.replace(path)
+        except OSError:
+            logger.exception("Generation safety hold could not be persisted; stop this agent before restart")
+        logger.critical("FLOW_ACCOUNT_SAFETY_HOLD reason=%s rpcid=%s manual_flow_ui_status=%s; "
+                        "no more CAPTCHA-bearing requests will be sent", reason, rpcid, FLOW_MANUAL_UI_STATUS)
+
+    def _generation_safety_rejection(self) -> dict | None:
+        if self._generation_safety_hold is None:
+            self._generation_safety_hold = self._read_generation_safety_hold()
+        if self._generation_safety_hold is not None:
+            reason = self._generation_safety_hold.get("reason", "unknown")
+            return {"status": 423, "error": f"FLOW_ACCOUNT_SAFETY_HOLD: {reason}; "
+                    "manual review required; do not retry automatically"}
+        if not FLOW_ENABLE_CAPTCHA_GENERATION:
+            return {"status": 423, "error": "FLOW_CAPTCHA_GENERATION_DISABLED: temporary account-safety "
+                    "default; opt in explicitly only with a test account"}
+        return None
 
     @property
     def ws_stats(self) -> dict:
@@ -518,9 +622,24 @@ class FlowClient:
         if match:
             params["match"] = match
 
-        is_generation = captcha_action in {fb.CAPTCHA_IMAGE, fb.CAPTCHA_VIDEO}
+        captcha_rpcs = {
+            fb.RPC_GEN_IMAGE, fb.RPC_GEN_VIDEO, fb.RPC_GEN_VIDEO_TEXT,
+            fb.RPC_GEN_VIDEO_FIRST_LAST, fb.RPC_GEN_VIDEO_REFERENCES,
+            fb.RPC_UPLOAD_IMAGE, fb.RPC_UPSCALE_IMAGE,
+        }
+        is_generation = (captcha_action in {fb.CAPTCHA_IMAGE, fb.CAPTCHA_VIDEO}
+                         or rpcid in captcha_rpcs or fb.CAPTCHA_SLOT in freq)
         if not is_generation:
             return await self._send("batch_rpc", params, timeout=timeout)
+
+        rejection = self._generation_safety_rejection()
+        if rejection is not None:
+            return rejection
+        if captcha_action not in {fb.CAPTCHA_IMAGE, fb.CAPTCHA_VIDEO}:
+            return {"status": 400, "error": "CAPTCHA_ACTION_REQUIRED: generation RPC has no CAPTCHA action"}
+        # The extension independently rejects CAPTCHA requests without this
+        # explicit signal. Non-generation RPCs never carry it.
+        params["accountSafetyOptIn"] = True
 
         now = time.monotonic()
         if now < self._generation_unusual_until:
@@ -536,6 +655,9 @@ class FlowClient:
         await self._generation_slots.acquire()
         try:
             async with self._generation_rate_gate:
+                rejection = self._generation_safety_rejection()
+                if rejection is not None:
+                    return rejection
                 now = time.monotonic()
                 if now < self._generation_unusual_until:
                     remaining = max(1, int(self._generation_unusual_until - now + 0.999))
@@ -551,9 +673,20 @@ class FlowClient:
                 )
                 if delay > 0:
                     await asyncio.sleep(delay)
+                # A different request/process may have latched a hold during
+                # the pacing wait. Check again immediately before dispatch.
+                rejection = self._generation_safety_rejection()
+                if rejection is not None:
+                    return rejection
+                if not self._begin_generation_attempt(rpcid):
+                    return self._generation_safety_rejection()
                 self._generation_last_submit_at = time.monotonic()
 
-            result = await self._send("batch_rpc", params, timeout=timeout)
+            try:
+                result = await self._send("batch_rpc", params, timeout=timeout)
+            except Exception:
+                self._latch_generation_safety("generation_transport_error", rpcid)
+                raise
             blob = f"{result.get('error', '')} {result.get('data', '')}"
             is_hijack = "extension_hijack" in blob.lower()
             is_unusual = (
@@ -561,10 +694,9 @@ class FlowClient:
                 or "unusual activity" in blob.lower()
             )
             if is_hijack:
-                # x2a trap: the token was poisoned with action
-                # "extension_hijack_detected". This is a system-level trap,
-                # NOT an account issue — don't apply the long cooldown.
-                # Short pause lets the bypass re-initialise on next tab.
+                # A hijack signal may coincide with account-level restrictions;
+                # its cause is not established. Hold all future generation.
+                self._latch_generation_safety("extension_hijack_detected", rpcid)
                 self._generation_unusual_until = max(
                     self._generation_unusual_until,
                     time.monotonic() + 30.0,
@@ -572,8 +704,7 @@ class FlowClient:
                 self._generation_last_unusual_at = time.time()
                 self._generation_last_unusual_rpc = rpcid
                 logger.error(
-                    "[HIJACK] extension_hijack_detected — captcha bypass may "
-                    "have failed; pausing generation submits for 30s"
+                    "[HIJACK] extension_hijack_detected; account-safety hold active"
                 )
                 # Tag the result so processor can distinguish it
                 if isinstance(result.get("error"), str):
@@ -581,6 +712,7 @@ class FlowClient:
                 else:
                     result["error"] = "[HIJACK] extension_hijack_detected"
             elif is_unusual:
+                self._latch_generation_safety("PUBLIC_ERROR_UNUSUAL_ACTIVITY", rpcid)
                 self._generation_unusual_until = max(
                     self._generation_unusual_until,
                     time.monotonic() + FLOW_UNUSUAL_ACTIVITY_COOLDOWN_S,
@@ -588,9 +720,18 @@ class FlowClient:
                 self._generation_last_unusual_at = time.time()
                 self._generation_last_unusual_rpc = rpcid
                 logger.warning(
-                    "Google unusual-activity block detected; pausing generation submits for %.0fs",
-                    FLOW_UNUSUAL_ACTIVITY_COOLDOWN_S,
+                    "Google unusual-activity signal detected; account-safety hold active "
+                    "(manual_flow_ui_status=%s)", FLOW_MANUAL_UI_STATUS,
                 )
+            elif result.get("error") or (isinstance(result.get("status"), int)
+                                         and result["status"] >= 400):
+                # A failed or ambiguous CAPTCHA request is not retried. Even
+                # if the hold write fails, the pre-submit marker survives.
+                self._latch_generation_safety("generation_response_error", rpcid)
+                original_error = str(result.get("error") or f"HTTP {result.get('status')}")[:240]
+                result["error"] = f"FLOW_ACCOUNT_SAFETY_HOLD: {original_error}"
+            elif not self._finish_generation_attempt():
+                return self._generation_safety_rejection()
             return result
         finally:
             self._generation_slots.release()

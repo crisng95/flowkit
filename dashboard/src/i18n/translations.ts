@@ -193,7 +193,7 @@ const en = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'Go to chrome://extensions and click the reload icon on the Flow Kit card — the extension will reconnect automatically.',
   'guide.trouble5.problem': '403 PUBLIC_ERROR_UNUSUAL_ACTIVITY error',
-  'guide.trouble5.solution': 'Pause submissions → chrome://settings/cookies → remove cookies for google.com and labs.google → reopen flow.google.com, sign in, solve the captcha if shown → resubmit more slowly.',
+  'guide.trouble5.solution': 'Stop all automated generation. An extension-only error does not confirm the manual Flow UI is blocked. If the manual UI is blocked, recovery and any cooldown are unverified.',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': "The agent isn't running — run python -m agent.main.",
 
@@ -516,7 +516,7 @@ const vi: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'Vào chrome://extensions, bấm reload icon trên thẻ Flow Kit — extension sẽ tự kết nối lại.',
   'guide.trouble5.problem': 'Lỗi 403 PUBLIC_ERROR_UNUSUAL_ACTIVITY',
-  'guide.trouble5.solution': 'Tạm dừng gửi request → chrome://settings/cookies → xoá cookie của google.com và labs.google → mở lại flow.google.com, đăng nhập, giải captcha nếu có → gửi lại chậm hơn.',
+  'guide.trouble5.solution': 'Dừng mọi hoạt động tạo tự động. Lỗi chỉ xuất hiện ở extension không xác nhận Flow UI thủ công bị chặn. Nếu UI thủ công bị chặn, cách khôi phục và thời gian chờ đều chưa được xác minh.',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'Agent chưa chạy — chạy python -m agent.main.',
 
@@ -828,7 +828,7 @@ const hi: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'chrome://extensions पर जाएं और Flow Kit कार्ड पर reload आइकन क्लिक करें — extension स्वतः फिर से जुड़ जाएगा।',
   'guide.trouble5.problem': '403 PUBLIC_ERROR_UNUSUAL_ACTIVITY एरर',
-  'guide.trouble5.solution': 'सबमिशन रोकें → chrome://settings/cookies → google.com और labs.google के कुकीज़ हटाएं → flow.google.com फिर से खोलें, साइन इन करें, दिखे तो captcha हल करें → धीरे-धीरे फिर से सबमिट करें।',
+  'guide.trouble5.solution': 'सभी स्वचालित जनरेशन रोकें। केवल extension में दिखी त्रुटि से यह पुष्टि नहीं होती कि मैन्युअल Flow UI ब्लॉक है। यदि मैन्युअल UI ब्लॉक है, तो रिकवरी और कोई भी कूलडाउन सत्यापित नहीं हैं।',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'एजेंट नहीं चल रहा — python -m agent.main चलाएं।',
 
@@ -1140,7 +1140,7 @@ const id: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'Buka chrome://extensions dan klik ikon reload pada kartu Flow Kit — ekstensi akan terhubung kembali secara otomatis.',
   'guide.trouble5.problem': 'Error 403 PUBLIC_ERROR_UNUSUAL_ACTIVITY',
-  'guide.trouble5.solution': 'Hentikan sementara pengiriman → chrome://settings/cookies → hapus cookie untuk google.com dan labs.google → buka kembali flow.google.com, masuk, selesaikan captcha jika muncul → kirim ulang lebih lambat.',
+  'guide.trouble5.solution': 'Hentikan semua pembuatan otomatis. Error yang hanya terjadi di ekstensi tidak memastikan Flow UI manual diblokir. Jika UI manual diblokir, pemulihan dan masa tunggu apa pun belum terverifikasi.',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'Agent tidak berjalan — jalankan python -m agent.main.',
 
@@ -1452,7 +1452,7 @@ const zh: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': '前往 chrome://extensions，点击 Flow Kit 卡片上的重新加载图标 — 扩展会自动重新连接。',
   'guide.trouble5.problem': '403 PUBLIC_ERROR_UNUSUAL_ACTIVITY 错误',
-  'guide.trouble5.solution': '暂停提交 → 打开 chrome://settings/cookies → 删除 google.com 和 labs.google 的 cookie → 重新打开 flow.google.com，登录，如出现验证码请完成 → 放慢速度重新提交。',
+  'guide.trouble5.solution': '停止所有自动生成。仅扩展程序报错并不能确认手动 Flow UI 已被阻止。如果手动 UI 被阻止，恢复方法和任何冷却时间均未经过验证。',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'Agent 未运行 — 请运行 python -m agent.main。',
 
@@ -1764,7 +1764,7 @@ const ko: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'chrome://extensions로 이동하여 Flow Kit 카드의 새로고침 아이콘을 클릭하세요 — 확장 프로그램이 자동으로 다시 연결됩니다.',
   'guide.trouble5.problem': '403 PUBLIC_ERROR_UNUSUAL_ACTIVITY 오류',
-  'guide.trouble5.solution': '제출을 일시 중지 → chrome://settings/cookies 열기 → google.com 및 labs.google의 쿠키 삭제 → flow.google.com를 다시 열고 로그인, 캡차가 표시되면 해결 → 더 천천히 다시 제출하세요.',
+  'guide.trouble5.solution': '모든 자동 생성을 중단하세요. 확장 프로그램에서만 발생한 오류로는 수동 Flow UI가 차단됐는지 확인할 수 없습니다. 수동 UI가 차단된 경우 복구 방법과 대기 시간은 검증되지 않았습니다.',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'Agent가 실행 중이 아닙니다 — python -m agent.main을 실행하세요.',
 
@@ -2076,7 +2076,7 @@ const ja: Partial<Record<TranslationKey, string>> = {
   'guide.trouble4.problem': '"Extension not connected"',
   'guide.trouble4.solution': 'chrome://extensions を開き、Flow Kit カードの再読み込みアイコンをクリックしてください — 拡張機能が自動的に再接続されます。',
   'guide.trouble5.problem': '403 PUBLIC_ERROR_UNUSUAL_ACTIVITY エラー',
-  'guide.trouble5.solution': '送信を一時停止 → chrome://settings/cookies を開く → google.com と labs.google のCookieを削除 → flow.google.com を再度開いてサインインし、captchaが表示されたら解決 → ゆっくりと再送信してください。',
+  'guide.trouble5.solution': 'すべての自動生成を停止してください。拡張機能だけのエラーでは、手動のFlow UIがブロックされたとは確認できません。手動UIがブロックされている場合、復旧方法や待機時間は未検証です。',
   'guide.trouble6.problem': 'curl: (7) Failed to connect to 127.0.0.1:8100',
   'guide.trouble6.solution': 'Agent が実行されていません — python -m agent.main を実行してください。',
 

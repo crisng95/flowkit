@@ -2,7 +2,8 @@
  * Flow Kit — Chrome Extension Background Service Worker
  *
  * Connects to local Python agent via WebSocket (agent runs WS server).
- * Mints reCAPTCHA and runs Flow's batchexecute RPCs inside the Flow tab.
+ * Runs Flow's batchexecute RPCs inside the Flow tab. CAPTCHA-bearing calls
+ * require explicit accountSafetyOptIn on each request.
  *
  * Flow moved to flow.google.com in September 2026 and stopped minting the
  * `Bearer ya29.…` the old REST host needed. The current path is `batch_rpc`:
@@ -367,77 +368,32 @@ function captchaFromTab(tabId, requestId, captchaAction) {
 }
 
 async function solveCaptcha(requestId, captchaAction) {
-  let tabs = await chrome.tabs.query({ url: flowUrls });
-
-  // No Flow tab at all — spawn one and let it settle. Keep the exact tab id:
-  // a redirected or stale tab must not make us select some older candidate.
-  if (!tabs.length) {
-    let opened;
-    try {
-      opened = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
-      await sleep(3000);
-    } catch (e) {
-      return { error: e.message || 'NO_FLOW_TAB' };
-    }
-    const target = opened?.id ? await chrome.tabs.get(opened.id).catch(() => null) : null;
-    if (!target) return { error: 'NO_FLOW_TAB' };
-    tabs = [target];
-  }
-
-  // Try each Flow tab in turn. A tab that answers "no grecaptcha" is a tab
-  // sitting on a page that never loaded it — another Flow tab may well be
-  // fine. Returning on the first one let one stale tab veto every generation.
-  const errors = [];
-  for (const candidate of tabs) {
-    const tab = await reviveTabIfNeeded(candidate);
-    if (!tab) continue;
-    try {
-      const resp = await captchaFromTab(tab.id, requestId, captchaAction);
-      if (!resp?.token) {
-        errors.push(resp?.error || 'NO_TOKEN');
-        continue;
-      }
-      return resp;
-    } catch (e) {
-      const msg = e?.message || '';
-      errors.push(msg);
-      // Tab evaporated mid-call (window closed, discarded again, navigated
-      // away). Move on to the next candidate rather than failing the job.
-      if (
-        msg.includes('No current window') ||
-        msg.includes('No tab with id') ||
-        msg.includes('Receiving end does not exist')
-      ) {
-        continue;
-      }
-      return { error: msg };
-    }
-  }
-
-  // Every candidate failed — last-ditch, spawn a fresh temporary tab and
-  // target THAT exact tab. Previously we re-queried all Flow tabs and picked
-  // fresh[0], which could select the same stale tab again while leaking the
-  // newly-created one on every retry.
-  let recoveryTab = null;
+  // One tab, one mint attempt. A failed tab must never trigger more token
+  // requests in other tabs or an automatically opened recovery tab.
+  const tabs = await chrome.tabs.query({ url: flowUrls });
+  const candidate = tabs.find((tab) => !tab.discarded) || tabs[0];
+  if (!candidate) return { error: 'NO_FLOW_TAB' };
+  const tab = await reviveTabIfNeeded(candidate);
+  if (!tab) return { error: 'FLOW_TAB_DISCARDED' };
   try {
-    recoveryTab = await chrome.tabs.create({ url: FLOW_TAB_URL, active: false });
-    await sleep(3000);
-    const target = await chrome.tabs.get(recoveryTab.id);
-    if (!target || target.discarded) return { error: 'NO_FLOW_TAB' };
-    return await captchaFromTab(target.id, requestId, captchaAction);
-  } catch (e) {
-    return { error: e?.message || errors[0] || 'NO_FLOW_TAB' };
-  } finally {
-    // A recovery tab is disposable: there were already Flow tabs available
-    // for the signed RPC. Do not let CAPTCHA retries accumulate root tabs.
-    if (recoveryTab?.id) {
-      try { await chrome.tabs.remove(recoveryTab.id); } catch { /* already gone */ }
+    const resp = await captchaFromTab(tab.id, requestId, captchaAction);
+    if (resp?.token && resp.mintPath !== 'public_execute') {
+      return { error: 'EXTENSION_HIJACK_DETECTED: unverified_mint_path',
+        mintPath: resp.mintPath || 'unknown' };
     }
+    return resp?.token ? resp : { error: resp?.error || 'NO_TOKEN',
+      mintPath: resp?.mintPath || null };
+  } catch (e) {
+    return { error: e?.message || 'CAPTCHA_FAILED' };
   }
 }
 
 async function handleSolveCaptcha(msg) {
   const { id, params } = msg;
+  if (params?.accountSafetyOptIn !== true) {
+    sendToAgent({ id, status: 403, result: { error: 'ACCOUNT_SAFETY_OPT_IN_REQUIRED' } });
+    return;
+  }
   const result = await solveCaptcha(id, params?.captchaAction || 'VIDEO_GENERATION');
 
   // Standalone captcha solve counts as captcha-consuming
@@ -462,12 +418,24 @@ async function handleSolveCaptcha(msg) {
 // batchexecute POST in the page's MAIN world, where at / f.sid / bl live.
 
 const CAPTCHA_SLOT = '__CAPTCHA__';
+const CAPTCHA_RPC_IDS = new Set(['ogiZ0b', 'eb1hJf', 'YhhmEf', 'nprQif', 'MZZa6b', 'maseQ', 'SPrCad']);
 const MAX_RPC_TEXT = 32000000; // the project listing alone is past 17 MB
 
 async function runBatchRpc(cmd) {
+  if (cmd.freq?.includes(CAPTCHA_SLOT) && !cmd.captchaAction) {
+    return { error: 'CAPTCHA_ACTION_REQUIRED' };
+  }
+  if ((cmd.captchaAction || cmd.freq?.includes(CAPTCHA_SLOT) || CAPTCHA_RPC_IDS.has(cmd.rpcid)) &&
+      cmd.accountSafetyOptIn !== true) {
+    return { error: 'ACCOUNT_SAFETY_OPT_IN_REQUIRED' };
+  }
+  if (CAPTCHA_RPC_IDS.has(cmd.rpcid) && !cmd.captchaAction) {
+    return { error: 'CAPTCHA_ACTION_REQUIRED' };
+  }
   const tabs = await chrome.tabs.query({ url: flowUrls });
   let candidate = tabs.find((t) => !t.discarded) || tabs[0];
   if (!candidate) {
+    if (cmd.captchaAction) return { error: 'NO_FLOW_TAB' };
     // No Flow tab — open one and give the app a moment to boot, otherwise
     // WIZ_global_data is not on the page yet and `at` comes back empty. Keep
     // the exact created tab id so redirects/stale tabs cannot hijack recovery.
@@ -486,9 +454,13 @@ async function runBatchRpc(cmd) {
   if (!tab) return { error: 'FLOW_TAB_DISCARDED' };
 
   let freq = cmd.freq;
+  let mintPath = null;
   if (cmd.captchaAction) {
     const solved = await solveCaptcha(cmd.id, cmd.captchaAction);
-    if (!solved?.token) return { error: `CAPTCHA_FAILED: ${solved?.error || 'no token'}` };
+    mintPath = solved?.mintPath || null;
+    if (!solved?.token) {
+      return { error: `CAPTCHA_FAILED: ${solved?.error || 'no token'}`, mintPath };
+    }
     freq = freq.split(CAPTCHA_SLOT).join(solved.token);
   }
 
@@ -537,7 +509,7 @@ async function runBatchRpc(cmd) {
     },
   });
 
-  return injected?.result || { error: 'NO_INJECTION_RESULT' };
+  return { ...(injected?.result || { error: 'NO_INJECTION_RESULT' }), mintPath };
 }
 
 async function handleBatchRpc(msg) {
@@ -545,6 +517,18 @@ async function handleBatchRpc(msg) {
   const { rpcid, freq, captchaAction, match } = params || {};
   if (!rpcid || !freq) {
     sendToAgent({ id, status: 400, error: 'INVALID_BATCH_RPC' });
+    return;
+  }
+  if (freq.includes(CAPTCHA_SLOT) && !captchaAction) {
+    sendToAgent({ id, status: 400, error: 'CAPTCHA_ACTION_REQUIRED' });
+    return;
+  }
+  if ((captchaAction || CAPTCHA_RPC_IDS.has(rpcid)) && params?.accountSafetyOptIn !== true) {
+    sendToAgent({ id, status: 403, error: 'ACCOUNT_SAFETY_OPT_IN_REQUIRED' });
+    return;
+  }
+  if (CAPTCHA_RPC_IDS.has(rpcid) && !captchaAction) {
+    sendToAgent({ id, status: 400, error: 'CAPTCHA_ACTION_REQUIRED' });
     return;
   }
 
@@ -571,20 +555,21 @@ async function handleBatchRpc(msg) {
   }
 
   try {
-    const out = await runBatchRpc({ id, rpcid, freq, captchaAction, match });
+    const out = await runBatchRpc({ id, rpcid, freq, captchaAction, match,
+      accountSafetyOptIn: params?.accountSafetyOptIn });
     if (out.error) {
       if (hasCaptcha) { metrics.failedCount++; metrics.lastError = out.error; }
-      if (visible) updateRequestLog(id, { status: 'failed', error: out.error });
-      sendToAgent({ id, status: 502, error: out.error });
+      if (visible) updateRequestLog(id, { status: 'failed', error: out.error, mintPath: out.mintPath });
+      sendToAgent({ id, status: 502, error: out.error, mintPath: out.mintPath });
     } else {
       if (hasCaptcha) { metrics.successCount++; metrics.lastError = null; }
       if (visible) {
         updateRequestLog(id, {
-          status: 'success', httpStatus: out.status,
+          status: 'success', httpStatus: out.status, mintPath: out.mintPath,
           responseSummary: (out.text || '').slice(0, 300),
         });
       }
-      sendToAgent({ id, status: out.status, data: out.text });
+      sendToAgent({ id, status: out.status, data: out.text, mintPath: out.mintPath });
     }
   } catch (e) {
     const err = e?.message || 'BATCH_RPC_FAILED';
@@ -670,6 +655,10 @@ async function handleApiRequest(msg) {
 
   if (!url.startsWith('https://aisandbox-pa.googleapis.com/')) {
     sendToAgent({ id, error: 'INVALID_URL' });
+    return;
+  }
+  if (captchaAction && params.accountSafetyOptIn !== true) {
+    sendToAgent({ id, status: 403, error: 'ACCOUNT_SAFETY_OPT_IN_REQUIRED' });
     return;
   }
 
@@ -851,6 +840,10 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
   }
 
   if (msg.type === 'TEST_CAPTCHA') {
+    if (msg.accountSafetyOptIn !== true) {
+      reply({ error: 'ACCOUNT_SAFETY_OPT_IN_REQUIRED' });
+      return true;
+    }
     solveCaptcha(`test-${Date.now()}`, msg.pageAction || 'IMAGE_GENERATION')
       .then((r) => reply(r))
       .catch((e) => reply({ error: e.message }));

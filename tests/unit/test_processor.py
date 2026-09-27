@@ -188,6 +188,27 @@ class TestHandleFailure:
         mock_crud.update_scene.assert_awaited_once_with("scene-001", vertical_video_status="FAILED")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [
+        "[HIJACK] extension_hijack_detected",
+        "CAPTCHA_FAILED: mint timed out",
+        "CAPTCHA_FAILED: Flow tab not found",
+        "FLOW_ACCOUNT_SAFETY_HOLD: manual review required",
+        "FLOW_CAPTCHA_GENERATION_DISABLED: temporary account-safety default",
+    ])
+    async def test_account_safety_signals_never_requeue(self, error):
+        req = make_req(req_type="GENERATE_IMAGE", retry_count=0)
+        with patch("agent.worker.processor._recover_entity_not_found", new_callable=AsyncMock) as recover, \
+                patch("agent.worker.processor.crud") as mock_crud:
+            mock_crud.update_request = AsyncMock()
+            mock_crud.update_scene = AsyncMock()
+            await _handle_failure(req["id"], req, {"error": error})
+
+        recover.assert_not_awaited()
+        assert mock_crud.update_request.call_args.kwargs["status"] == "FAILED"
+        assert "retry_count" not in mock_crud.update_request.call_args.kwargs
+        mock_crud.update_scene.assert_awaited_once_with("scene-001", vertical_image_status="FAILED")
+
+    @pytest.mark.asyncio
     async def test_extracts_error_message_from_nested_data(self):
         """Error message extraction from data.error.message should work."""
         req = make_req(retry_count=MAX_RETRIES - 1)

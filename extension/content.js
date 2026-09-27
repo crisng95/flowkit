@@ -2,10 +2,9 @@
  * Content script — bridge between background.js (ISOLATED world) and
  * injected.js (MAIN world).
  *
- * All MAIN world scripts (hijack_bypass.js, recaptcha_enterprise.js,
- * recaptcha__en.js, injected.js) are now loaded via manifest.json
- * content_scripts with "world": "MAIN" — this bypasses the page's
- * Trusted Types CSP entirely. No more createElement('script') needed.
+ * injected.js is loaded in the MAIN world via manifest.json. reCAPTCHA uses
+ * the page's own public API when present; the extension does not auto-load a
+ * second reCAPTCHA runtime into every Flow tab.
  *
  * This content script only handles the message relay between the two worlds.
  */
@@ -19,7 +18,7 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
     if (e.detail?.requestId === requestId) {
       window.removeEventListener('CAPTCHA_RESULT', handler);
       clearTimeout(timer);
-      reply({ token: e.detail.token, error: e.detail.error });
+      reply({ token: e.detail.token, error: e.detail.error, mintPath: e.detail.mintPath });
     }
   };
 
