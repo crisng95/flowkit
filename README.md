@@ -9,29 +9,59 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI"/>
   <img src="https://img.shields.io/badge/ffmpeg-required-007808?logo=ffmpeg&logoColor=white" alt="ffmpeg"/>
   <a href="CLAUDE.md"><img src="https://img.shields.io/badge/Docs-CLAUDE.md-8A2BE2" alt="Documentation"/></a>
-  <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/stargazers"><img src="https://img.shields.io/github/stars/tuannguyenhoangit-droid/google-flow-agent?style=flat&logo=github" alt="GitHub stars"/></a>
-  <a href="https://github.com/tuannguyenhoangit-droid/google-flow-agent/issues"><img src="https://img.shields.io/github/issues/tuannguyenhoangit-droid/google-flow-agent?logo=github" alt="GitHub issues"/></a>
+  <a href="https://github.com/crisng95/flowkit/stargazers"><img src="https://img.shields.io/github/stars/crisng95/flowkit?style=flat&logo=github" alt="GitHub stars"/></a>
+  <a href="https://github.com/crisng95/flowkit/issues"><img src="https://img.shields.io/github/issues/crisng95/flowkit?logo=github" alt="GitHub issues"/></a>
   <a href="https://deepwiki.com/tuannguyenhoangit-droid/google-flow-agent"><img src="https://img.shields.io/badge/DeepWiki-AI%20Docs-6A3BC9" alt="DeepWiki"/></a>
 </p>
 
 ---
 
-> **Working against the new Google Flow API.** Flow moved to `flow.google.com`
-> in September 2026 and stopped minting the `Bearer ya29.…` that the old
-> `aisandbox-pa.googleapis.com` REST API needed. The `batchexecute` transport
-> that replaces it is in place and verified end to end against the live API —
-> image generation, 2K image export, and image-to-video all run green. Upgrading
-> from an older Flow Kit: reload the extension (v0.3.2+) and pin
+> [!CAUTION]
+> **Temporary account-safety notice — read before testing Flow Kit**
+>
+> Use a test or disposable Google account for Flow Kit experiments; avoid an
+> account whose access you cannot risk losing. CAPTCHA-bearing generation is
+> disabled by default. Enabling it requires the explicit opt-in
+> `FLOW_ENABLE_CAPTCHA_GENERATION=1`; use that only with a test account.
+> Unusual-activity or extension-hijack signals latch a persistent generation
+> safety hold. Stop generation immediately and do not keep retrying through
+> Flow Kit.
+>
+> Reports that two Google accounts became unable to use the **manual Flow UI**
+> after Flow Kit testing are a correlation, not proof that Flow Kit caused the
+> blocks. Keep extension-only errors distinct from a block reproduced in the
+> Flow website used manually. Public tracking: [FlowKit issue #67](https://github.com/crisng95/flowkit/issues/67).
+>
+> The hold is stored in `flow_generation_safety_hold.json` and survives an agent
+> restart. `/api/flow/clear-hijack` cannot clear an active safety hold.
+> **Google account recovery is unverified.** FlowKit's internal guard is not a
+> Google recovery cooldown or recipe. Do not claim that clearing cookies,
+> changing IP/networks, or waiting a fixed time will restore access. See
+> [`docs/ACCOUNT_SAFETY.md`](docs/ACCOUNT_SAFETY.md) before troubleshooting.
+
+---
+
+> **Historical migration verification — not current generation status.** During
+> the September 2026 move to `flow.google.com`, the `batchexecute` transport,
+> image generation, 2K image export, and image-to-video were reported verified
+> against the live API. Those results predate the current account-safety gate;
+> they do not mean generation is currently enabled or available by default.
+> CAPTCHA-bearing generation is now disabled unless explicitly opted in with
+> `FLOW_ENABLE_CAPTCHA_GENERATION=1` (test accounts only). The old
+> `aisandbox-pa.googleapis.com` REST path depended on a `Bearer ya29.…` that
+> Flow no longer mints. When upgrading, reload the extension (v0.3.2+) and pin
 > `FLOW_PROJECT_ID`; Flow Kit can no longer create the project for you.
 >
-> Every Omni 1.1 Flash video mode is ported and live-verified: text-to-video,
-> first frame, first+last frame, and references. Three capabilities remain
-> unported on the **Veo** path because their payloads were never captured off
-> the new UI — **video upscale**, **Veo reference-to-video**, and **Veo
-> start+end-frame chaining**. They fail loudly with `UNSUPPORTED_ON_BATCH_API`
-> instead of quietly producing the wrong thing. For the latter two, Omni covers
-> the same shot with `model_family=omni_flash`, or `FLOW_ALLOW_DEGRADED=1` drops
-> them to plain i2v; video upscale has no fallback. To restore one properly see
+> That same historical verification recorded every Omni 1.1 Flash video mode
+> as ported and live-verified: text-to-video, first frame, first+last frame,
+> and references. It recorded three capabilities as unported on the **Veo**
+> path because their payloads had not been captured off the new UI — **video
+> upscale**, **Veo reference-to-video**, and **Veo start+end-frame chaining**.
+> The current default remains the account-safety gate above: CAPTCHA-bearing
+> generation is off unless opted in. Unsupported operations fail with
+> `UNSUPPORTED_ON_BATCH_API`; for the latter two, Omni covers the same shot
+> with `model_family=omni_flash`, or `FLOW_ALLOW_DEGRADED=1` drops them to plain
+> i2v; video upscale has no fallback. To restore one properly see
 > [`docs/CAPTURE.md`](docs/CAPTURE.md).
 
 ---
@@ -247,6 +277,7 @@ You can also pass `flow_project_id` per project on `POST /api/projects`.
 |---------|---------|--------------|
 | `FLOW_PROJECT_ID` | — | The Flow project every RPC is scoped to. Required. |
 | `FLOW_ALLOW_DEGRADED` | `0` | `1` lets scene chaining and r2v fall back to plain i2v instead of failing. |
+| `FLOW_ENABLE_CAPTCHA_GENERATION` | `0` | Set to `1` to explicitly opt in to CAPTCHA-bearing generation. Disabled by default; opt in only with a test account. |
 | `DEFAULT_PAYGATE_TIER` | `PAYGATE_TIER_TWO` | Carried for the DB and dashboard; no longer selects a model. |
 
 ### Image API
@@ -693,7 +724,7 @@ drawtext` shows whether yours has it.
 
 ## Worker Behavior
 
-- **Server handles throttling** — worker enforces max 5 concurrent + 10s cooldown automatically. Use `POST /api/requests/batch` to submit all at once; do NOT manually batch.
+- **Server handles throttling** — the worker may queue a batch, but the temporary account-safety guard permits at most one CAPTCHA-bearing request in flight when explicitly opted in. Use `POST /api/requests/batch` rather than a manual request loop.
 - **10s cooldown** between API calls (anti-spam, configurable via `API_COOLDOWN`)
 - **Reference blocking** — scene image gen refuses if any referenced entity is missing `media_id`
 - **Skip completed** — won't re-generate already-completed assets
@@ -860,8 +891,10 @@ These arrive in the response body as `data.error.details[].reason`. The worker a
 | `PUBLIC_ERROR_MODEL_ACCESS_DENIED` | Tier mismatch (e.g. TIER_ONE trying Veo 3 / upscale) | Mark FAILED — auto-detect should downgrade to allowed model |
 | `Requested entity was not found` | Uploaded `media_id` expired (~1h TTL) | Auto-recover via `_recover_entity_not_found` — re-uploads from `image_url`, re-queues PENDING |
 | `Internal error encountered` | Flow backend transient 500 | Exponential backoff retry: `2^retry * 10s`, capped 300s |
-| `reCAPTCHA failed` / `captcha` | Extension couldn't solve CAPTCHA | Retry up to 10× without incrementing `retry_count` (processor.py:454-464) |
-| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (403, message `reCAPTCHA evaluation failed`) | Google flagged the session as bot-like — usually rapid bursts of submits, VPN/shared IP, or stale auth cookies | NOT auto-recoverable. Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in at `flow.google.com`, then resubmit with ≥1s gap and ≤5 concurrent. See `/fk-doctor` for full playbook. |
+| `FLOW_CAPTCHA_GENERATION_DISABLED` | CAPTCHA-bearing generation is disabled by default | Request rejected before it is sent; explicit opt-in is `FLOW_ENABLE_CAPTCHA_GENERATION=1`, for test accounts only |
+| `reCAPTCHA failed` / `captcha` | CAPTCHA-bearing generation failed at the extension/Flow layer | Current request is terminal, and a persistent safety hold prevents another token request. No automatic retry. |
+| `FLOW_ACCOUNT_SAFETY_HOLD` | A prior unusual-activity or extension-hijack signal latched the persistent generation hold | CAPTCHA-bearing generation is rejected; hold survives restart. `/api/flow/clear-hijack` cannot clear it. See [`docs/ACCOUNT_SAFETY.md`](docs/ACCOUNT_SAFETY.md). |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (often reported with 403 / `reCAPTCHA evaluation failed`) | Flow returned an unusual-activity / risk-evaluation error; the cause and account impact are not established by this message alone | Current request is terminal and the persistent hold is latched. Distinguish extension-only failure from a manual Flow UI block. Do not infer account recovery from FlowKit's internal guard. See [`docs/ACCOUNT_SAFETY.md`](docs/ACCOUNT_SAFETY.md) and `/fk-doctor`. |
 
 ### HTTP Status Codes
 
@@ -869,7 +902,7 @@ These arrive in the response body as `data.error.details[].reason`. The worker a
 |--------|--------|---------|----------|
 | **400** | Flow API | Invalid payload, UNSAFE_GENERATION, entity not found (sometimes) | Route by `details.reason` — some are auto-recoverable, others terminal |
 | **401** | Flow API | Should not occur — batchexecute authenticates in the page, not with a bearer | Check the Flow tab is signed in; see `NO_AT_TOKEN` |
-| **403** | Extension (`background.js:432`) | `CAPTCHA_FAILED`, `NO_FLOW_TAB`, or `MODEL_ACCESS_DENIED` | CAPTCHA → retry loop; NO_FLOW_TAB → fail (user must open Flow); tier → fail |
+| **403** | Extension (`background.js:432`) | `CAPTCHA_FAILED`, `NO_FLOW_TAB`, or `MODEL_ACCESS_DENIED` | CAPTCHA generation request → terminal; NO_FLOW_TAB → fail (user must open Flow); tier → fail |
 | **404** | Flow API | `media_id` not found (expired upload) | Same as "Requested entity was not found" — auto re-upload |
 | **429** | Flow API | Rate limited / quota | Back off + retry; if `USER_QUOTA_REACHED` appears, fail |
 | **500** | Flow backend **or** extension fetch exception (`background.js:504`) | Transient server error OR network drop during fetch | Retry with exponential backoff |
@@ -899,10 +932,17 @@ String patterns in `error_message` that the worker recognizes:
 
 `processor.py:_handle_failure` decides terminal vs retryable:
 
-1. **Auto-recover** if message contains `"not found"` → re-upload media, mark PENDING.
-2. **Transient WS** (`reconnected`/`disconnected`/`switched`) → re-queue PENDING, keep `retry_count`.
-3. **CAPTCHA** → retry up to 10× without counting toward `MAX_RETRIES`.
-4. **Default** → increment `retry_count`; if < `MAX_RETRIES` (5), schedule retry with `2^retry * 10s` backoff (capped 300s). Otherwise mark FAILED.
+The account-safety stop rule in [`docs/ACCOUNT_SAFETY.md`](docs/ACCOUNT_SAFETY.md)
+overrides these ordinary retries: stop automated generation immediately on an
+unusual-activity or account/session security signal.
+
+1. **`[HIJACK]` or unusual activity** → mark FAILED and latch the persistent generation safety hold.
+2. **`FLOW_ACCOUNT_SAFETY_HOLD` / `FLOW_CAPTCHA_GENERATION_DISABLED`** → mark FAILED; do not retry.
+3. **`UNSUPPORTED_ON_BATCH_API` / `NO_FLOW_PROJECT`** → mark FAILED; do not retry.
+4. **Transient WS** (`reconnected`/`disconnected`/`switched`) → re-queue PENDING, keep `retry_count`.
+5. **Any other CAPTCHA / reCAPTCHA error** → mark FAILED; do not retry automatically.
+6. **`"not found"`** → attempt media recovery and re-queue only if recovery succeeds.
+7. **Default** → increment `retry_count`; if < `MAX_RETRIES` (5), schedule retry with `2^retry * 10s` backoff (capped 300s). Otherwise mark FAILED.
 
 ### YouTube Upload Errors
 
@@ -925,7 +965,8 @@ From `youtube/upload.py` (HTTP errors from YouTube Data API v3):
 | Extension shows "No token" | Expected on the batch path — there is no bearer token any more |
 | `CAPTCHA_FAILED: NO_FLOW_TAB` | Open a Google Flow tab |
 | 403 `MODEL_ACCESS_DENIED` | Tier mismatch — check `/api/flow/credits`, downgrade model in `models.json` |
-| 403 `PUBLIC_ERROR_UNUSUAL_ACTIVITY` / `reCAPTCHA evaluation failed` | Pause submits, clear cookies for `google.com` + `labs.google` in Chrome, sign back in, then resubmit with ≥1s gap and ≤5 concurrent. Switch network or wait 1–6 h if still blocked |
+| CAPTCHA-bearing generation disabled | Default is off; `FLOW_ENABLE_CAPTCHA_GENERATION=1` is explicit opt-in for test accounts only |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY`, extension hijack, CAPTCHA error, or active safety hold | Stop generation. These signals latch a persistent hold. Distinguish extension-only failure from a manual Flow UI block. Google recovery is unverified; `/api/flow/clear-hijack` cannot clear the hold. See [`docs/ACCOUNT_SAFETY.md`](docs/ACCOUNT_SAFETY.md). |
 | Scene images inconsistent | Check all refs have UUID `media_id` — run `/fk-fix-uuids` |
 | `media_id` starts with `CAMS...` | Run `/fk-fix-uuids` to extract UUID from URL |
 | Upscale "permission denied" | Requires `PAYGATE_TIER_TWO` account |

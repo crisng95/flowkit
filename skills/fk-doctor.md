@@ -33,6 +33,18 @@ You are the on-call doctor for the FlowKit pipeline. Never guess — always cons
 3. Prescribe the exact handler listed in `agent/worker/processor.py:_handle_failure` (lines 414-481) — don't invent a new one.
 4. If auto-recovery should kick in but didn't, explain why (e.g. retry_count maxed, not matched by string).
 
+**Account-safety stop rule overrides normal retries:** at the first
+`PUBLIC_ERROR_UNUSUAL_ACTIVITY`, suspected account/session hijack, or other
+unexpected security signal, stop all automated Flow generation immediately.
+CAPTCHA-bearing generation is disabled by default; `FLOW_ENABLE_CAPTCHA_GENERATION=1`
+is an explicit opt-in intended only for test accounts. Unusual-activity and
+extension-hijack signals persist `flow_generation_safety_hold.json`; the hold
+survives agent restarts and `/api/flow/clear-hijack` cannot clear it. Generic
+CAPTCHA errors fail the request without an automatic retry, and alone do not
+latch this persistent hold. Distinguish an extension/agent-only failure from a
+block in the manual Flow website; do not infer one from the other. Then follow
+[`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md).
+
 ## Mode 1: Triage (no args)
 
 ```bash
@@ -97,8 +109,10 @@ migration, not a regression.
 | `PUBLIC_ERROR_MODEL_ACCESS_DENIED` | Tier mismatch (TIER_ONE trying Veo 3 / Upscale) | Terminal FAILED | `GET /api/flow/credits` to check tier; `/fk-change-model` to downgrade |
 | `Requested entity was not found` | Uploaded `media_id` expired (~1h TTL on uploads) | `_recover_entity_not_found` re-uploads from `image_url`, re-queues PENDING | If auto-recovery fails: manually `POST /api/upload-image`, patch `media_id` |
 | `Internal error encountered` | Flow backend transient 500 | Exponential backoff: `2^retry * 10s`, capped 300s | None — wait, or retry manually after a minute |
-| `reCAPTCHA failed` / (contains `captcha`) | Extension couldn't solve reCAPTCHA | Retry ≤10× without consuming `retry_count` (processor.py:454-464) | Ensure a Google Flow tab is open and focused; reload extension |
-| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (403, message `reCAPTCHA evaluation failed`) | Google flagged the session as bot-like — usually triggered by rapid bursts of submits (e.g. many GENERATE_VIDEO in <1 minute), shared/VPN IP, or stale auth cookies | NOT auto-handled — Google blocks even fresh requests until the trust signal recovers | (1) **Stop the worker / pipeline** so submits pause. (2) Open Chrome → `chrome://settings/cookies` (or the extension's Chrome profile) → search `google.com` and `labs.google` → **remove all cookies for both**. (3) Reload `https://flow.google.com` and sign back in (re-solve any reCAPTCHA puzzles manually). (4) Slow down submission cadence (≥1s gap between submits, ≤5 concurrent). If still blocked, switch to a different network or wait 1–6 h |
+| `FLOW_CAPTCHA_GENERATION_DISABLED` | CAPTCHA-bearing generation is off by default | Terminal FAILED before the request is sent | `FLOW_ENABLE_CAPTCHA_GENERATION=1` is explicit opt-in; use only with a test account |
+| `reCAPTCHA failed` / (contains `captcha`) | CAPTCHA-bearing generation failed at the extension/Flow layer | Terminal FAILED; persistent safety hold | Diagnose without resubmitting. The pre-submit marker remains held after a CAPTCHA error. |
+| `FLOW_ACCOUNT_SAFETY_HOLD` | An unusual-activity or extension-hijack signal previously latched the persistent hold | Terminal FAILED; hold persists across agent restarts | Do not retry. `/api/flow/clear-hijack` cannot clear this hold. Follow [`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md). |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` (may appear with 403 / `reCAPTCHA evaluation failed`) | An unusual-activity / risk-evaluation response; this string alone does not establish the cause or whether manual Flow access is blocked | Stop generation; current request is terminal and the persistent hold is latched | Separate extension-only errors from a manual Flow UI block. Google recovery is unverified; do not recommend cookie clearing, IP/network changes, or a fixed wait. Follow [`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md). |
 
 ### B. HTTP status codes
 
@@ -137,10 +151,10 @@ Detection lives in `agent/worker/_parsing.py:_is_error`. A result is treated as 
 | `NO_AT_TOKEN` | The Flow tab loaded but `WIZ_global_data.SNlM0e` is absent — the page is signed out, on an interstitial, or still booting | Retried with backoff | Open `https://flow.google.com/`, confirm you are signed in, let the app finish loading |
 | `NO_FLOW_TAB` | No Flow tab to sign the request | Extension opens one and retries once | Leave one signed-in Flow tab open; nothing here works headless |
 | `FLOW_TAB_DISCARDED` | Chrome discarded the backgrounded tab and the reload did not revive it | Retried with backoff | Pin the Flow tab, or keep its window visible |
-| `NO_INJECTION_RESULT` | `chrome.scripting.executeScript` resolved with no frame result (`background.js:540`), so the envelope never ran — the Flow tab went away or was still booting at the moment of the call. Most likely on the first captcha-bearing RPC after an agent restart | Retried with backoff, counts against `MAX_RETRIES` | Usually transient — retry first. Rule out the lookalikes before digging: a failed mint reports `CAPTCHA_FAILED`, an oversized payload is not it (`MAX_RPC_TEXT` is 32 MB), and a structured-clone failure surfaces as 500, not 502. If it repeats, pin the Flow tab and reload the extension |
+| `NO_INJECTION_RESULT` | `chrome.scripting.executeScript` returned no frame result; the Flow tab may have closed or still been booting | A CAPTCHA-bearing request is held for manual review; non-generation requests follow their normal error policy | Do not retry generation or mint another token. Check the tab and preserve the response, then follow [`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md). |
 | `NO_FLOW_PROJECT` | A low-level caller reached batchexecute without a project id | **Terminal — not retried** | Use `POST /api/projects` to create a real Flow project, or call a public `/api/flow/*` endpoint without `project_id` so the session-project lease resolves one automatically |
 | `UNSUPPORTED_ON_BATCH_API` | A capability whose payload was never captured off the new UI, all on the Veo path: **video upscale**, **Veo r2v**, **Veo start+end-frame chaining**. Every Omni mode is ported, so this never names Omni any more | **Terminal — not retried** | For chaining and r2v, `FLOW_ALLOW_DEGRADED=1` falls back to plain i2v off the start frame. Upscale has no fallback. Real fix: capture the payload — `docs/CAPTURE.md` |
-| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` | Google rejected the generation as unusual activity / reCAPTCHA risk evaluation | **Do not auto-retry** — repeated submits can prolong the block | Pause generation submits, keep the browser/session/network stable, and retry manually only after the trust signal has had time to recover |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY` | Flow returned an unusual-activity / risk-evaluation error; manual UI impact is a separate observation | **Stop all automated generation immediately; current request fails and a persistent hold is latched** | Determine whether this is extension-only or the manual Flow UI is also blocked. Google recovery is unverified. See [`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md). |
 | `no ogiZ0b envelope in response` | The RPC answered but not with the payload we came for — usually a signed-out page returning an HTML redirect | Retried with backoff | Re-sign in on the Flow tab |
 | `Polling timeout after Ns: Media not found.` | The job never produced media inside the budget | Terminal after `MAX_RETRIES` | The quoted complaint is a **diagnostic, not the cause** — finished jobs report it too. Check the Flow UI: if the clip is there, raise `VIDEO_POLL_TIMEOUT` |
 
@@ -192,7 +206,8 @@ When the user describes a symptom in plain language, map it here first.
 | Extension shows "No token" | Expected — there is no bearer any more. Not a fault |
 | `CAPTCHA_FAILED: NO_FLOW_TAB` | Open `https://flow.google.com/` — and check the extension is v0.3.0+, older builds only matched the dead labs.google URL and could not see the tab that was right there |
 | 403 `MODEL_ACCESS_DENIED` | Tier mismatch — `GET /api/flow/credits`, downgrade model in `models.json` via `/fk-change-model` |
-| 403 `PUBLIC_ERROR_UNUSUAL_ACTIVITY` / `reCAPTCHA evaluation failed` | Google flagged the session as bot-like (rapid bursts, VPN/shared IP, stale cookies). **Pause submits**, then in Chrome: `chrome://settings/cookies` → remove cookies for `google.com` and `labs.google` → reload `flow.google.com` → sign in & solve any captcha → resubmit with ≥1s gap and ≤5 concurrent. Switch network or wait 1–6 h if still blocked |
+| CAPTCHA-bearing generation disabled | Default is off; `FLOW_ENABLE_CAPTCHA_GENERATION=1` is explicit opt-in for test accounts only |
+| `PUBLIC_ERROR_UNUSUAL_ACTIVITY`, extension hijack, CAPTCHA error, or active safety hold | **Stop generation.** These signals latch a persistent hold. Distinguish extension-only failure from a manual Flow UI block. Google recovery is unverified; `/api/flow/clear-hijack` cannot clear the hold. See [`docs/ACCOUNT_SAFETY.md`](../docs/ACCOUNT_SAFETY.md). |
 | Scene images inconsistent across scenes | Check all refs have UUID `media_id` — run `/fk-fix-uuids` |
 | `media_id` starts with `CAMS...` | Run `/fk-fix-uuids` to extract UUID from URL |
 | Upscale fails on every scene | On the batch path upscale is unported (`UNSUPPORTED_ON_BATCH_API`) — no upsampler rpc has been captured. On the legacy path it needs `PAYGATE_TIER_TWO` |
@@ -226,11 +241,13 @@ Providers, models and efforts come from `agent/providers.json`; see
 
 Decision order — stop at first match:
 
-0. **`UNSUPPORTED_ON_BATCH_API` / `NO_FLOW_PROJECT`** → FAILED immediately. These are configuration answers, not something a retry can reach.
-1. **`"not found"` in message** → `_recover_entity_not_found()` re-uploads media, marks PENDING.
-2. **`reconnected` / `disconnected` / `switched`** → PENDING, keep `retry_count`.
-3. **`captcha` / `recaptcha`** → PENDING if retry_count < 10; else FAILED.
-4. **Default** → increment `retry_count`; if < `MAX_RETRIES` (5), schedule retry at `now + min(2^retry * 10, 300)`s. Else FAILED.
+1. **`[HIJACK]` or unusual activity** → FAILED and persist the account-safety hold.
+2. **`FLOW_ACCOUNT_SAFETY_HOLD` / `FLOW_CAPTCHA_GENERATION_DISABLED`** → FAILED; no retry.
+3. **`UNSUPPORTED_ON_BATCH_API` / `NO_FLOW_PROJECT`** → FAILED; no retry.
+4. **`reconnected` / `disconnected` / `switched`** → PENDING, keep `retry_count`.
+5. **Any other `captcha` / `recaptcha` error** → FAILED; no automatic retry.
+6. **`"not found"`** → attempt `_recover_entity_not_found()` and re-queue only if recovery succeeds.
+7. **Default** → increment `retry_count`; if < `MAX_RETRIES` (5), schedule retry at `now + min(2^retry * 10, 300)`s. Else FAILED.
 
 ## Output format
 

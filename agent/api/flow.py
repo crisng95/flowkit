@@ -185,7 +185,7 @@ async def extension_status():
         "flow_key_present": client._flow_key is not None,
         "generation_throttle": {
             "min_interval_s": FLOW_GENERATION_MIN_INTERVAL_S,
-            "max_concurrent": FLOW_GENERATION_MAX_CONCURRENT,
+            "max_concurrent": 1,  # temporary account-safety cap in FlowClient
             "unusual_activity_cooldown_s": FLOW_UNUSUAL_ACTIVITY_COOLDOWN_S,
             **client.generation_guard_status,
         },
@@ -195,13 +195,12 @@ async def extension_status():
 
 @router.post("/clear-hijack")
 async def clear_hijack_cooldown():
-    """Reset the generation cooldown triggered by extension_hijack_detected.
-
-    Call this after deploying the bypass fix to immediately resume generation
-    without waiting for the cooldown to expire.
-    """
+    """Clear only the legacy timer, never an account-safety hold."""
     import time as _time
     client = get_flow_client()
+    if client.generation_guard_status["safety_hold_active"]:
+        raise HTTPException(409, "FLOW_ACCOUNT_SAFETY_HOLD: this endpoint cannot reset the hold; "
+                            "review manual Flow UI status and the safety state before restarting")
     old_until = client._generation_unusual_until
     client._generation_unusual_until = 0.0
     was_active = old_until > 0.0 and old_until > _time.monotonic()

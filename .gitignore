@@ -27,3 +27,5 @@ extension/_metadata/
 .omc/
 .agent/
 flow_session_project.json
+flow_generation_safety_hold.json
+flow_generation_safety_hold.json.*.tmp

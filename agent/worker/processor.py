@@ -434,25 +434,15 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
     if isinstance(error_msg, dict):
         error_msg = json.dumps(error_msg)[:200]
 
-    # Auto-recover expired media by re-uploading
-    if "not found" in str(error_msg).lower():
-        recovered = await _recover_entity_not_found(req)
-        if recovered:
-            logger.info("Request %s: recovered expired media, retrying", rid[:8])
-            await crud.update_request(rid, status="PENDING", error_message=f"recovered: {error_msg}")
-            return
-
     error_lower = str(error_msg).lower()
 
-    # [HIJACK] extension_hijack_detected — the captcha bypass failed and the
-    # token was poisoned by x2a. This is a system-level trap, NOT an account
-    # issue. Don't burn retry count — the bypass may succeed on the next
-    # attempt once the tab re-initializes.
+    # Neither the account impact nor the cause of this signal is established.
+    # A later automatic retry would mint another token, so fail this request.
     if "[hijack]" in error_lower or "extension_hijack" in error_lower:
-        await crud.update_request(rid, status="PENDING", error_message=str(error_msg))
+        await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
+        await _mark_scene_failed(req)
         logger.error(
-            "Request %s [HIJACK] captcha bypass failed — will retry without "
-            "counting (system error, not account error): %s",
+            "Request %s FAILED (hijack signal; no automatic retry): %s",
             rid[:8], error_msg,
         )
         return
@@ -469,6 +459,12 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
                      rid[:8], error_msg)
         return
 
+    if "flow_account_safety_hold" in error_lower or "flow_captcha_generation_disabled" in error_lower:
+        await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
+        await _mark_scene_failed(req)
+        logger.error("Request %s FAILED (generation safety gate): %s", rid[:8], error_msg)
+        return
+
     # A capability the batch path does not have, or a missing Flow project, is
     # a configuration answer — not something a retry can reach. Fail it once.
     if "unsupported_on_batch_api" in error_lower or "no_flow_project" in error_lower:
@@ -483,17 +479,21 @@ async def _handle_failure(rid: str, req: dict, result: dict, retry_after: dict =
         logger.info("Request %s transient WS error, will retry (no retry increment): %s", rid[:8], error_msg)
         return
 
-    # reCAPTCHA errors: retry up to 10 times — deferred dict in main loop handles delay
+    # A repeated mint can add more risk signals. A CAPTCHA failure is terminal
+    # for this request; the operator can investigate without an automatic loop.
     if "captcha" in error_lower or "recaptcha" in error_lower:
-        retry = req.get("retry_count", 0) + 1
-        if retry < 10:
-            await crud.update_request(rid, status="PENDING", retry_count=retry, error_message=str(error_msg))
-            logger.warning("Request %s reCAPTCHA failed (retry %d/10), will retry", rid[:8], retry)
-            return
-        else:
-            await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
-            await _mark_scene_failed(req)
-            logger.error("Request %s FAILED after 10 reCAPTCHA retries: %s", rid[:8], error_msg)
+        await crud.update_request(rid, status="FAILED", error_message=str(error_msg))
+        await _mark_scene_failed(req)
+        logger.error("Request %s FAILED (CAPTCHA error; no automatic retry): %s", rid[:8], error_msg)
+        return
+
+    # Only ordinary missing media may be re-uploaded. Safety and CAPTCHA
+    # signals above take precedence even if their wording contains "not found".
+    if "not found" in error_lower:
+        recovered = await _recover_entity_not_found(req)
+        if recovered:
+            logger.info("Request %s: recovered expired media, retrying", rid[:8])
+            await crud.update_request(rid, status="PENDING", error_message=f"recovered: {error_msg}")
             return
 
     retry = req.get("retry_count", 0) + 1

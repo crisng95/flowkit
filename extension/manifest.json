@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Flow Kit",
   "version": "0.5.2",
-  "description": "Local agent bridge for Google Flow — runs batchexecute RPCs inside a signed-in flow.google.com tab, mints reCAPTCHA with hijack bypass, proxies API calls",
+  "description": "Local Google Flow bridge. Automated CAPTCHA generation is disabled by default during account-safety investigation.",
   "permissions": [
     "storage",
     "alarms",
@@ -30,9 +30,6 @@
         "https://labs.google/fx/*/tools/flow*"
       ],
       "js": [
-        "hijack_bypass.js",
-        "recaptcha_enterprise.js",
-        "recaptcha__en.js",
         "injected.js"
       ],
       "run_at": "document_start",

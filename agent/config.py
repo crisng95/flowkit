@@ -33,6 +33,17 @@ FLOW_PROJECT_ID = os.environ.get("FLOW_PROJECT_ID", "")
 # both drop to plain i2v off the start frame. Upscale has no fallback.
 FLOW_ALLOW_DEGRADED = os.environ.get("FLOW_ALLOW_DEGRADED", "0") == "1"
 
+# Temporary account-safety gate for CAPTCHA-bearing generation. Google may
+# block manual Flow generation after an unusual-activity response; opt in only
+# with an account whose loss of generation access would be acceptable.
+FLOW_ENABLE_CAPTCHA_GENERATION = os.environ.get("FLOW_ENABLE_CAPTCHA_GENERATION", "0") == "1"
+FLOW_GENERATION_SAFETY_FILE = Path(os.environ.get(
+    "FLOW_GENERATION_SAFETY_FILE", BASE_DIR / "flow_generation_safety_hold.json"))
+# Operator-reported manual UI state, never inferred from an extension error.
+FLOW_MANUAL_UI_STATUS = os.environ.get("FLOW_MANUAL_UI_STATUS", "unknown").lower()
+if FLOW_MANUAL_UI_STATUS not in {"unknown", "works", "blocked"}:
+    FLOW_MANUAL_UI_STATUS = "unknown"
+
 # Process-wide guard for every CAPTCHA-bearing generation submit, including
 # direct API calls that bypass the background worker's limiter.
 FLOW_GENERATION_MIN_INTERVAL_S = max(
@@ -124,4 +135,3 @@ SUNO_MODEL = os.environ.get("SUNO_MODEL", "V4")
 SUNO_CALLBACK_URL = os.environ.get("SUNO_CALLBACK_URL", f"http://{API_HOST}:{API_PORT}/api/music/callback")
 SUNO_POLL_INTERVAL = int(os.environ.get("SUNO_POLL_INTERVAL", "5"))
 SUNO_POLL_TIMEOUT = int(os.environ.get("SUNO_POLL_TIMEOUT", "600"))
-
