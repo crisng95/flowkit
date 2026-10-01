@@ -1,0 +1,10 @@
+{
+  "cases": 180,
+  "invariant_violations": 0,
+  "full_regen_reference_cost_units": 15.2,
+  "targeted_avg_invalidation_cost_units": 7.911,
+  "targeted_median_invalidation_cost_units": 8.0,
+  "targeted_max_invalidation_cost_units": 15.0,
+  "synthetic_scope_savings_percent_vs_full_regen": 48.0,
+  "note": "Synthetic invalidation-scope model. It does not prove provider generation quality, success rate, or real monetary savings."
+}
