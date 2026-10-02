@@ -38,6 +38,7 @@ from agent.services.cli_providers import (  # noqa: F401  (PROVIDER_BINARIES re-
     PROVIDER_BINARIES,
     resolve_role,
 )
+from agent.utils.paths import file_url_to_path
 
 logger = logging.getLogger(__name__)
 
@@ -149,11 +150,12 @@ def _local_media_path(url: str) -> Path | None:
     """
     if not url:
         return None
-    parsed = urlparse(url)
-    if parsed.scheme == "file":
-        p = Path(parsed.path)
+    p = file_url_to_path(url)
+    if p is not None:
         return p if p.is_file() else None
-    if not parsed.scheme:
+    parsed = urlparse(url)
+    # A Windows drive letter ("C:") parses as a scheme; it is still a path.
+    if not parsed.scheme or len(parsed.scheme) == 1:
         p = Path(url)
         return p if p.is_file() else None
     return None

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from agent.utils.paths import file_url_to_path
 from agent.config import OUTPUT_DIR
 from agent.db import crud
 from agent.models.video import Video, VideoCreate, VideoUpdate
@@ -131,10 +132,10 @@ def _resolve_media_local(url: str, tmpdir: Path) -> Optional[str]:
     """Resolve a media URL to a local file path (downloading http(s) when needed)."""
     if not url:
         return None
+    local = file_url_to_path(url)
+    if local is not None:
+        return str(local) if local.is_file() else None
     parsed = urlparse(url)
-    if parsed.scheme == "file":
-        p = Path(parsed.path)
-        return str(p) if p.is_file() else None
     if parsed.scheme in ("http", "https"):
         dest = tmpdir / f"dl_{abs(hash(url)) % 10**8}{Path(parsed.path).suffix or '.mp4'}"
         try:

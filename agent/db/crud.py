@@ -20,7 +20,7 @@ def _validate_table(table: str) -> None:
 # Column whitelists per table — prevents SQL injection via kwargs keys
 _COLUMNS = {
     "character": {"name", "slug", "entity_type", "description", "image_prompt", "voice_description", "reference_image_url", "media_id", "updated_at"},
-    "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "narrator_voice", "narrator_ref_audio", "material", "allow_music", "allow_voice", "updated_at"},
+    "project": {"name", "description", "story", "thumbnail_url", "language", "status", "user_paygate_tier", "narrator_voice", "narrator_ref_audio", "material", "allow_music", "allow_voice", "video_model_family", "updated_at"},
     "video": {"title", "description", "display_order", "status", "orientation", "vertical_url", "horizontal_url",
               "thumbnail_url", "duration", "target_duration_s", "resolution", "youtube_id", "privacy", "tags", "updated_at"},
     "scene": {"prompt", "image_prompt", "video_prompt", "character_names", "parent_scene_id", "chain_type",
@@ -116,13 +116,13 @@ async def list_characters() -> list[dict]:
 
 # ─── Project ────────────────────────────────────────────────
 
-async def create_project(name: str, description: str = None, story: str = None, language: str = "en", user_paygate_tier: str = "PAYGATE_TIER_ONE", id: str = None, material: str = None, allow_music: bool = False, allow_voice: bool = False) -> dict:
+async def create_project(name: str, description: str = None, story: str = None, language: str = "en", user_paygate_tier: str = "PAYGATE_TIER_ONE", id: str = None, material: str = None, allow_music: bool = False, allow_voice: bool = False, video_model_family: str = "veo") -> dict:
     db = await get_db()
     pid, now = id or _uuid(), _now()
     async with _db_lock:
         await db.execute(
-            "INSERT INTO project (id,name,description,story,language,user_paygate_tier,material,allow_music,allow_voice,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (pid, name, description, story, language, user_paygate_tier, material, int(allow_music), int(allow_voice), now, now))
+            "INSERT INTO project (id,name,description,story,language,user_paygate_tier,material,allow_music,allow_voice,video_model_family,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (pid, name, description, story, language, user_paygate_tier, material, int(allow_music), int(allow_voice), video_model_family or "veo", now, now))
         await db.commit()
     return await _get_with_db(db, "project", "id", pid)
 

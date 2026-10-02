@@ -1,7 +1,28 @@
 """Centralized path resolver for project output directories and scene files."""
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from agent.config import OUTPUT_DIR
+
+
+def file_url_to_path(url: str | None) -> "Path | None":
+    """Turn a ``file://`` URL into a local ``Path``; ``None`` for anything else.
+
+    Accepts both the RFC 8089 form ``Path.as_uri()`` produces
+    (``file:///C:/x/y.png``, percent-encoded) and the naive
+    ``"file://" + str(path)`` form the pipeline stores. The latter is fine on
+    POSIX (``file:///tmp/y.png``) but on Windows ``urlparse`` files
+    ``C:\\x\\y.png`` under *netloc* with an empty *path*, so reading only
+    ``parsed.path`` made every local clip look missing.
+    """
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme != "file":
+        return None
+    raw = (parsed.netloc or "") + parsed.path
+    return Path(url2pathname(raw))
 
 
 def project_dir(project_slug: str) -> Path:

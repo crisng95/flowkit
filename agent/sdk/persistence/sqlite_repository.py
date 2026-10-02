@@ -34,6 +34,7 @@ class SQLiteRepository(Repository):
             material=row.get("material"),
             allow_music=bool(row.get("allow_music", 0)),
             allow_voice=bool(row.get("allow_voice", 0)),
+            video_model_family=row.get("video_model_family") or "veo",
             narrator_voice=row.get("narrator_voice"),
             narrator_ref_audio=row.get("narrator_ref_audio"),
             created_at=row.get("created_at"),
@@ -192,6 +193,7 @@ class SQLiteRepository(Repository):
             user_paygate_tier=project.user_paygate_tier,
             allow_music=int(project.allow_music),
             allow_voice=int(project.allow_voice),
+            video_model_family=project.video_model_family,
         )
 
     async def create_project(
@@ -206,6 +208,7 @@ class SQLiteRepository(Repository):
         material: Optional[str] = None,
         allow_music: bool = False,
         allow_voice: bool = False,
+        video_model_family: str = "veo",
     ) -> Project:
         row = await crud.create_project(
             name=name,
@@ -217,6 +220,7 @@ class SQLiteRepository(Repository):
             material=material,
             allow_music=allow_music,
             allow_voice=allow_voice,
+            video_model_family=video_model_family,
         )
         return self._row_to_project(row)
 

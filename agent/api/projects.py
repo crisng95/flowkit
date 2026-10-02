@@ -10,6 +10,7 @@ import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from agent.utils.paths import file_url_to_path
 from agent.config import BASE_DIR
 from agent.models.project import Project, ProjectCreate, ProjectUpdate
 from agent.models.character import Character
@@ -212,6 +213,7 @@ async def create(body: ProjectCreate):
         material=material_id,
         allow_music=create_data.get("allow_music", False),
         allow_voice=create_data.get("allow_voice", False),
+        video_model_family=create_data.get("video_model_family", "veo"),
     )
 
     # Step 3: Create reference entities (characters, locations, assets) with profiles
@@ -467,8 +469,8 @@ async def generate_thumbnail(pid: str, body: ThumbnailRequest):
             except aiohttp.ClientError as e:
                 raise HTTPException(502, f"Failed to download image: {e}") from e
         elif gen_result.url.startswith("file://"):
-            src = Path(urlparse(gen_result.url).path)
-            if not src.is_file():
+            src = file_url_to_path(gen_result.url)
+            if src is None or not src.is_file():
                 raise HTTPException(502, f"Provider returned missing file: {gen_result.url}")
             shutil.copy2(src, output_path)
 

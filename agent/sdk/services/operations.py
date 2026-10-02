@@ -275,6 +275,7 @@ class OperationService:
         tier = project.get("user_paygate_tier", "PAYGATE_TIER_TWO") if project else "PAYGATE_TIER_TWO"
         pid = scene.get("_project_id", "0")
         end_id = scene.get(f"{prefix}_end_scene_media_id")
+        model_family = (project.get("video_model_family") if project else None) or "veo"
 
         # Chain scenes with end_image: prefer transition_prompt (describes motion between frames)
         if end_id and scene.get("transition_prompt"):
@@ -298,6 +299,11 @@ class OperationService:
                 "start_media_id": image_media_id,
                 "end_media_id": end_id,
                 "request_id": request_id,
+                "model_family": model_family,
+                # Per-scene clip length (seconds). Omni Flash honours it (rounded
+                # up to 4/6/8/10); Veo ignores it. Lets a scene whose narration
+                # outruns the default be rendered longer instead of padded in post.
+                "duration_s": scene.get("duration"),
                 "project_name": project.get("name") if project else "",
                 "display_order": scene.get("display_order", 0),
             },

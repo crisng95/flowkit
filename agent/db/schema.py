@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS project (
     material TEXT DEFAULT 'realistic',
     allow_music INTEGER NOT NULL DEFAULT 0,
     allow_voice INTEGER NOT NULL DEFAULT 0,
+    video_model_family TEXT NOT NULL DEFAULT 'veo',
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
@@ -327,6 +328,9 @@ CREATE INDEX IF NOT EXISTS idx_request_scene ON request(scene_id);
         if "allow_voice" not in project_columns:
             await db.execute("ALTER TABLE project ADD COLUMN allow_voice INTEGER NOT NULL DEFAULT 0")
             logger.info("Migrated: added allow_voice column to project table")
+        if "video_model_family" not in project_columns:
+            await db.execute("ALTER TABLE project ADD COLUMN video_model_family TEXT NOT NULL DEFAULT 'veo'")
+            logger.info("Migrated: added video_model_family column to project table")
         # Migration: add orientation to video table + backfill from scene data
         cursor = await db.execute("PRAGMA table_info(video)")
         video_columns = {row[1] for row in await cursor.fetchall()}

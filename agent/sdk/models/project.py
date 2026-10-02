@@ -29,6 +29,7 @@ class Project(DomainModel):
     material: Optional[str] = None
     allow_music: bool = False
     allow_voice: bool = False
+    video_model_family: str = "veo"
     narrator_voice: Optional[str] = None
     narrator_ref_audio: Optional[str] = None
     created_at: Optional[str] = None
