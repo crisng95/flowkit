@@ -1,0 +1,26 @@
+{
+  "profiles": {
+    "google-flow-product.json": {
+      "valid": true,
+      "errors": []
+    },
+    "google-veo-vertex.json": {
+      "valid": true,
+      "errors": []
+    },
+    "byteplus-seedance-1-0-pro.json": {
+      "valid": true,
+      "errors": []
+    },
+    "alibaba-wan-2-7-t2v.json": {
+      "valid": true,
+      "errors": []
+    },
+    "wan2-2-local.json": {
+      "valid": true,
+      "errors": []
+    }
+  },
+  "schema_engine": "jsonschema Draft2020-12",
+  "all_valid": true
+}

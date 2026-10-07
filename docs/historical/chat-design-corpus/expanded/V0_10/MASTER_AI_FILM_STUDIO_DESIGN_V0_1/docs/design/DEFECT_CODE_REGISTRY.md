@@ -1,0 +1,34 @@
+# DEFECT_CODE_REGISTRY.md
+# Canonical Defect Code Registry — Draft V0.7
+
+**Status:** DRAFT / cross-module vocabulary candidate.
+
+| Defect Code | Default Severity | Candidate Owner | QA Dimension | Typical Repair Mode |
+|---|---|---|---|---|
+| IDENTITY_WRONG_CHARACTER | BLOCKING | L1 / Reference | IDENTITY | REGENERATE_FROM_ANCHOR |
+| IDENTITY_DRIFT | BLOCKING/HIGH | L1 / Reference | IDENTITY | REGENERATE_FROM_ANCHOR |
+| STATE_WARDROBE_MISMATCH | HIGH/BLOCKING | L2 / State | STATE | PATCH_IN_PLACE |
+| STATE_PHYSICAL_MISMATCH | HIGH | L2 / State | STATE | PATCH_IN_PLACE |
+| PROP_MISSING_CRITICAL | BLOCKING | L2 / State | PROP | PATCH_IN_PLACE |
+| PROP_WRONG_IDENTITY | HIGH/BLOCKING | L2 / Reference | PROP | PATCH_IN_PLACE |
+| ACTION_MISMATCH | HIGH/BLOCKING | L3 / Directing | ACTION | PATCH/REPLAN |
+| PERFORMANCE_MISMATCH | HIGH | L3 / Directing | PERFORMANCE | PATCH/REPLAN |
+| LOCATION_MISMATCH | BLOCKING/HIGH | L4 / Reference | ENVIRONMENT | RE-ANCHOR |
+| SPATIAL_CONTINUITY_FAIL | HIGH/BLOCKING | L4/L8 | CONTINUITY | REPLAN/RE-ANCHOR |
+| SCREEN_DIRECTION_FAIL | HIGH | L6/L8 | CONTINUITY/CAMERA | PATCH/REPLAN |
+| CAMERA_SHOT_SIZE_FAIL | HIGH | L6 | CAMERA | PATCH_IN_PLACE |
+| CAMERA_ANGLE_FAIL | HIGH | L6 | CAMERA | PATCH_IN_PLACE |
+| CAMERA_MOVE_FAIL | HIGH | L6 / Motion | MOTION | PATCH/REPLAN |
+| LIGHTING_CONTINUITY_FAIL | MEDIUM/HIGH | L7/L8 | STYLE/CONTINUITY | PATCH |
+| STYLE_DRIFT | MEDIUM/HIGH | L7 | STYLE | RE-ANCHOR/PATCH |
+| PARENT_CONDITIONING_DRIFT | HIGH | L8 | CONTINUITY | REGENERATE_FROM_ANCHOR |
+| NARRATIVE_INTENT_FAIL | HIGH/BLOCKING | Directing/Cinematography | INTENT | REPLAN_SHOT |
+| SEQUENCE_RHYTHM_FAIL | HIGH | Sequence Director | SEQUENCE | REPLAN_SEQUENCE |
+| PROVIDER_CAPABILITY_FAIL | BLOCKING | Provider Router | EXECUTION | ROUTE/RECOMPILE |
+| ARTIFACT_CORRUPT | BLOCKING | Artifact/Execution | TECHNICAL | RE-DOWNLOAD/REGENERATE |
+
+Rules:
+1. code identifies observed failure class, not guaranteed root cause;
+2. repair planner may assign a different upstream responsible owner with evidence;
+3. severity can be raised by project/shot policy;
+4. code registry is shared by QA, Repair, Orchestrator and UI.

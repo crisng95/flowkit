@@ -1,0 +1,15 @@
+{
+  "fixtures": 120,
+  "blocking_fail_cases": 60,
+  "valid_cases": 60,
+  "weighted_policy": {
+    "threshold": 0.75,
+    "blocking_false_negatives": 60,
+    "false_positives": 0
+  },
+  "severity_policy": {
+    "blocking_false_negatives": 0,
+    "false_positives": 0
+  },
+  "note": "Synthetic policy test. It proves acceptance-policy behavior, not computer-vision detection quality."
+}
