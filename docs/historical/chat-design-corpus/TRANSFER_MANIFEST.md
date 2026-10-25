@@ -1,0 +1,46 @@
+# FLOWKIT DESIGN HISTORY TRANSFER BUNDLE
+
+Mục đích: chuyển corpus thiết kế từ hội thoại hiện tại sang chat đang kết nối FileMCP.
+
+## Nội dung
+
+- Snapshot V0.1 → V0.16 (mỗi version chọn một archive đại diện).
+- 3 canonical patch mới nhất về Niche/Brain, Narrative Expansion, Beat/Scene→Shot.
+- 2 tài liệu standalone quan trọng về audit/kiến trúc hybrid.
+
+- Tổng file entries bên trong 16 snapshot ZIP: **1100**
+- Trong đó `.md` entries: **833**
+- Lưu ý: nhiều file lặp lại giữa các version; đây là lịch sử versioned, không phải số file unique.
+
+## Cách dùng với FileMCP
+
+1. Upload file bundle này vào chat đang kết nối FileMCP, hoặc tải bundle về máy.
+2. Yêu cầu FileMCP lưu/extract vào `D:\FlowKit-Studio-Upgrade\docs\historical\chat-design-corpus\`.
+3. Không import mù tất cả file vào active design. Dùng V0.16 + 3 patch mới làm active candidates; V0.1–V0.15 giữ historical/lineage.
+4. Sau extract, build authority/supersession map rồi mới tạo Master canonical design.
+
+## File inventory
+
+| File | Bytes | SHA-256 | Entries in ZIP | Markdown entries |
+|---|---:|---|---:|---:|
+| `BEAT_SCENE_TO_SHOT_AUTHORITY_ARCHITECTURE_V1_FINAL.md` | 40591 | `eebab25809d44c3fcd85aed4217cf442864b2f006267d76dbb6027507911d94c` | — | — |
+| `FLOWKIT_INDEPENDENT_MULTI_ROUND_PRODUCTION_AUDIT_2026-09-20.md` | 41389 | `e3995d0748f6d951b64d3dd42f7a3c31154c93c255b40afdf7a16b2749b6eac1` | — | — |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_1.zip` | 30157 | `6f3956c77adcd116cbe5050b59613a985b7ee93e735d3f48e3cf3e32eae1c434` | 14 | 14 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_10_PROVIDER_EVIDENCE_CONTRADICTION_PATCHED.zip` | 151500 | `0de6773dee9d2a493b5b0dbe41835fcf143ff4bd47b7e7786af9ee3c5228783a` | 64 | 56 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_11_PROVIDER_CONTRACT_TRACEABILITY_HARDENED.zip` | 155828 | `6c6cd6c4a1659bad008fb64d5f967eb5205f31a9c00f3fd2b0240ac215c382ee` | 73 | 57 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_12_LIVE_PROOF_HARNESSES_READY.zip` | 177725 | `e0a7fc0db2f98aa27402248d70fba9240bcc39f247c95578668ff84c70cc050f` | 96 | 65 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_13_EVIDENCE_GOVERNANCE_STATE_MODEL_HARDENED.zip` | 199116 | `5a72a7bf02fca611b1d959bec4b7c25984ba1ba7425866bd120b8e3dbfc4bdbc` | 113 | 74 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_14_WINDOWS_PERSISTENCE_EVIDENCE_PATCH.zip` | 228220 | `912add6322e8f4a32e6e4484895afc837108bea4bc89fabf722d77a7ac9fe861` | 129 | 81 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_15_WINDOWS_PERSISTENCE_GATE_CLOSED.zip` | 238299 | `1ececd406026cf882607e10fc75f396fa26d8405c29e8b39e47717acc159867a` | 136 | 85 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_16_STORY_INTELLIGENCE_12_ROUND_REPO_HARVEST.zip` | 293634 | `f0e6bbdb27911c1838d98150e29a3a2ba3ac92d89ae655b0aef472b3a7d82453` | 150 | 97 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_2_PERSISTENCE_REVIEWED.zip` | 46931 | `ecf1829888cc01d646b46a82682c7afc83292ccdc524d29d4cd4d6399aadea99` | 18 | 18 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_3_L5_REVIEWED.zip` | 68385 | `299d0d06dbbdc9f8420a0680a6de186927e6d2db80364ad6026e798d4372472a` | 26 | 26 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_4_L5_5_PARTIAL_HARDENING.zip` | 87272 | `79c235e89952e9f3a974094ff953436f00cfa2d2cfaece0ae9ec44e4cc9c8d3d` | 36 | 36 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_5_PROVIDER_AMBIGUITY_PARTIAL_PROOF.zip` | 98668 | `00dcca3aeb4f67160a9408240423282710c69d40885223dec14dce319ee1d2b2` | 40 | 39 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_6_CREDENTIAL_BROKER_PARTIAL_PROOF.zip` | 110846 | `54f182a9ad4782848c9083318e959b41d61eeef09d41b3d5d1a1a1682f14651a` | 44 | 42 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_7_QA_REPAIR_POLICY_PARTIAL_PROOF.zip` | 117559 | `dc1d0354ce26cfecaaf46c12b50e9c13338a0f9f44c75d77c7ebc8acc3359077` | 49 | 45 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_8_PERFORMANCE_WINDOWS_HARNESS.zip` | 128202 | `02cc7cea9810c66ac2568f66538abda311282c898e9664f86720a299de62d763` | 55 | 48 |
+| `MASTER_AI_FILM_STUDIO_DESIGN_V0_9_HARDENING_PROTOCOLS_READY.zip` | 133271 | `02b79e3d870498836df10f3ab1cdbf4c52f1be949516bb0479c7141227dcfac4` | 57 | 50 |
+| `MASTER_STUDIO_OPTIMAL_HYBRID_ARCHITECTURE_V1_FROZEN.md` | 62364 | `96b658abc9a2bd5077bda1694e7c6a836acabec91abe22d2067fd4aaaf50c536` | — | — |
+| `NARRATIVE_EXPANSION_LADDER_PATCH_V1_FINAL.md` | 35902 | `1af4584478472d82e83fec887023afd702982bdcd13b211fd19fbbadd4991b50` | — | — |
+| `UNIVERSAL_NICHE_COMPOSABLE_BRAIN_ARCHITECTURE_V1_FINAL.md` | 44929 | `1ca3735d1f345f5166ed609206677970a0d6ba4197fafb3a214eddfec566e961` | — | — |

@@ -1,0 +1,398 @@
+{
+  "captured_at": "2026-09-21",
+  "repos": [
+    {
+      "repo": "google-deepmind/dramatron",
+      "sha": "2e7c36afadacf8321b77a468940024371b7a8c7a",
+      "head_date": "2024-07-16",
+      "license": "Apache-2.0",
+      "lang": "Jupyter/Python",
+      "decision": "EXTRACT/PATTERN",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "hierarchical logline\u2192characters\u2192scenes\u2192places\u2192dialogue",
+        "human rewrite/intervention history",
+        "screenplay-specific decomposition"
+      ],
+      "limits": [
+        "research prototype/not autonomous production engine",
+        "weak explicit causal/state/quality authority",
+        "old notebook-centric integration surface"
+      ],
+      "url": "https://github.com/google-deepmind/dramatron",
+      "commit_url": "https://github.com/google-deepmind/dramatron/commit/2e7c36afadacf8321b77a468940024371b7a8c7a"
+    },
+    {
+      "repo": "sgware/sabre",
+      "sha": "73a128123b10a57843068b69d0b0e0601f37488a",
+      "head_date": "2026-07-02",
+      "license": "GPL-3.0",
+      "lang": "Java",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "deterministic narrative planning",
+        "character utilities/intentionality",
+        "beliefs, observations, nested theory-of-mind",
+        "preconditions/effects and author utility"
+      ],
+      "limits": [
+        "GPL boundary for closed/proprietary product",
+        "symbolic authoring burden",
+        "not LLM screenplay prose system"
+      ],
+      "url": "https://github.com/sgware/sabre",
+      "commit_url": "https://github.com/sgware/sabre/commit/73a128123b10a57843068b69d0b0e0601f37488a"
+    },
+    {
+      "repo": "EdwardAThomson/StoryDaemon",
+      "sha": "d0c7fa18d573bef38e344791fbdbeb9792c91474",
+      "head_date": "2026-09-15",
+      "license": "NO LICENSE DETECTED",
+      "lang": "Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "multi-stage strategic\u2192semantic-context\u2192tactical planning",
+        "plot beats/rolling horizon/throughline/open loops",
+        "tension evaluation",
+        "selective paragraph repair",
+        "fact/lore extraction and contradiction detection",
+        "large test surface"
+      ],
+      "limits": [
+        "no reusable license detected",
+        "some evaluator checks are heuristic",
+        "some failure paths degrade/continue rather than fail closed"
+      ],
+      "url": "https://github.com/EdwardAThomson/StoryDaemon",
+      "commit_url": "https://github.com/EdwardAThomson/StoryDaemon/commit/d0c7fa18d573bef38e344791fbdbeb9792c91474"
+    },
+    {
+      "repo": "abdussamadbello/beatlume",
+      "sha": "d6b8ca8f2b615a4e5343209ec91761fa66c540dd",
+      "head_date": "2026-04-29",
+      "license": "NO LICENSE DETECTED",
+      "lang": "Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "scene scaffold and relationship graph",
+        "structured story/character/scene models",
+        "tension curve, pacing flatline/whiplash/breathing-room analytics",
+        "broad test/e2e layout"
+      ],
+      "limits": [
+        "very young/small project",
+        "no reusable license detected",
+        "scaffold graph itself is LLM-prompt-centric"
+      ],
+      "url": "https://github.com/abdussamadbello/beatlume",
+      "commit_url": "https://github.com/abdussamadbello/beatlume/commit/d6b8ca8f2b615a4e5343209ec91761fa66c540dd"
+    },
+    {
+      "repo": "simon-benigeri/narrative-generation",
+      "sha": "a4faf49b5cfe3d5239142e2d75961aeced7fd865",
+      "head_date": "2021-08-12",
+      "license": "NO LICENSE DETECTED",
+      "lang": "Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "explicit emotions/character arc idea",
+        "narrative planner/context/dialogue separation",
+        "emotion-conditioned dialogue experiment"
+      ],
+      "limits": [
+        "old research prototype",
+        "coarse emotion enum",
+        "no license detected",
+        "not production-grade or modern LLM architecture"
+      ],
+      "url": "https://github.com/simon-benigeri/narrative-generation",
+      "commit_url": "https://github.com/simon-benigeri/narrative-generation/commit/a4faf49b5cfe3d5239142e2d75961aeced7fd865"
+    },
+    {
+      "repo": "sotopia-lab/sotopia",
+      "sha": "a0aaafb440e570e5e61b7c44a44e5e417c545383",
+      "head_date": "2026-01-07",
+      "license": "MIT",
+      "lang": "Python",
+      "decision": "EXTRACT/PATTERN",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "persistent character profiles/values/decision style/secrets",
+        "agent goals and relationships",
+        "social interaction evaluation",
+        "structured evaluators/tests"
+      ],
+      "limits": [
+        "social simulation, not screenplay planner",
+        "runtime is much heavier than required for V1",
+        "scores should not become canonical story truth"
+      ],
+      "url": "https://github.com/sotopia-lab/sotopia",
+      "commit_url": "https://github.com/sotopia-lab/sotopia/commit/a0aaafb440e570e5e61b7c44a44e5e417c545383"
+    },
+    {
+      "repo": "assafelovic/gpt-researcher",
+      "sha": "6f998577d547b1e54ec662dac63583aa11e3b84b",
+      "head_date": "2026-08-23",
+      "license": "Apache-2.0",
+      "lang": "Python",
+      "decision": "ADAPT/EXTRACT",
+      "runtime_dependency": "OPTIONAL; NOT CORE AUTHORITY",
+      "strengths": [
+        "recursive breadth/depth research",
+        "parallel subresearch",
+        "source/citation tracking",
+        "bounded plan/fact review loops",
+        "reviewer/reviser role separation",
+        "large tests/evals"
+      ],
+      "limits": [
+        "full stack is heavyweight",
+        "generic report research, not story material",
+        "Python runtime should not own canonical Studio state"
+      ],
+      "url": "https://github.com/assafelovic/gpt-researcher",
+      "commit_url": "https://github.com/assafelovic/gpt-researcher/commit/6f998577d547b1e54ec662dac63583aa11e3b84b"
+    },
+    {
+      "repo": "langchain-ai/open_deep_research",
+      "sha": "1b7d2e80db9faa586165c60e09096dbbfd483a64",
+      "head_date": "2026-08-10",
+      "license": "MIT",
+      "lang": "Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "supervisor/research graph",
+        "state/config contracts",
+        "evaluation assets"
+      ],
+      "limits": [
+        "repository archived/read-only",
+        "do not introduce new long-lived dependency"
+      ],
+      "url": "https://github.com/langchain-ai/open_deep_research",
+      "commit_url": "https://github.com/langchain-ai/open_deep_research/commit/1b7d2e80db9faa586165c60e09096dbbfd483a64"
+    },
+    {
+      "repo": "stanford-oval/storm",
+      "sha": "fb951af7744dab086e34962e9bc6fe878e145f83",
+      "head_date": "2025-09-30",
+      "license": "MIT",
+      "lang": "Python",
+      "decision": "EXTRACT/PATTERN",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "perspective/persona generation",
+        "persona-guided questions",
+        "retrieval-grounded knowledge curation",
+        "draft\u2192refined outline synthesis"
+      ],
+      "limits": [
+        "Wikipedia/report orientation rather than dramatic story",
+        "DSPy/Python stack not desired as canonical dependency"
+      ],
+      "url": "https://github.com/stanford-oval/storm",
+      "commit_url": "https://github.com/stanford-oval/storm/commit/fb951af7744dab086e34962e9bc6fe878e145f83"
+    },
+    {
+      "repo": "machachlouei/evidence-graph",
+      "sha": "67bcf9fee4b77174d69ecb9f96866c5873b1acc2",
+      "head_date": "2026-04-26",
+      "license": "MIT",
+      "lang": "Python",
+      "decision": "EXTRACT/PATTERN",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "atomic claim graph",
+        "typed supports/contradicts/qualifies/extends edges",
+        "contradiction hunter",
+        "skeptic/disconfirmation search",
+        "stability-based stop condition"
+      ],
+      "limits": [
+        "tiny/young repository",
+        "source credibility weights are simplistic policy candidates, not universal truth"
+      ],
+      "url": "https://github.com/machachlouei/evidence-graph",
+      "commit_url": "https://github.com/machachlouei/evidence-graph/commit/67bcf9fee4b77174d69ecb9f96866c5873b1acc2"
+    },
+    {
+      "repo": "mem0ai/mem0",
+      "sha": "a39a802bbc93e85b820078cd3c4dbaf53af25dbe",
+      "head_date": "2026-09-18",
+      "license": "Apache-2.0",
+      "lang": "Python",
+      "decision": "OPTIONAL ADAPTER",
+      "runtime_dependency": "OPTIONAL",
+      "strengths": [
+        "production-oriented long-term memory infrastructure",
+        "persistent semantic memory and retrieval",
+        "large ecosystem"
+      ],
+      "limits": [
+        "must never become story fact authority",
+        "extra runtime/dependency may be unnecessary when SQLite+vector index is sufficient"
+      ],
+      "url": "https://github.com/mem0ai/mem0",
+      "commit_url": "https://github.com/mem0ai/mem0/commit/a39a802bbc93e85b820078cd3c4dbaf53af25dbe"
+    },
+    {
+      "repo": "StanfordHCI/genagents",
+      "sha": "96854071ef4c2d79c93144c973c7820722d52bab",
+      "head_date": "2024-11-18",
+      "license": "MIT",
+      "lang": "Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "memory/reflection/behavior pattern for simulated persons"
+      ],
+      "limits": [
+        "research prototype",
+        "not screenplay structure system"
+      ],
+      "url": "https://github.com/StanfordHCI/genagents",
+      "commit_url": "https://github.com/StanfordHCI/genagents/commit/96854071ef4c2d79c93144c973c7820722d52bab"
+    },
+    {
+      "repo": "letta-ai/letta-code",
+      "sha": "b69da0ee2aa2afa348e6975055ed804cb127f172",
+      "head_date": "2026-09-21",
+      "license": "Apache-2.0",
+      "lang": "TypeScript",
+      "decision": "DEFER/PATTERN",
+      "runtime_dependency": "NO V1",
+      "strengths": [
+        "stateful agent memory/identity runtime",
+        "TypeScript and current activity"
+      ],
+      "limits": [
+        "far broader than story subsystem",
+        "would compete with Studio state/memory authority"
+      ],
+      "url": "https://github.com/letta-ai/letta-code",
+      "commit_url": "https://github.com/letta-ai/letta-code/commit/b69da0ee2aa2afa348e6975055ed804cb127f172"
+    },
+    {
+      "repo": "GAIR-NLP/MoPS",
+      "sha": "4e4ee427b5d35513a1ea33958a4c93993fd96f04",
+      "head_date": "2024-07-19",
+      "license": "NO LICENSE DETECTED",
+      "lang": "Notebook/Python",
+      "decision": "PATTERN-ONLY",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "modular story premise synthesis",
+        "candidate module composition before premise integration"
+      ],
+      "limits": [
+        "no reusable license detected",
+        "research code rather than production service"
+      ],
+      "url": "https://github.com/GAIR-NLP/MoPS",
+      "commit_url": "https://github.com/GAIR-NLP/MoPS/commit/4e4ee427b5d35513a1ea33958a4c93993fd96f04"
+    },
+    {
+      "repo": "Open-Write/Open-Write",
+      "sha": "14a65ac9e4f88712ec9caa62dfab4abf54f9e3e8",
+      "head_date": "2026-06-15",
+      "license": "Apache-2.0",
+      "lang": "Markdown/Python/Node",
+      "decision": "ADAPT/EXTRACT",
+      "runtime_dependency": "NO CORE RUNTIME; IMPORT RUBRICS/TOOLS",
+      "strengths": [
+        "screenplay pipeline",
+        "story bible/state/callback/audience/timeline ledgers",
+        "blinded specialist critics",
+        "meta-critic",
+        "completion verification",
+        "iterative revision"
+      ],
+      "limits": [
+        "agent/tool workflow rather than typed domain engine",
+        "creative rubrics need adaptation/calibration",
+        "human/agent procedure can be bypassed without enforcement"
+      ],
+      "url": "https://github.com/Open-Write/Open-Write",
+      "commit_url": "https://github.com/Open-Write/Open-Write/commit/14a65ac9e4f88712ec9caa62dfab4abf54f9e3e8"
+    },
+    {
+      "repo": "jackterror/writers-room-story-engine",
+      "sha": "f146ab0a7778e545d95d3c95afdae6fb29a55823",
+      "head_date": "2026-07-07",
+      "license": "MIT",
+      "lang": "Markdown",
+      "decision": "ADAPT AS BRAIN PACK",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "premise/story spine/causal beat/character arc craft framework",
+        "modular AI-ready skill format"
+      ],
+      "limits": [
+        "knowledge/rubric pack, not execution engine"
+      ],
+      "url": "https://github.com/jackterror/writers-room-story-engine",
+      "commit_url": "https://github.com/jackterror/writers-room-story-engine/commit/f146ab0a7778e545d95d3c95afdae6fb29a55823"
+    },
+    {
+      "repo": "NeuraCerebra-AI/story-architect-skill",
+      "sha": "84e30372e5e2d92a61f70af05cbf7ead4fc8673f",
+      "head_date": "2026-08-27",
+      "license": "MIT",
+      "lang": "Markdown",
+      "decision": "ADAPT AS BRAIN PACK",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "Truby-like character web/moral argument/scene weave/dialogue framework"
+      ],
+      "limits": [
+        "skill/rubric only",
+        "methodology should remain selectable, not universal"
+      ],
+      "url": "https://github.com/NeuraCerebra-AI/story-architect-skill",
+      "commit_url": "https://github.com/NeuraCerebra-AI/story-architect-skill/commit/84e30372e5e2d92a61f70af05cbf7ead4fc8673f"
+    },
+    {
+      "repo": "bflandev/script-doctor",
+      "sha": "e4a7460a7fc4cd6e1d106fcbbb248273daec4c49",
+      "head_date": "2026-05-10",
+      "license": "MIT",
+      "lang": "Markdown/Plugin",
+      "decision": "ADAPT AS BRAIN PACK",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "story bible approval",
+        "beat sheet acceptance",
+        "coverage/plot-hole audit"
+      ],
+      "limits": [
+        "workflow/rubric asset, not canonical engine"
+      ],
+      "url": "https://github.com/bflandev/script-doctor",
+      "commit_url": "https://github.com/bflandev/script-doctor/commit/e4a7460a7fc4cd6e1d106fcbbb248273daec4c49"
+    },
+    {
+      "repo": "lwhela12/AI-Screenwriting-Tool",
+      "sha": "68084f3270520b1dba7c97340f452ced9c6ac31c",
+      "head_date": "2026-09-19",
+      "license": "MIT",
+      "lang": "TypeScript",
+      "decision": "UI/PATTERN",
+      "runtime_dependency": "NO",
+      "strengths": [
+        "screenplay editor/beat board/outline UX",
+        "current TypeScript codebase"
+      ],
+      "limits": [
+        "editor/product surface more than core narrative intelligence"
+      ],
+      "url": "https://github.com/lwhela12/AI-Screenwriting-Tool",
+      "commit_url": "https://github.com/lwhela12/AI-Screenwriting-Tool/commit/68084f3270520b1dba7c97340f452ced9c6ac31c"
+    }
+  ]
+}

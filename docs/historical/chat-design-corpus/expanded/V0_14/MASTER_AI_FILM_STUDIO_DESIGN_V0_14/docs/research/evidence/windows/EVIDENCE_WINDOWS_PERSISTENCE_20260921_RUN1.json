@@ -1,0 +1,45 @@
+{
+  "platform": "win32",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "tests": {
+    "wal_concurrency": {
+      "journal_mode": "wal",
+      "expected": 3000,
+      "committed": 2888,
+      "revision": 2888,
+      "errors": 112,
+      "elapsed_s": 109.02015559999563,
+      "tx_per_s": 27.517847351156416,
+      "latency_ms_mean": 55.67136412731862,
+      "latency_ms_p95": 82.82650000182912,
+      "latency_ms_max": 5539.680099987891,
+      "integrity_check": "ok"
+    },
+    "abrupt_exit": {
+      "committed_survived": true,
+      "uncommitted_absent": true,
+      "integrity_check": "ok"
+    },
+    "migration_interrupt_resume": {
+      "detected_status_after_crash": "RUNNING",
+      "phase_after_crash": 500,
+      "rows_converted_after_crash": 500,
+      "rows_converted_after_resume": 1000,
+      "integrity_check": "ok"
+    },
+    "backup_restore": {
+      "restored_rows": 100,
+      "integrity_check": "ok",
+      "source_sha256": "8ddea7731b2a923225fbc72bccda02d55cd6b045313f0c3aeb8c94039c5c9a95",
+      "backup_sha256": "888fc40e2d0d7d97f62dbea53a1943a1f8c1502775c4e2772c23394d89a3cb62",
+      "note": "SQLite backup files need not have identical byte hashes to prove logical equivalence."
+    },
+    "newer_schema_gate": {
+      "db_schema_version": 999,
+      "supported_max": 7,
+      "write_allowed": false
+    }
+  },
+  "limitations": [],
+  "all_required_checks_pass": false
+}

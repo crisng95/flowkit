@@ -1,0 +1,24 @@
+{
+  "syntax_check": "PASS",
+  "smoke_platform": "linux",
+  "smoke_parameters": {
+    "threads": 3,
+    "commands_per_producer": 10,
+    "busy_timeout_ms": 100
+  },
+  "smoke_all_required_checks_pass": true,
+  "raw_multiwriter": {
+    "expected": 30,
+    "committed": 30,
+    "errors": 0,
+    "error_summary": []
+  },
+  "single_writer_queue": {
+    "expected": 30,
+    "committed": 30,
+    "writer_errors": 0,
+    "producer_errors": 0,
+    "integrity_check": "ok"
+  },
+  "note": "Reduced local smoke only. Target Windows Run 2 with default 12x250 remains required."
+}

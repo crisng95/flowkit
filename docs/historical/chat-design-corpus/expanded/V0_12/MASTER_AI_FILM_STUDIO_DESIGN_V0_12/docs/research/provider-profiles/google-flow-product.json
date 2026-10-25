@@ -1,0 +1,60 @@
+{
+  "profile_id": "google:flow-product:veo-3.1-fast:2026-09-20",
+  "profile_version": "2026-09-20.1",
+  "provider": "GOOGLE",
+  "provider_surface": "FLOW_PRODUCT",
+  "region": null,
+  "account_scope": "user/account",
+  "model_family": "VEO_3_1_FAST",
+  "model_version": "Veo 3.1 Fast",
+  "verified_at": "2026-09-20T13:12:00Z",
+  "capabilities": {
+    "video_generation": true,
+    "product_ui": true
+  },
+  "quota": {
+    "kind": "PRODUCT_CREDITS_PLUS_ADAPTIVE_RATE_LIMIT",
+    "rpm": null,
+    "rps": null,
+    "concurrency": null,
+    "queue_behavior": "adaptive/undocumented",
+    "source_scope": "product account"
+  },
+  "task_lifecycle": {
+    "async": true,
+    "handle_kind": "PRODUCT_INTERNAL",
+    "handle_retention_seconds": null,
+    "list_supported": null,
+    "cancel_queued": null,
+    "cancel_running": null,
+    "delete_terminal": null
+  },
+  "billing": {
+    "billing_surface": "GOOGLE_FLOW",
+    "unit_kind": "CREDITS_PER_GENERATION",
+    "currency": "FLOW_CREDITS",
+    "unit_price": 20,
+    "charge_on_success_only": true,
+    "effective_at": "2026-09-20"
+  },
+  "recovery": {
+    "idempotency_mode": "UNVERIFIED",
+    "reconcile_methods": [],
+    "ambiguous_resubmit_policy": "NEVER_AUTO",
+    "reconciliation_deadline_seconds": null
+  },
+  "evidence": [
+    {
+      "grade": "B",
+      "source": "https://support.google.com/flow/answer/16526234",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "credits per generation/current credit costs"
+    },
+    {
+      "grade": "B",
+      "source": "https://support.google.com/flow/answer/16353333",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "adaptive product rate limiting"
+    }
+  ]
+}

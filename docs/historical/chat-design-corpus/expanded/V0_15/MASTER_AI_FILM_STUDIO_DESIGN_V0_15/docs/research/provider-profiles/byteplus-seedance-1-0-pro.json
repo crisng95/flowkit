@@ -1,0 +1,70 @@
+{
+  "profile_id": "byteplus:modelark:seedance-1-0-pro-250528:2026-09-20",
+  "profile_version": "2026-09-20.1",
+  "provider": "BYTEPLUS",
+  "provider_surface": "MODELARK",
+  "region": "ap-southeast",
+  "account_scope": "primary account/model version",
+  "model_family": "SEEDANCE_1_0_PRO",
+  "model_version": "seedance-1-0-pro-250528",
+  "verified_at": "2026-09-20T13:12:00Z",
+  "capabilities": {
+    "t2v": true,
+    "i2v_first_frame": true,
+    "i2v_last_frame": true
+  },
+  "quota": {
+    "kind": "DOCUMENTED_MODEL_LIMIT",
+    "rpm": 600,
+    "rps": null,
+    "concurrency": 10,
+    "queue_behavior": "queue above concurrency",
+    "source_scope": "primary account/model version"
+  },
+  "task_lifecycle": {
+    "async": true,
+    "handle_kind": "TASK_ID",
+    "handle_retention_seconds": 604800,
+    "list_supported": true,
+    "cancel_queued": true,
+    "cancel_running": false,
+    "delete_terminal": true
+  },
+  "billing": {
+    "billing_surface": "MODELARK",
+    "unit_kind": "USD_PER_M_VIDEO_TOKENS",
+    "currency": "USD",
+    "unit_price": 2.5,
+    "charge_on_success_only": true,
+    "effective_at": "2026-07-13"
+  },
+  "recovery": {
+    "idempotency_mode": "UNVERIFIED",
+    "reconcile_methods": [
+      "TASK_ID",
+      "LIST_TASKS"
+    ],
+    "ambiguous_resubmit_policy": "RECONCILE_FIRST",
+    "reconciliation_deadline_seconds": 604800
+  },
+  "evidence": [
+    {
+      "grade": "A",
+      "source": "https://docs.byteplus.com/en/docs/ModelArk/1587798",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "capabilities/quota"
+    },
+    {
+      "grade": "A",
+      "source": "https://docs.byteplus.com/docs/ModelArk/1099320",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "pricing"
+    },
+    {
+      "grade": "A",
+      "source": "https://docs.byteplus.com/en/docs/ModelArk/Video_Generation_API",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "task lifecycle"
+    }
+  ]
+}
