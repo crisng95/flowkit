@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, NavLink, Routes, Route, useLocation, useParams, useSearchParams } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, Film, ScrollText, BookOpen, SlidersHorizontal } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Film, ScrollText, BookOpen, SlidersHorizontal, Globe } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { WebSocketProvider } from './api/WebSocketContext'
 import { useWebSocketContext } from './api/useWebSocketContext'
@@ -73,18 +73,25 @@ function useBreadcrumbs() {
 }
 
 function LanguageSwitcher() {
-  const { lang, setLang } = useTranslation()
+  const { lang, setLang, t } = useTranslation()
   return (
-    <select
-      value={lang}
-      onChange={e => setLang(e.target.value as Lang)}
-      className="text-[10px] px-2 py-1 rounded outline-none w-full"
-      style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}
-    >
-      {LANGS.map(l => (
-        <option key={l} value={l}>{LANG_LABELS[l]}</option>
-      ))}
-    </select>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--muted)' }}>
+        <Globe size={11} />
+        <span>{t('app.language')}</span>
+      </div>
+      <select
+        value={lang}
+        onChange={e => setLang(e.target.value as Lang)}
+        className="text-[10px] px-2 py-1.5 rounded outline-none w-full cursor-pointer"
+        style={{ background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)' }}
+        aria-label={t('app.language')}
+      >
+        {LANGS.map(l => (
+          <option key={l} value={l}>{LANG_LABELS[l]}</option>
+        ))}
+      </select>
+    </div>
   )
 }
 
@@ -145,7 +152,7 @@ function Sidebar() {
 }
 
 function Header() {
-  const { t } = useTranslation()
+  const { lang, setLang, t } = useTranslation()
   const { isConnected } = useWebSocketContext()
   const crumbs = useBreadcrumbs()
   const clock = useClock()
@@ -162,7 +169,23 @@ function Header() {
         ))}
       </div>
       <span className="ml-auto" />
-      <div className="flex items-center gap-3.5 text-[10px]" style={{ color: 'var(--muted)' }}>
+      <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--muted)' }}>
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded border" style={{ borderColor: 'var(--border)' }}>
+          <Globe size={11} style={{ color: 'var(--muted)' }} />
+          <select
+            value={lang}
+            onChange={e => setLang(e.target.value as Lang)}
+            className="text-[10px] bg-transparent outline-none cursor-pointer"
+            style={{ color: 'var(--text)' }}
+            aria-label={t('app.language')}
+          >
+            {LANGS.map(l => (
+              <option key={l} value={l} style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                {LANG_LABELS[l]}
+              </option>
+            ))}
+          </select>
+        </div>
         <span className="tracking-wide">{clock.toLocaleTimeString()}</span>
         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded border" style={{ borderColor: 'var(--border)', color: isConnected ? 'var(--green)' : 'var(--red)' }}>
           <span
