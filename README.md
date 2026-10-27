@@ -475,12 +475,13 @@ When `project_id` is omitted on the maintained session-project path, the upload 
 
 ### What does not work on the new API yet
 
-Three capabilities have no captured payload, so they fail with
-`UNSUPPORTED_ON_BATCH_API` rather than quietly producing the wrong thing:
+1080p export is ported: FlowKit mirrors the Flow UI's `p0UkFb` high-resolution
+Download request and polls the resulting media through `as29s`. The remaining
+capabilities below still fail loudly rather than quietly producing the wrong thing:
 
 | Capability | Status | Workaround |
 |---|---|---|
-| 4K/1080p upscale (`/fk-pipeline` last step) | unported | none — keep the 1080p render |
+| 4K export | plan-gated / not live-verified | use 1080p; Google Flow exposes Full HD as the standard high-resolution export |
 | Veo reference-to-video (r2v) | unported | Omni r2v (`model_family=omni_flash`), or `FLOW_ALLOW_DEGRADED=1` → i2v off the first reference |
 | Veo start+end-frame chaining (`/fk-gen-chain-videos`) | unported | Omni first+last (`model_family=omni_flash`), or `FLOW_ALLOW_DEGRADED=1` → i2v off the start frame |
 | Omni Flash text-to-video | ported | `POST /api/flow/generate-video-omni-text` (4/6/8/10s) |

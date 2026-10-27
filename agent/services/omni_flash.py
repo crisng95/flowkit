@@ -24,6 +24,7 @@ from pathlib import Path
 
 from agent.services import flow_batch as fb
 from agent.services.flow_client import get_flow_client
+from agent.services.flow_poll import check_workflow_status, extract_workflows
 
 _MODELS_FILE = Path(__file__).parent.parent / "models.json"
 
@@ -134,39 +135,9 @@ def _validate_frame_inputs(
         raise ValueError("Omni Flash First+Last requires a non-empty end_image_media_id")
 
 
-def _normalize_workflow(workflow: dict) -> dict | None:
-    """Normalize a raw Flow workflow or FlowKit polling descriptor."""
-    if not isinstance(workflow, dict):
-        return None
-    name = workflow.get("name")
-    primary_media_id = workflow.get("primary_media_id")
-    if not primary_media_id:
-        metadata = workflow.get("metadata")
-        if isinstance(metadata, dict):
-            primary_media_id = metadata.get("primaryMediaId")
-    if not isinstance(name, str) or not name:
-        return None
-    if not isinstance(primary_media_id, str) or not primary_media_id:
-        return None
-    item = {"name": name, "primary_media_id": primary_media_id}
-    project_id = workflow.get("project_id") or workflow.get("projectId")
-    if isinstance(project_id, str) and project_id:
-        item["project_id"] = project_id
-    return item
-
-
 def extract_omni_workflows(result: dict) -> list[dict]:
-    """Extract ``name`` + ``primaryMediaId`` pairs from an Omni submit."""
-    if not isinstance(result, dict):
-        return []
-    data = result.get("data") if isinstance(result.get("data"), dict) else result
-    workflows = data.get("workflows", []) if isinstance(data, dict) else []
-    normalized = []
-    for workflow in workflows:
-        item = _normalize_workflow(workflow)
-        if item:
-            normalized.append(item)
-    return normalized
+    """Backward-compatible Omni name for the shared workflow extractor."""
+    return extract_workflows(result)
 
 
 async def generate_omni_flash_text_video(
@@ -363,64 +334,16 @@ async def generate_omni_flash_video(
     batch_model = f"abra_r2v_{duration_s}s" + ("_360p" if resolution == "360p" else "")
     return _batch_operation_result(operation, pid, batch_model, duration_s, resolution)
 
-async def _check_omni_batch_media(
-    workflows: list[dict],
-    include_encoded_video: bool = False,
-    project_id: str = "",
-) -> dict:
-    normalized = [item for workflow in (workflows or []) if (item := _normalize_workflow(workflow))]
-    if not normalized:
-        raise ValueError("Omni polling requires workflow descriptors with name and primary_media_id")
-    resolved_project_id = project_id or next(
-        (item.get("project_id", "") for item in normalized if item.get("project_id")), "")
-    client = get_flow_client()
-    items = []
-    for workflow in normalized:
-        media_id = workflow["primary_media_id"]
-        response = await client.get_media(media_id)
-        data = response.get("data") if isinstance(response, dict) else None
-        video = data.get("video") if isinstance(data, dict) else None
-        url = video.get("fifeUrl") if isinstance(video, dict) else None
-        if isinstance(url, str) and url.startswith("https://flow-content.google/video/"):
-            media = {
-                "media_id": media_id,
-                "url": url,
-                "encoded_video_available": False,
-                "resolved_via": "as29s",
-            }
-            if include_encoded_video:
-                media["encoded_video"] = None
-            items.append({
-                "name": workflow["name"],
-                "primary_media_id": media_id,
-                "project_id": workflow.get("project_id") or resolved_project_id,
-                "done": True,
-                "status": "MEDIA_GENERATION_STATUS_SUCCESSFUL",
-                "error": None,
-                "media": media,
-            })
-        else:
-            items.append({
-                "name": workflow["name"],
-                "primary_media_id": media_id,
-                "project_id": workflow.get("project_id") or resolved_project_id,
-                "done": False,
-                "status": "PENDING",
-                "error": None,
-            })
-    all_done = bool(items) and all(item["done"] for item in items)
-    return {
-        "project_id": resolved_project_id or None,
-        "done": all_done,
-        "status": "COMPLETED" if all_done else "PENDING",
-        "workflows": items,
-    }
-
-
 async def check_omni_flash_status(
     workflows: list[dict],
     include_encoded_video: bool = False,
     project_id: str = "",
 ) -> dict:
-    """Perform one non-blocking poll pass for Omni workflow-backed jobs."""
-    return await _check_omni_batch_media(workflows, include_encoded_video, project_id)
+    """Poll Omni text-to-video results using the same batch media resolver as exports."""
+    return await check_workflow_status(
+        workflows,
+        mode="batch_media",
+        include_encoded_video=include_encoded_video,
+        project_id=project_id,
+        client=get_flow_client(),
+    )
