@@ -2,14 +2,18 @@
 import asyncio
 import json
 import logging
+import re
+import secrets
 import signal
 from contextlib import asynccontextmanager
 
 import websockets
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT
+from agent.config import API_HOST, API_PORT, WS_HOST, WS_PORT, FLOWKIT_ALLOWED_HOSTS
+from agent.api.debug_gate import DEBUG as _DEBUG
 from agent.db.schema import init_db, close_db
 from agent.api.characters import router as characters_router
 from agent.api.projects import router as projects_router
@@ -63,7 +67,10 @@ async def ws_handler(websocket):
 
 async def run_ws_server():
     """Run WebSocket server for extension connections."""
-    async with websockets.serve(ws_handler, WS_HOST, WS_PORT):
+    # A web page can open a WebSocket to localhost too; only the extension (or a
+    # local non-browser client, which sends no Origin) may act as the extension.
+    origins = [None, re.compile(r"chrome-extension://[a-p]{32}")]
+    async with websockets.serve(ws_handler, WS_HOST, WS_PORT, origins=origins):
         logger.info("WebSocket server listening on ws://%s:%d", WS_HOST, WS_PORT)
         await asyncio.Future()  # run forever
 
@@ -116,9 +123,49 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Flow Kit", version="1.3.1", lifespan=lifespan)
 
+# The API has no auth: it trusts whoever can reach 127.0.0.1. A browser lets any
+# web page send requests there, so cross-site requests are refused outright
+# (CORS alone only hides the response; a text/plain POST still runs) and CORS
+# is limited to the local dashboard and the extension.
+_LOCAL_ORIGIN = re.compile(
+    r"(https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?|chrome-extension://[a-p]{32})"
+)
+
+
+_ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", API_HOST, *FLOWKIT_ALLOWED_HOSTS}
+
+
+def _host_name(host: str) -> str:
+    """The Host header without its port ("[::1]:8100" -> "[::1]")."""
+    if host.startswith("["):
+        return host[:host.find("]") + 1]
+    return host.rsplit(":", 1)[0]
+
+
+@app.middleware("http")
+async def reject_cross_site(request: Request, call_next):
+    # DNS rebinding: a page on evil.example re-pointed at 127.0.0.1 is
+    # "same-origin" to the browser, but still says evil.example in Host.
+    host = _host_name(request.headers.get("host") or "")
+    if host and host.lower() not in _ALLOWED_HOSTS:
+        logger.warning("Refused %s %s for host %s", request.method, request.url.path, host)
+        return JSONResponse({"detail": "host not allowed"}, status_code=403)
+    origin = request.headers.get("origin")
+    if origin is not None:
+        allowed = bool(_LOCAL_ORIGIN.fullmatch(origin))
+    else:
+        # No Origin: a non-browser client, or a plain cross-site GET (<img>, link).
+        allowed = request.headers.get("sec-fetch-site") != "cross-site"
+    if not allowed:
+        logger.warning("Refused cross-site %s %s (origin=%s)",
+                       request.method, request.url.path, origin)
+        return JSONResponse({"detail": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=_LOCAL_ORIGIN.pattern,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -164,8 +211,7 @@ app.include_router(providers_router)
 app.include_router(active_project_router)
 
 
-import secrets as _secrets
-_CALLBACK_SECRET = _secrets.token_urlsafe(32)
+_CALLBACK_SECRET = secrets.token_urlsafe(32)
 
 
 @app.post("/api/ext/callback")
@@ -176,6 +222,9 @@ async def ext_callback(request: Request):
     Extension POSTs {id, status, data, error} here instead of sending via WS.
     Requires X-Callback-Secret header matching the secret sent to extension on WS connect.
     """
+    supplied = request.headers.get("x-callback-secret") or ""
+    if not secrets.compare_digest(supplied, _CALLBACK_SECRET):
+        raise HTTPException(403, "bad callback secret")
     data = await request.json()
     client = get_flow_client()
     req_id = data.get("id")
@@ -193,7 +242,7 @@ async def ext_callback(request: Request):
     return {"ok": False, "reason": "no matching pending request"}
 
 
-@app.post("/api/ext/reload")
+@app.post("/api/ext/reload", dependencies=_DEBUG)
 async def ext_reload():
     """Trigger extension to reload its background service worker."""
     client = get_flow_client()
@@ -208,7 +257,7 @@ async def ext_reload():
     return {"ok": True}
 
 
-@app.post("/api/ext/reload-flow-tab")
+@app.post("/api/ext/reload-flow-tab", dependencies=_DEBUG)
 async def ext_reload_flow_tab():
     """Trigger extension to reload open Flow tabs."""
     client = get_flow_client()
@@ -228,7 +277,7 @@ async def ext_tabs():
     return await client._send("list_tabs", {})
 
 
-@app.get("/api/ext/debug-tab")
+@app.get("/api/ext/debug-tab", dependencies=_DEBUG)
 async def ext_debug_tab():
     """Inspect candidate Flow tab status."""
     client = get_flow_client()
@@ -238,7 +287,7 @@ async def ext_debug_tab():
     return await client._send("debug_tab", {})
 
 
-@app.get("/api/ext/test-captcha")
+@app.get("/api/ext/test-captcha", dependencies=_DEBUG)
 async def ext_test_captcha(action: str = "IMAGE_GENERATION"):
     """Test reCAPTCHA minting via extension."""
     client = get_flow_client()
@@ -248,7 +297,7 @@ async def ext_test_captcha(action: str = "IMAGE_GENERATION"):
     return await client._send("solve_captcha", {"captchaAction": action})
 
 
-@app.get("/api/ext/test-project-media")
+@app.get("/api/ext/test-project-media", dependencies=_DEBUG)
 async def ext_test_project_media():
     """Test listing media from active Flow project."""
     client = get_flow_client()
@@ -271,7 +320,7 @@ async def ext_test_project_media():
     }
 
 
-@app.get("/api/ext/test-op")
+@app.get("/api/ext/test-op", dependencies=_DEBUG)
 async def ext_test_op(op: str):
     """Fetch raw operation status for an operation ID."""
     client = get_flow_client()
@@ -283,7 +332,7 @@ async def ext_test_op(op: str):
     return res
 
 
-@app.get("/api/ext/test-op-match")
+@app.get("/api/ext/test-op-match", dependencies=_DEBUG)
 async def ext_test_op_match(op: str):
     """Test matching an operation in project media listing."""
     client = get_flow_client()
@@ -304,7 +353,7 @@ async def ext_test_op_match(op: str):
     }
 
 
-@app.get("/api/ext/media-url")
+@app.get("/api/ext/media-url", dependencies=_DEBUG)
 async def ext_media_url(media_id: str):
     """Fetch signed media URLs for a media_id."""
     client = get_flow_client()
@@ -330,7 +379,7 @@ async def ext_media_url(media_id: str):
     }
 
 
-@app.post("/api/ext/stream-chat")
+@app.post("/api/ext/stream-chat", dependencies=_DEBUG)
 async def ext_stream_chat(request: Request):
     """Trigger image generation via FlowCreationAgentService/StreamChat."""
     client = get_flow_client()
@@ -347,7 +396,7 @@ async def ext_stream_chat(request: Request):
     return res
 
 
-@app.post("/api/ext/submit-ui-prompt")
+@app.post("/api/ext/submit-ui-prompt", dependencies=_DEBUG)
 async def ext_submit_ui_prompt(request: Request):
     """Type prompt into Flow web UI ProseMirror editor and click create button."""
     client = get_flow_client()
@@ -362,7 +411,7 @@ async def ext_submit_ui_prompt(request: Request):
     return await client._send("submit_ui_prompt", {"prompt": prompt})
 
 
-@app.post("/api/ext/eval-tab")
+@app.post("/api/ext/eval-tab", dependencies=_DEBUG)
 async def ext_eval_tab(request: Request):
     """Execute javascript in the active Flow tab's MAIN world and return result."""
     client = get_flow_client()
@@ -373,7 +422,7 @@ async def ext_eval_tab(request: Request):
     return await client._send("eval_tab", {"code": data.get("code", "")})
 
 
-@app.get("/api/ext/find-actions")
+@app.get("/api/ext/find-actions", dependencies=_DEBUG)
 async def ext_find_actions():
     """Find reCAPTCHA action names in Flow web scripts."""
     client = get_flow_client()
@@ -381,33 +430,6 @@ async def ext_find_actions():
         from fastapi import HTTPException
         raise HTTPException(503, "Extension not connected")
     return await client._send("find_actions", {})
-
-
-@app.post("/api/ext/netlog")
-async def ext_netlog(request: Request):
-    """Capture raw batchexecute requests from Flow UI."""
-    data = await request.json()
-    import pathlib
-    p = pathlib.Path("scratch/captured_netlog.jsonl")
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "a", encoding="utf-8") as f:
-        f.write(json.dumps(data) + "\n")
-    logger.info("Captured netlog: url=%s status=%s body_len=%d",
-                data.get("url"), data.get("statusCode"), len(data.get("body") or ""))
-    return {"ok": True}
-
-
-@app.get("/api/ext/netlog")
-async def ext_get_netlog():
-    """Retrieve captured raw batchexecute requests."""
-    import pathlib
-    p = pathlib.Path("scratch/captured_netlog.jsonl")
-    if not p.exists():
-        return {"captures": []}
-    lines = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
-    return {"captures": lines}
-
-
 
 
 @app.get("/health")
@@ -427,10 +449,8 @@ async def health():
 async def dashboard_ws(websocket: WebSocket):
     """WebSocket endpoint for dashboard clients (Chrome extension side panel)."""
     # Reject cross-origin connections (only allow localhost)
-    origin = (websocket.headers.get("origin") or "").lower()
-    if origin and not any(origin.startswith(p) for p in (
-        "http://127.0.0.1", "http://localhost", "chrome-extension://",
-    )):
+    origin = websocket.headers.get("origin")
+    if origin and not _LOCAL_ORIGIN.fullmatch(origin):
         await websocket.close(code=4003, reason="Origin not allowed")
         return
     await websocket.accept()
@@ -473,7 +493,7 @@ async def dashboard_ws(websocket: WebSocket):
         event_bus.unsubscribe(q)
 
 
-@app.post("/api/test-direct")
+@app.post("/api/test-direct", dependencies=_DEBUG)
 async def test_direct(request: Request):
     from agent.services import flow_batch as fb
     client = get_flow_client()

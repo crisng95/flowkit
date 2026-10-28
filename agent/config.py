@@ -10,6 +10,14 @@ DB_PATH = BASE_DIR / "flow_agent.db"
 # ─── API Server ──────────────────────────────────────────────
 API_HOST = os.environ.get("API_HOST", "127.0.0.1")
 API_PORT = int(os.environ.get("API_PORT", "8100"))
+# Debug/experiment routes under /api/ext/* and /api/test-direct (eval in the
+# Flow tab, raw RPCs, reCAPTCHA mints). Off unless explicitly turned on.
+FLOWKIT_DEBUG_ENDPOINTS = os.environ.get("FLOWKIT_DEBUG_ENDPOINTS", "0") == "1"
+# Extra Host header names the API answers to besides localhost / 127.0.0.1 /
+# API_HOST (e.g. a tunnel hostname for the Suno callback). Comma-separated.
+FLOWKIT_ALLOWED_HOSTS = [
+    h.strip().lower() for h in os.environ.get("FLOWKIT_ALLOWED_HOSTS", "").split(",") if h.strip()
+]
 
 # ─── WebSocket Server (extension connects here) ─────────────
 WS_HOST = os.environ.get("WS_HOST", "127.0.0.1")
