@@ -28,38 +28,6 @@ const flowUrls = [
 ];
 const FLOW_TAB_URL = 'https://flow.google.com/';
 
-// ─── Temporary Netlog Recorder (docs/CAPTURE.md) ───────────
-const NETLOG_HOSTS = ['https://flow.google.com/_/*'];
-const netlogPending = new Map();
-
-chrome.webRequest.onBeforeRequest.addListener(
-  (d) => {
-    let body = null;
-    if (d.requestBody?.raw?.length) {
-      body = new TextDecoder().decode(new Uint8Array(d.requestBody.raw[0].bytes));
-    } else if (d.requestBody?.formData) {
-      body = JSON.stringify(d.requestBody.formData);
-    }
-    netlogPending.set(d.requestId, { ts: new Date().toISOString(), url: d.url, method: d.method, body });
-  },
-  { urls: NETLOG_HOSTS },
-  ['requestBody']
-);
-
-chrome.webRequest.onCompleted.addListener(
-  (d) => {
-    const rec = netlogPending.get(d.requestId);
-    if (!rec) return;
-    netlogPending.delete(d.requestId);
-    fetch('http://127.0.0.1:8100/api/ext/netlog', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...rec, statusCode: d.statusCode }),
-    }).catch(() => {});
-  },
-  { urls: NETLOG_HOSTS }
-);
-
 let ws = null;
 let flowKey = null;
 let callbackSecret = null;  // Auth secret for HTTP callback, received from server on WS connect
@@ -529,6 +497,9 @@ function sendToAgent(msg) {
       method: 'POST',
       headers,
       body: JSON.stringify(msg),
+    }).then((res) => {
+      // 403: the server rejected the secret (e.g. it restarted) — still deliver.
+      if (!res.ok) throw new Error(`callback HTTP ${res.status}`);
     }).catch(() => {
       // HTTP failed — fallback to WS
       if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
