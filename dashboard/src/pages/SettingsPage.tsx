@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Globe } from 'lucide-react'
+import { LANGS, LANG_LABELS, type Lang } from '../i18n/translations'
 import { fetchAPI, patchAPI } from '../api/client'
 import { useTranslation } from '../i18n/useTranslation'
 import type { RoleAssignment, ProvidersResponse, ProviderModelsResponse, ProvidersUpdateResponse } from '../types'
@@ -39,7 +40,7 @@ function sameAssignment(a: RoleAssignment, b: RoleAssignment): boolean {
 }
 
 export default function SettingsPage() {
-  const { t } = useTranslation()
+  const { lang, setLang, t } = useTranslation()
   const [data, setData] = useState<ProvidersResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -177,6 +178,30 @@ export default function SettingsPage() {
         <h1 className="m-0 text-lg font-semibold" style={{ color: 'var(--text)' }}>{t('settings.title')}</h1>
         <span className="text-[11px]" style={{ color: 'var(--muted)' }}>{t('settings.desc')}</span>
       </div>
+
+      <Card className="py-4">
+        <CardHeader>
+          <CardTitle className="text-xs tracking-widest uppercase flex items-center gap-1.5">
+            <Globe size={13} style={{ color: 'var(--accent)' }} />
+            {t('settings.language.title')}
+          </CardTitle>
+          <CardDescription className="text-[11px]">{t('settings.language.desc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-xs">
+            <select
+              value={lang}
+              onChange={e => setLang(e.target.value as Lang)}
+              className={CONTROL_CLASS}
+              style={CONTROL_STYLE}
+            >
+              {LANGS.map(l => (
+                <option key={l} value={l}>{LANG_LABELS[l]}</option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="py-4">
         <CardHeader>
