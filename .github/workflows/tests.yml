@@ -15,7 +15,9 @@ concurrency:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    # Pin to a stable runner while ubuntu-latest transitions to Ubuntu 26.04.
+    # Tooling (including ffmpeg/fonts) differs during the rollout.
+    runs-on: ubuntu-24.04
     # The suite takes ~7s. A ceiling this generous only ever trips on a hang,
     # which this suite has had before: an aiosqlite connection left open keeps a
     # non-daemon worker thread alive and the interpreter never exits.
@@ -38,14 +40,25 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Install ffmpeg
-        # fonts-dejavu-core is not optional. The drawtext call in
-        # video_reviewer.py passes no fontfile=, so it asks fontconfig for a
-        # default family; with --no-install-recommends the runner can end up
-        # with an ffmpeg that has drawtext and no font for it to use.
+      - name: Ensure ffmpeg and fonts
+        # Hosted Ubuntu images can already include both. Unconditional apt
+        # update has hung until the 10-minute job timeout (Python 3.13 CI),
+        # preventing the test suite from running at all. Only install what is
+        # missing and bound apt network operations so the failure is visible.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
+          if command -v ffmpeg >/dev/null && \
+             command -v fc-match >/dev/null && \
+             fc-match "DejaVu Sans" | grep -qi "DejaVu"; then
+            echo "ffmpeg and DejaVu font are already available"
+          else
+            timeout 90s sudo apt-get update \
+              -o Acquire::Retries=1 \
+              -o Acquire::http::Timeout=15 \
+              -o Acquire::https::Timeout=15
+            timeout 90s sudo env DEBIAN_FRONTEND=noninteractive apt-get install \
+              -y --no-install-recommends ffmpeg fonts-dejavu-core
+          fi
+          command -v ffmpeg
 
       - name: Report whether drawtext renders
         # This used to fail the build, because naming an absent filter aborted
