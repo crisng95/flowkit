@@ -65,6 +65,9 @@ chrome.webRequest.onCompleted.addListener((d) => {
 5. Delete the capture file. It is evidence, not a fixture — put what you learned
    into a builder and a test instead.
 
+Never commit the recorder or its route. It logs every Flow request body,
+including the session's `at` token; one shipped by mistake until extension 0.5.3.
+
 ## Two things worth knowing before you diff
 
 **Accepted ≠ used.** A wrong arrangement inside a slot comes back 200 and is

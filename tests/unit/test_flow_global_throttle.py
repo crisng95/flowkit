@@ -152,3 +152,33 @@ async def test_a_shorter_hold_keeps_the_longer_one_and_its_reason(monkeypatch, _
     assert status["cooldown_reason"] == "unusual_activity"
     assert status["cooldown_remaining_s"] > 3590
     assert fc.FlowClient().generation_guard_status["cooldown_reason"] == "unusual_activity"
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_is_held_like_generation(monkeypatch):
+    monkeypatch.setattr(fc, "FLOW_GENERATION_MIN_INTERVAL_S", 0.0)
+    monkeypatch.setattr(fc, "FLOW_PROJECT_ID", "p")
+    client = fc.FlowClient()
+    await _unusual(client, monkeypatch)
+    calls = 0
+
+    async def fake_send(method, params, timeout=300):
+        nonlocal calls
+        calls += 1
+        return {"status": 200, "data": "ok"}
+
+    monkeypatch.setattr(client, "_send", fake_send)
+    monkeypatch.setattr(client, "_batch_project_id", lambda pid: "p")
+    result = await client.stream_chat("hello")
+    assert result["status"] == 429 and calls == 0
+
+
+def test_operation_caches_evict_oldest_first(monkeypatch):
+    monkeypatch.setattr(fc, "OPERATION_CACHE_MAX", 3)
+    client = fc.FlowClient()
+    for i in range(5):
+        client._remember_operation(f"op{i}", "p")
+    assert list(client._operation_projects) == ["op2", "op3", "op4"]
+    client._remember_operation("op2", "p")  # touched again: now newest
+    client._remember_operation("op5", "p")
+    assert list(client._operation_projects) == ["op4", "op2", "op5"]

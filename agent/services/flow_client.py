@@ -36,6 +36,18 @@ from agent.services import flow_batch as fb
 
 logger = logging.getLogger(__name__)
 
+# Per-operation poll caches keep at most this many entries each.
+OPERATION_CACHE_MAX = 512
+
+
+def _cache_put(cache: dict, key, value) -> None:
+    """Insert as newest and evict the oldest entries beyond OPERATION_CACHE_MAX,
+    so an operation still being polled is not dropped along with stale ones."""
+    cache.pop(key, None)
+    cache[key] = value
+    while len(cache) > OPERATION_CACHE_MAX:
+        cache.pop(next(iter(cache)))
+
 # Captured from the current Flow image composer. x4 launches independent
 # ogiZ0b requests at roughly 0.0s, 0.5s, 1.5s and 2.5s rather than bursting
 # all variants at once. The generation work still overlaps after submission.
@@ -577,7 +589,9 @@ class FlowClient:
         if custom_path:
             params["customPath"] = custom_path
 
-        is_generation = captcha_action in {fb.CAPTCHA_IMAGE, fb.CAPTCHA_VIDEO}
+        # Every reCAPTCHA-bearing call is a submit Google scores, StreamChat
+        # (CHAT_GENERATION) included, so all of them share the throttle and hold.
+        is_generation = captcha_action is not None
         if not is_generation:
             return await self._send("batch_rpc", params, timeout=timeout)
 
@@ -654,7 +668,7 @@ class FlowClient:
         return await self.batch_rpc(
             "StreamChat",
             freq,
-            captcha_action="CHAT_GENERATION",
+            captcha_action=fb.CAPTCHA_CHAT,
             custom_path=fb.STREAM_CHAT_PATH,
             timeout=timeout,
         )
@@ -705,9 +719,7 @@ class FlowClient:
         """
         if not operation_id:
             return
-        if len(self._operation_projects) > 512:
-            self._operation_projects.clear()
-        self._operation_projects[operation_id] = project_id
+        _cache_put(self._operation_projects, operation_id, project_id)
 
     # ─── High-Level Batch Methods ────────────────────────────────
 
@@ -1000,7 +1012,7 @@ class FlowClient:
             if not media_id:
                 return _as_pending_operation(operation_id, error=complaint)
             logger.info("Matched media_id=%s for op=%s", media_id, operation_id)
-            self._operation_media[operation_id] = media_id
+            _cache_put(self._operation_media, operation_id, media_id)
 
         try:
             urls = await self._batch_media_urls(media_id)
@@ -1015,7 +1027,7 @@ class FlowClient:
         # The media id stays cached rather than being cleared here: a batch
         # with several operations re-polls the finished ones alongside the
         # pending ones, and a cleared entry would report them PENDING again.
-        # Growth is bounded by _remember_operation.
+        # Growth is bounded by _cache_put.
         return {
             "operation": {
                 "name": operation_id,
@@ -1033,7 +1045,7 @@ class FlowClient:
         happened, when the poll is unreadable, or every third round regardless.
         """
         rounds = self._operation_polls.get(operation_id, 0) + 1
-        self._operation_polls[operation_id] = rounds
+        _cache_put(self._operation_polls, operation_id, rounds)
 
         project_id = self._operation_projects.get(operation_id) or FLOW_PROJECT_ID
         if not project_id:
