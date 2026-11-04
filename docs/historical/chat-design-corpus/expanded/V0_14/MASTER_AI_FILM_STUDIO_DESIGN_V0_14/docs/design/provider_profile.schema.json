@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "studio.provider-profile.v1",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "profile_version",
+    "provider",
+    "provider_surface",
+    "model_family",
+    "model_version",
+    "verified_at",
+    "capabilities",
+    "quota",
+    "task_lifecycle",
+    "billing",
+    "recovery",
+    "evidence"
+  ],
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_surface": {
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "account_scope": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "model_family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "capabilities": {
+      "type": "object"
+    },
+    "quota": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "rpm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "queue_behavior": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_scope": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "task_lifecycle": {
+      "type": "object",
+      "required": [
+        "async",
+        "handle_kind"
+      ],
+      "properties": {
+        "async": {
+          "type": "boolean"
+        },
+        "handle_kind": {
+          "type": "string"
+        },
+        "handle_retention_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "list_supported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cancel_queued": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cancel_running": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "delete_terminal": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "billing": {
+      "type": "object",
+      "required": [
+        "billing_surface",
+        "unit_kind"
+      ],
+      "properties": {
+        "billing_surface": {
+          "type": "string"
+        },
+        "unit_kind": {
+          "enum": [
+            "CREDITS_PER_GENERATION",
+            "USD_PER_GENERATION",
+            "USD_PER_VIDEO_SECOND",
+            "USD_PER_BILLABLE_SECOND",
+            "USD_PER_M_VIDEO_TOKENS",
+            "PROVISIONED_CAPACITY",
+            "LOCAL_COMPUTE_ESTIMATE",
+            "UNKNOWN"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unit_price": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "charge_on_success_only": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "effective_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "recovery": {
+      "type": "object",
+      "required": [
+        "idempotency_mode",
+        "reconcile_methods",
+        "ambiguous_resubmit_policy"
+      ],
+      "properties": {
+        "idempotency_mode": {
+          "type": "string"
+        },
+        "reconcile_methods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ambiguous_resubmit_policy": {
+          "enum": [
+            "SAFE",
+            "RECONCILE_FIRST",
+            "NEVER_AUTO"
+          ]
+        },
+        "reconciliation_deadline_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "grade",
+          "source",
+          "verified_at"
+        ],
+        "properties": {
+          "grade": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

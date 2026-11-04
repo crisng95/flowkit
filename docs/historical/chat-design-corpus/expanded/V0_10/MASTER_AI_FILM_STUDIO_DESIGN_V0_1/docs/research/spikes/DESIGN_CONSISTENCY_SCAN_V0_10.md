@@ -1,0 +1,34 @@
+# DESIGN_CONSISTENCY_SCAN_V0_10.md
+
+```json
+{
+  "checks": {
+    "review_rounds_1_84_continuous": true,
+    "adr_1_10_continuous": true,
+    "no_stale_L4_current_headers_outside_review": true,
+    "no_final_frozen_design": true,
+    "current_state_L5_5": true,
+    "provider_matrix_exists": true,
+    "decision_registry_exists": true,
+    "orthogonal_job_state_exists": true
+  },
+  "all_pass": true,
+  "review_round_count": 84,
+  "missing_1_84": [],
+  "duplicate_rounds": [],
+  "adr_numbers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "stale_current_L4_headers": [],
+  "note": "Document/static consistency only; no runtime evidence implied."
+}
+```

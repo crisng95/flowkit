@@ -1,0 +1,71 @@
+{
+  "profile_id": "alibaba-cloud:model-studio:wan2.7-t2v:singapore:2026-09-20",
+  "profile_version": "2026-09-20.1",
+  "provider": "ALIBABA_CLOUD",
+  "provider_surface": "MODEL_STUDIO",
+  "region": "Singapore",
+  "account_scope": "workspace/model/region",
+  "model_family": "WAN_2_7",
+  "model_version": "wan2.7-t2v",
+  "verified_at": "2026-09-20T13:12:00Z",
+  "capabilities": {
+    "t2v": true,
+    "resolutions": [
+      "720P",
+      "1080P"
+    ]
+  },
+  "quota": {
+    "kind": "DOCUMENTED_MODEL_LIMIT",
+    "rpm": null,
+    "rps": 5,
+    "concurrency": 5,
+    "queue_behavior": null,
+    "source_scope": "model/region"
+  },
+  "task_lifecycle": {
+    "async": true,
+    "handle_kind": "TASK_ID",
+    "handle_retention_seconds": 86400,
+    "list_supported": null,
+    "cancel_queued": null,
+    "cancel_running": null,
+    "delete_terminal": null
+  },
+  "billing": {
+    "billing_surface": "MODEL_STUDIO",
+    "unit_kind": "USD_PER_VIDEO_SECOND",
+    "currency": "USD",
+    "unit_price": 0.1,
+    "charge_on_success_only": true,
+    "effective_at": "2026-09-11"
+  },
+  "recovery": {
+    "idempotency_mode": "UNVERIFIED",
+    "reconcile_methods": [
+      "TASK_ID"
+    ],
+    "ambiguous_resubmit_policy": "NEVER_AUTO",
+    "reconciliation_deadline_seconds": 86400
+  },
+  "evidence": [
+    {
+      "grade": "A",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/text-to-video-api-reference",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "async task/24h task id"
+    },
+    {
+      "grade": "A",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/rate-limit",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "RPS/concurrency"
+    },
+    {
+      "grade": "A",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/model-pricing",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "Singapore 720P pricing example"
+    }
+  ]
+}

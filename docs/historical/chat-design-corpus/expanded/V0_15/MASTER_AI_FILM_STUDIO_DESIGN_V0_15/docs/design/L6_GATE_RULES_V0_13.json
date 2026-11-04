@@ -1,0 +1,50 @@
+{
+  "PERSISTENCE_WINDOWS": {
+    "required_classes": [
+      "TARGET_RUNTIME"
+    ],
+    "required_status": "PASS"
+  },
+  "CREDENTIAL_BROKER_WINDOWS": {
+    "required_classes": [
+      "TARGET_RUNTIME"
+    ],
+    "required_status": "PASS"
+  },
+  "PROVIDER_AMBIGUITY": {
+    "required_classes": [
+      "LIVE_PROVIDER"
+    ],
+    "required_status": "PASS"
+  },
+  "STATIC_QA_CALIBRATION": {
+    "required_classes": [
+      "VISUAL_CALIBRATION"
+    ],
+    "required_status": "PASS"
+  },
+  "TARGETED_REPAIR_LIVE": {
+    "required_classes": [
+      "LIVE_GENERATION_BENCHMARK"
+    ],
+    "required_status": "PASS"
+  },
+  "PERFORMANCE_TARGET": {
+    "required_classes": [
+      "TARGET_RUNTIME"
+    ],
+    "required_status": "PASS"
+  },
+  "PROVIDER_PROFILE_LIVE": {
+    "required_classes": [
+      "LIVE_ACCOUNT_OBSERVATION"
+    ],
+    "required_status": "PASS"
+  },
+  "CONTRACT_TRACEABILITY": {
+    "required_classes": [
+      "STATIC_ANALYSIS"
+    ],
+    "required_status": "PASS"
+  }
+}

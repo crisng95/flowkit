@@ -1,0 +1,7 @@
+{
+  "requirements_count": 64,
+  "traceability_count": 64,
+  "requirements_missing_from_traceability": [],
+  "traceability_ids_missing_from_requirements": [],
+  "exact_id_set_match": true
+}

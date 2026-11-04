@@ -1,0 +1,60 @@
+{
+  "fixtures": 4,
+  "classes": {
+    "CAMERA_ANGLE_FAIL": {
+      "tp": 1,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "specificity": null,
+      "f1": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "IDENTITY_DRIFT": {
+      "tp": 1,
+      "fp": 0,
+      "tn": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "specificity": null,
+      "f1": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "PROP_MISSING_CRITICAL": {
+      "tp": 0,
+      "fp": 0,
+      "tn": 0,
+      "fn": 1,
+      "precision": null,
+      "recall": 0.0,
+      "specificity": null,
+      "f1": null,
+      "false_negative_rate": 1.0
+    },
+    "STYLE_DRIFT": {
+      "tp": 0,
+      "fp": 1,
+      "tn": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": null,
+      "specificity": 0.0,
+      "f1": null,
+      "false_negative_rate": null
+    }
+  },
+  "blocking_classes": [
+    "IDENTITY_DRIFT",
+    "PROP_MISSING_CRITICAL"
+  ],
+  "blocking_false_negative_rate": 0.5,
+  "dataset_versions": [
+    "demo"
+  ],
+  "reviewer_versions": [
+    "demo-r1"
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "platform": "win32",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "parameters": {
+    "threads": 12,
+    "commands_per_producer": 250,
+    "busy_timeout_ms": 5000
+  },
+  "tests": {
+    "raw_multiwriter_characterization": {
+      "purpose": "adversarial characterization; NOT production acceptance lane",
+      "journal_mode": "wal",
+      "expected": 3000,
+      "committed": 2874,
+      "revision": 2874,
+      "errors": 126,
+      "error_summary": [
+        {
+          "error": "OperationalError: database is locked",
+          "count": 126
+        }
+      ],
+      "elapsed_s": 120.8734148000076,
+      "tx_per_s": 23.776940568405447,
+      "latency_ms_mean": 74.23963987477175,
+      "latency_ms_p95": 141.69600000604987,
+      "latency_ms_max": 5590.293000001111,
+      "integrity_check": "ok"
+    },
+    "single_writer_queue": {
+      "purpose": "V1 production acceptance lane",
+      "journal_mode": "wal",
+      "producer_threads": 12,
+      "commands_per_producer": 250,
+      "expected": 3000,
+      "committed": 3000,
+      "revision": 3000,
+      "writer_errors": 0,
+      "writer_error_summary": [],
+      "producer_errors": 0,
+      "producer_error_summary": [],
+      "elapsed_s": 124.48383820000163,
+      "tx_per_s": 24.099513988153692,
+      "writer_latency_ms_mean": 41.45643750000454,
+      "writer_latency_ms_p95": 88.90039999096189,
+      "writer_latency_ms_max": 141.24310000624973,
+      "producer_queue_wait_ms_mean": 418.2986755000117,
+      "producer_queue_wait_ms_p95": 531.2869000044884,
+      "producer_queue_wait_ms_max": 649.8109999956796,
+      "integrity_check": "ok"
+    },
+    "abrupt_exit": {
+      "committed_survived": true,
+      "uncommitted_absent": true,
+      "integrity_check": "ok"
+    },
+    "migration_interrupt_resume": {
+      "detected_status_after_crash": "RUNNING",
+      "phase_after_crash": 500,
+      "rows_converted_after_crash": 500,
+      "rows_converted_after_resume": 1000,
+      "integrity_check": "ok"
+    },
+    "backup_restore": {
+      "restored_rows": 100,
+      "integrity_check": "ok",
+      "source_sha256": "8ddea7731b2a923225fbc72bccda02d55cd6b045313f0c3aeb8c94039c5c9a95",
+      "backup_sha256": "888fc40e2d0d7d97f62dbea53a1943a1f8c1502775c4e2772c23394d89a3cb62",
+      "note": "SQLite backup files need not have identical byte hashes to prove logical equivalence."
+    },
+    "newer_schema_gate": {
+      "db_schema_version": 999,
+      "supported_max": 7,
+      "write_allowed": false
+    }
+  },
+  "limitations": [],
+  "all_required_checks_pass": true,
+  "acceptance_policy": {
+    "raw_multiwriter_characterization_is_informational": true,
+    "production_acceptance_lane": "single_writer_queue",
+    "production_required_committed": 3000,
+    "production_required_errors": 0
+  }
+}

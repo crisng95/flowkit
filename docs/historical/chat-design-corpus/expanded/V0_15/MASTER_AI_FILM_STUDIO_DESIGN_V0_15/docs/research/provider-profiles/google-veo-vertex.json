@@ -1,0 +1,77 @@
+{
+  "profile_id": "google:vertex-ai:veo-3.1-generate-001:2026-09-20",
+  "profile_version": "2026-09-20.1",
+  "provider": "GOOGLE",
+  "provider_surface": "VERTEX_AI",
+  "region": "us-central1",
+  "account_scope": "project",
+  "model_family": "VEO_3_1",
+  "model_version": "veo-3.1-generate-001",
+  "verified_at": "2026-09-20T13:12:00Z",
+  "capabilities": {
+    "t2v": true,
+    "i2v": true,
+    "first_last_frame": true,
+    "durations": [
+      4,
+      6,
+      8
+    ],
+    "aspect_ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "resolutions": [
+      "720p",
+      "1080p"
+    ],
+    "max_outputs_per_request": 4
+  },
+  "quota": {
+    "kind": "DOCUMENTED_MODEL_QUOTA",
+    "rpm": 50,
+    "rps": null,
+    "concurrency": null,
+    "queue_behavior": null,
+    "source_scope": "per project/model page"
+  },
+  "task_lifecycle": {
+    "async": true,
+    "handle_kind": "LONG_RUNNING_OPERATION",
+    "handle_retention_seconds": null,
+    "list_supported": null,
+    "cancel_queued": null,
+    "cancel_running": null,
+    "delete_terminal": null
+  },
+  "billing": {
+    "billing_surface": "VERTEX_AI",
+    "unit_kind": "UNKNOWN",
+    "currency": "USD",
+    "unit_price": null,
+    "charge_on_success_only": null,
+    "effective_at": null
+  },
+  "recovery": {
+    "idempotency_mode": "UNVERIFIED",
+    "reconcile_methods": [
+      "OPERATION_HANDLE"
+    ],
+    "ambiguous_resubmit_policy": "NEVER_AUTO",
+    "reconciliation_deadline_seconds": null
+  },
+  "evidence": [
+    {
+      "grade": "A",
+      "source": "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/veo/3-1-generate",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "capabilities/limits"
+    },
+    {
+      "grade": "A",
+      "source": "https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos-from-text",
+      "verified_at": "2026-09-20T13:12:00Z",
+      "note": "long-running prediction"
+    }
+  ]
+}

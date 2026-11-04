@@ -1,0 +1,174 @@
+{
+  "integrity_pass": true,
+  "integrity": [
+    {
+      "evidence_id": "EV-PERSIST-LOCAL-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "3c944b4cec510398bfa279f315dbc8ad43f41d537d2b8db17a4df9155a951e5d",
+      "actual_sha256": "3c944b4cec510398bfa279f315dbc8ad43f41d537d2b8db17a4df9155a951e5d"
+    },
+    {
+      "evidence_id": "EV-PROVIDER-AMB-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "a0256cc5aa06f86a1422c4a8699d3ade519f55152c75ea86cb8460d2bdbe8e60",
+      "actual_sha256": "a0256cc5aa06f86a1422c4a8699d3ade519f55152c75ea86cb8460d2bdbe8e60"
+    },
+    {
+      "evidence_id": "EV-CRED-LOCAL-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "9a25b4001cf60001920df4dcddd3b7a7df144657a494403c018c01186fc52510",
+      "actual_sha256": "9a25b4001cf60001920df4dcddd3b7a7df144657a494403c018c01186fc52510"
+    },
+    {
+      "evidence_id": "EV-QA-POLICY-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "5fce03380457e3a754a16b378b9569685fcc8d39759c55f30c41347438aa43f1",
+      "actual_sha256": "5fce03380457e3a754a16b378b9569685fcc8d39759c55f30c41347438aa43f1"
+    },
+    {
+      "evidence_id": "EV-REPAIR-PLAN-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "25e227db1f8cfb1927d7dba23ebca59e366dc2a4177fe027c37985a2f28c19ba",
+      "actual_sha256": "25e227db1f8cfb1927d7dba23ebca59e366dc2a4177fe027c37985a2f28c19ba"
+    },
+    {
+      "evidence_id": "EV-PERF-LOCAL-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "85d48c0916d2d2c07a17d1711be918b663dc473ba38b0b9c4bb374045ec5faa1",
+      "actual_sha256": "85d48c0916d2d2c07a17d1711be918b663dc473ba38b0b9c4bb374045ec5faa1"
+    },
+    {
+      "evidence_id": "EV-CONTRACT-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "25cd5e56e8242df65dd2a3e8678eef5082625e26c7bedc45bd0b01d5551ce99a",
+      "actual_sha256": "25cd5e56e8242df65dd2a3e8678eef5082625e26c7bedc45bd0b01d5551ce99a"
+    },
+    {
+      "evidence_id": "EV-HARNESS-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "52f80263bd08af57f0eea44e5bd37a57508f213ea9bdac1ecc089c784cce764f",
+      "actual_sha256": "52f80263bd08af57f0eea44e5bd37a57508f213ea9bdac1ecc089c784cce764f"
+    },
+    {
+      "evidence_id": "EV-PERSIST-WIN-RUN1-001",
+      "exists": true,
+      "hash_matches": true,
+      "expected_sha256": "27209750c447f6e1e79a10c56f93a62507dc4607e6d4b80723ca656e9702467e",
+      "actual_sha256": "27209750c447f6e1e79a10c56f93a62507dc4607e6d4b80723ca656e9702467e"
+    }
+  ],
+  "gate_status": {
+    "PERSISTENCE_WINDOWS": {
+      "closed": false,
+      "required_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "evidence_ids": [
+        "EV-PERSIST-LOCAL-001",
+        "EV-PERSIST-WIN-RUN1-001"
+      ]
+    },
+    "CREDENTIAL_BROKER_WINDOWS": {
+      "closed": false,
+      "required_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "evidence_ids": [
+        "EV-CRED-LOCAL-001"
+      ]
+    },
+    "PROVIDER_AMBIGUITY": {
+      "closed": false,
+      "required_classes": [
+        "LIVE_PROVIDER"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "LIVE_PROVIDER"
+      ],
+      "evidence_ids": [
+        "EV-PROVIDER-AMB-001"
+      ]
+    },
+    "STATIC_QA_CALIBRATION": {
+      "closed": false,
+      "required_classes": [
+        "VISUAL_CALIBRATION"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "VISUAL_CALIBRATION"
+      ],
+      "evidence_ids": [
+        "EV-QA-POLICY-001"
+      ]
+    },
+    "TARGETED_REPAIR_LIVE": {
+      "closed": false,
+      "required_classes": [
+        "LIVE_GENERATION_BENCHMARK"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "LIVE_GENERATION_BENCHMARK"
+      ],
+      "evidence_ids": [
+        "EV-REPAIR-PLAN-001"
+      ]
+    },
+    "PERFORMANCE_TARGET": {
+      "closed": false,
+      "required_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "TARGET_RUNTIME"
+      ],
+      "evidence_ids": [
+        "EV-PERF-LOCAL-001"
+      ]
+    },
+    "PROVIDER_PROFILE_LIVE": {
+      "closed": false,
+      "required_classes": [
+        "LIVE_ACCOUNT_OBSERVATION"
+      ],
+      "present_passing_classes": [],
+      "missing_classes": [
+        "LIVE_ACCOUNT_OBSERVATION"
+      ],
+      "evidence_ids": []
+    },
+    "CONTRACT_TRACEABILITY": {
+      "closed": true,
+      "required_classes": [
+        "STATIC_ANALYSIS"
+      ],
+      "present_passing_classes": [
+        "STATIC_ANALYSIS"
+      ],
+      "missing_classes": [],
+      "evidence_ids": [
+        "EV-CONTRACT-001"
+      ]
+    }
+  },
+  "l6_critical_gates_closed": false
+}
