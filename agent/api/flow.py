@@ -55,6 +55,8 @@ class GenerateVideoRequest(BaseModel):
     model_family: Literal["veo", "omni_flash"] = "veo"
     duration_s: int = 8
     resolution: Literal["360p", "720p"] = "720p"
+    # Omni only: "1.2" = Omni 1.2 Flash (3-15s; first+last only for frames).
+    omni_version: Literal["1.1", "1.2"] = "1.1"
 
 
 class GenerateVideoRefsRequest(BaseModel):
@@ -80,6 +82,7 @@ class GenerateOmniFlashVideoRequest(BaseModel):
     resolution: Literal["360p", "720p"] = "720p"
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
+    omni_version: Literal["1.1", "1.2"] = "1.1"
 
 
 class GenerateOmniFlashTextVideoRequest(BaseModel):
@@ -90,6 +93,7 @@ class GenerateOmniFlashTextVideoRequest(BaseModel):
     resolution: Literal["360p", "720p"] = "720p"
     aspect_ratio: str = "VIDEO_ASPECT_RATIO_PORTRAIT"
     user_paygate_tier: str = "PAYGATE_TIER_ONE"
+    omni_version: Literal["1.1", "1.2"] = "1.1"
 
 
 class UpscaleVideoRequest(BaseModel):
@@ -271,6 +275,7 @@ async def generate_video(body: GenerateVideoRequest):
                 resolution=body.resolution,
                 aspect_ratio=body.aspect_ratio,
                 user_paygate_tier=body.user_paygate_tier,
+                omni_version=body.omni_version,
             )
             if body.end_image_media_id:
                 result = await generate_omni_flash_first_last_video(
@@ -283,7 +288,8 @@ async def generate_video(body: GenerateVideoRequest):
             raise HTTPException(400, str(exc)) from exc
     else:
         payload = body.model_dump(
-            exclude={"model_family", "duration_s", "resolution"}, exclude_none=True
+            exclude={"model_family", "duration_s", "resolution", "omni_version"},
+            exclude_none=True,
         )
         payload["project_id"] = project_id
         result = await client.generate_video(**payload)
