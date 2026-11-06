@@ -664,7 +664,15 @@ const MAX_RPC_TEXT = 32000000; // the project listing alone is past 17 MB
 
 async function runBatchRpc(cmd) {
   const tabs = await chrome.tabs.query({ url: flowUrls });
+  // With several Flow tabs open (possibly on different Google accounts), use
+  // the one whose project id appears in this request.
+  const freqText = String(cmd.freq || '');
+  const projectTab = tabs.find((t) => {
+    const m = t.url && t.url.match(/\/project\/([0-9a-f-]{36})/i);
+    return m && freqText.includes(m[1]) && !t.discarded;
+  });
   let candidate =
+    projectTab ||
     tabs.find((t) => t.url && t.url.includes('/project/') && !t.discarded) ||
     tabs.find((t) => t.active && !t.discarded) ||
     tabs.find((t) => !t.discarded) ||
@@ -710,9 +718,12 @@ async function runBatchRpc(cmd) {
       // image generation when source-path is missing even though Lite may not.
       const sourcePath = location.pathname || '/';
       const hl = (document.documentElement.lang || navigator.language || 'en').split('-')[0];
+      // Multi-account: a tab on /u/<n>/ must hit /u/<n>/_/..., otherwise the
+      // cookie jar resolves to the default account and its projects 404.
+      const acct = (location.pathname.match(/^\/u\/\d+(?=\/)/) || [''])[0];
       const url = customPath
-        ? `${customPath}?bl=${encodeURIComponent(bl || '')}&f.sid=${encodeURIComponent(sid || '')}&hl=${encodeURIComponent(hl)}&_reqid=${reqid}&rt=c`
-        : `/_/AiSandboxAngularFrontend/data/batchexecute?rpcids=${encodeURIComponent(rpcid)}` +
+        ? `${customPath.startsWith('/_/') ? acct : ''}${customPath}?bl=${encodeURIComponent(bl || '')}&f.sid=${encodeURIComponent(sid || '')}&hl=${encodeURIComponent(hl)}&_reqid=${reqid}&rt=c`
+        : `${acct}/_/AiSandboxAngularFrontend/data/batchexecute?rpcids=${encodeURIComponent(rpcid)}` +
           `&source-path=${encodeURIComponent(sourcePath)}` +
           `&bl=${encodeURIComponent(bl || '')}&f.sid=${encodeURIComponent(sid || '')}` +
           `&hl=${encodeURIComponent(hl)}&_reqid=${reqid}&rt=c`;
