@@ -20,6 +20,7 @@ shape and never learns where it came from.
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Optional
@@ -626,7 +627,17 @@ class FlowClient:
                     await asyncio.sleep(delay)
                 self._generation_last_submit_at = time.monotonic()
 
-            result = await self._send("batch_rpc", params, timeout=timeout)
+            if rpcid == fb.RPC_GEN_VIDEO_TEXT and os.environ.get("FLOW_OMNI12_CDP_URL"):
+                from agent.services.omni_12_ui import is_omni_12_ui_envelope, run_omni_12_ui_generation
+            else:
+                is_omni_12_ui_envelope = lambda _freq: False
+            if is_omni_12_ui_envelope(freq):
+                result = await run_omni_12_ui_generation(
+                    freq, project_id=self._batch_active_project or FLOW_PROJECT_ID or None,
+                    timeout=timeout,
+                )
+            else:
+                result = await self._send("batch_rpc", params, timeout=timeout)
             blob = f"{result.get('error', '')} {result.get('data', '')}"
             is_hijack = "extension_hijack" in blob.lower()
             is_unusual = (
