@@ -900,11 +900,12 @@ async def prepare_review_sheets(
     orient_prefix = "vertical" if orientation.upper() == "VERTICAL" else "horizontal"
 
     scene_dir = Path(persist_dir) / scene["id"]
-    scene_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         video_path = await _fetch_scene_video(scene, orient_prefix, tmp_path)
+        # Avoid an empty output directory when the scene video is unavailable.
+        scene_dir.mkdir(parents=True, exist_ok=True)
         contact_sheets, n_frames, timestamped = await asyncio.get_event_loop().run_in_executor(
             None, _create_contact_sheets, str(video_path), fps, str(scene_dir)
         )
