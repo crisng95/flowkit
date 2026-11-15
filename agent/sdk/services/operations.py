@@ -51,6 +51,22 @@ def _char_matches(c: dict, name_set: set) -> bool:
     return (slug and slug in name_set) or (name and name in name_set)
 
 
+def _build_continuation_prompt(base_prompt: str) -> str:
+    """Build a transformation-focused prompt for CONTINUATION scene images.
+
+    When editing from a parent image, the default prompt just describes the
+    child scene statically — the edit API preserves the parent's composition.
+    This helper prepends transformation instructions so the AI actually
+    changes camera angle, location, and setup.
+    """
+    return (
+        f"Transform this image into a completely different moment. "
+        f"Move the camera to a new angle, position, and composition. "
+        f"Change the surrounding environment and visual setup. "
+        f"{base_prompt}"
+    )
+
+
 def _reference_aspect_ratio(entity_type: str) -> str:
     """Pick aspect ratio based on entity type."""
     if entity_type in _LANDSCAPE_ENTITY_TYPES:

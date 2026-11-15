@@ -158,6 +158,34 @@ class TestGenerateSceneImage:
         call_kwargs = mock_client.generate_images.call_args.kwargs
         assert call_kwargs["aspect_ratio"] == "IMAGE_ASPECT_RATIO_LANDSCAPE"
 
+    @pytest.mark.asyncio
+    async def test_continuation_scene_enriches_prompt_without_crashing(
+            self, service, base_scene, mock_client):
+        """A CONTINUATION scene (has parent_scene_id, no image_prompt) must route
+        through _build_continuation_prompt without raising NameError, and the
+        enriched prompt must reach the provider call.
+
+        Regression test: a prior refactor (provider-neutral platform, 76c4d3f)
+        dropped the _build_continuation_prompt definition but left both call
+        sites in place. No existing fixture set parent_scene_id, so the dead
+        code path went untested and the NameError only surfaced at runtime
+        against a live Flow project.
+        """
+        base_scene["parent_scene_id"] = "parent-scene-001"
+        base_scene["image_prompt"] = None
+        base_scene["character_names"] = None
+
+        with patch("agent.sdk.services.operations.crud") as mock_crud:
+            mock_crud.get_project = AsyncMock(return_value={"user_paygate_tier": "PAYGATE_TIER_ONE"})
+            mock_crud.get_project_characters = AsyncMock(return_value=[])
+
+            result = await service.generate_scene_image(base_scene, "VERTICAL")
+
+        assert "error" not in result
+        call_kwargs = mock_client.generate_images.call_args.kwargs
+        assert "Transform this image into a completely different moment" in call_kwargs["prompt"]
+        assert base_scene["prompt"] in call_kwargs["prompt"]
+
 
 # ---------------------------------------------------------------------------
 # Test: generate_scene_video — the retry branch
@@ -267,6 +295,39 @@ class TestEditSceneImage:
 
         assert "error" in result
         assert "No source image" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_continuation_scene_enriches_prompt_without_crashing(
+            self, service, base_scene, mock_client):
+        """A CONTINUATION scene (has parent_scene_id, no image_prompt) must route
+        through _build_continuation_prompt without raising NameError.
+
+        Regression test for the same dropped-function bug as
+        TestGenerateSceneImage.test_continuation_scene_enriches_prompt_without_crashing,
+        on the edit_scene_image call site (used for actual CONTINUATION scenes
+        in the real pipeline — generate_scene_image's call site is only hit on
+        a direct regenerate-with-parent edge case).
+        """
+        base_scene["parent_scene_id"] = "parent-scene-001"
+        base_scene["image_prompt"] = None
+        base_scene["character_names"] = None
+        parent_scene = {
+            "vertical_image_media_id": SAMPLE_UUID_2,
+            "vertical_image_url": "https://lh3.googleusercontent.com/image/parent?sqp=params",
+        }
+
+        with patch("agent.sdk.services.operations.crud") as mock_crud:
+            mock_crud.get_project = AsyncMock(return_value={"user_paygate_tier": "PAYGATE_TIER_ONE"})
+            mock_crud.get_project_characters = AsyncMock(return_value=[])
+            mock_crud.get_scene = AsyncMock(return_value=parent_scene)
+
+            result = await service.edit_scene_image(base_scene, "VERTICAL", source_media_id=None)
+
+        assert "error" not in result
+        mock_client.edit_image.assert_called_once()
+        call_kwargs = mock_client.edit_image.call_args.kwargs
+        assert "Transform this image into a completely different moment" in call_kwargs["prompt"]
+        assert call_kwargs["source_media_id"] == SAMPLE_UUID_2  # resolved from parent
 
 
 # ---------------------------------------------------------------------------
