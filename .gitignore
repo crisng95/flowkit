@@ -31,6 +31,9 @@ extension/_metadata/
 .agent/
 flow_session_project.json
 .venv/
+venv/
+agent_out.log
+agent_err.log
 *.mp3
 scratch/
 
