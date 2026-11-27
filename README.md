@@ -487,6 +487,7 @@ Three capabilities have no captured payload, so they fail with
 | Veo start+end-frame chaining (`/fk-gen-chain-videos`) | unported | Omni first+last (`model_family=omni_flash`), or `FLOW_ALLOW_DEGRADED=1` → i2v off the start frame |
 | Omni Flash text-to-video | ported | `POST /api/flow/generate-video-omni-text` (4/6/8/10s) |
 | Omni Flash frame / first+last / reference modes | ported | `eb1hJf`, `nprQif`, `MZZa6b` — `POST /api/flow/generate-video` with `model_family=omni_flash` |
+| Omni 1.2 Flash (all four modes above) | ported | add `"omni_version": "1.2"` to the same endpoints — `macaron_cookie_{t2v,i2v,i2v_fl,r2v}_<N>s[_360p]`, any whole second 3–15 |
 
 Restoring one starts with a capture, not a guess: [`docs/CAPTURE.md`](docs/CAPTURE.md).
 

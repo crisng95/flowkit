@@ -443,18 +443,21 @@ def video_request(prompt: str, project_id: str, source_media_id: str,
 def omni_first_frame_request(prompt: str, project_id: str, source_media_id: str,
                              *, duration_s: int = 8, resolution: str = "720p",
                              aspect: Any = VIDEO_ASPECT_LANDSCAPE,
-                             crop: Optional[list] = None) -> str:
+                             crop: Optional[list] = None,
+                             model: Optional[str] = None) -> str:
     """Build current Omni first-frame I2V (RPC ``eb1hJf``).
 
     Live-captured from Flow on 2026-09-14. 720p uses ``abra_i2v_<N>s``;
     360p appends ``_360p`` and carries the UI's low-resolution option slot.
+    ``model`` overrides the key (Omni 1.2).
     """
-    if duration_s not in (4, 6, 8, 10):
-        raise ValueError("Omni duration must be 4, 6, 8 or 10 seconds")
     res = str(resolution).strip().lower()
     if res not in {"360p", "720p"}:
         raise ValueError("Omni resolution must be 360p or 720p")
-    model = f"abra_i2v_{duration_s}s" + ("_360p" if res == "360p" else "")
+    if model is None:
+        if duration_s not in (4, 6, 8, 10):
+            raise ValueError("Omni duration must be 4, 6, 8 or 10 seconds")
+        model = f"abra_i2v_{duration_s}s" + ("_360p" if res == "360p" else "")
     request = [
         [None, None, [[[prompt]]]],
         model,
@@ -478,14 +481,20 @@ def omni_first_last_request(prompt: str, project_id: str,
                             *, duration_s: int = 8, resolution: str = "720p",
                             aspect: Any = VIDEO_ASPECT_LANDSCAPE,
                             start_crop: Optional[list] = None,
-                            end_crop: Optional[list] = None) -> str:
-    """Build Omni First+Last frames submit (RPC ``nprQif``)."""
-    if duration_s not in (4, 6, 8, 10):
-        raise ValueError("Omni duration must be 4, 6, 8 or 10 seconds")
+                            end_crop: Optional[list] = None,
+                            model: Optional[str] = None) -> str:
+    """Build Omni First+Last frames submit (RPC ``nprQif``).
+
+    ``model`` overrides the 1.1 key; Omni 1.2 uses the same payload with
+    ``macaron_cookie_i2v_fl_<N>s[_360p]`` (live-captured 2026-11-06).
+    """
     res = str(resolution).strip().lower()
     if res not in {"360p", "720p"}:
         raise ValueError("Omni resolution must be 360p or 720p")
-    model = f"omni_flash_i2v_{duration_s}s_first_last" + ("_360p" if res == "360p" else "")
+    if model is None:
+        if duration_s not in (4, 6, 8, 10):
+            raise ValueError("Omni duration must be 4, 6, 8 or 10 seconds")
+        model = f"omni_flash_i2v_{duration_s}s_first_last" + ("_360p" if res == "360p" else "")
     request = [
         [None, None, [[[prompt]]]],
         model,
@@ -507,17 +516,18 @@ def omni_first_last_request(prompt: str, project_id: str,
 def omni_reference_video_request(prompt: str, project_id: str,
                                  reference_media_ids: list[str],
                                  *, duration_s: int = 8, resolution: str = "720p",
-                                 aspect: Any = VIDEO_ASPECT_LANDSCAPE) -> str:
+                                 aspect: Any = VIDEO_ASPECT_LANDSCAPE,
+                                 model: Optional[str] = None) -> str:
     """Build Omni Ingredients/reference-to-video submit (RPC ``MZZa6b``)."""
     refs = [str(mid) for mid in reference_media_ids if str(mid)]
     if not refs:
         raise ValueError("Omni reference-to-video requires at least one reference image")
-    if duration_s not in (4, 6, 8, 10):
+    if model is None and duration_s not in (4, 6, 8, 10):
         raise ValueError("Omni duration must be 4, 6, 8 or 10 seconds")
     res = str(resolution).strip().lower()
     if res not in {"360p", "720p"}:
         raise ValueError("Omni resolution must be 360p or 720p")
-    model = f"abra_r2v_{duration_s}s" + ("_360p" if res == "360p" else "")
+    model = model or f"abra_r2v_{duration_s}s" + ("_360p" if res == "360p" else "")
     request = [
         [None, None, [[[prompt]]]],
         [[None, mid] for mid in refs],
