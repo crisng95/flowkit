@@ -1,0 +1,93 @@
+name: Flow compatibility report
+description: Report a Google Flow API/UI change or a generation mode that stopped working.
+title: "[Flow compatibility] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep FlowKit compatible with the live Google Flow frontend.
+
+        **Do not include cookies, Google auth tokens, reCAPTCHA tokens, passwords, or private media URLs.**
+
+  - type: input
+    id: commit
+    attributes:
+      label: FlowKit commit
+      description: Output of `git rev-parse --short HEAD`.
+      placeholder: abc1234
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: What stopped working?
+      options:
+        - Image generation
+        - Image editing / references
+        - Image export / upscale
+        - Omni Flash text-to-video
+        - Omni Flash first-frame video
+        - Omni Flash first+last video
+        - Omni Flash references / Ingredients
+        - Veo image-to-video
+        - Video export / upscale
+        - Project creation / project reuse
+        - Flow login / browser session
+        - Credits / account inspection
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: Request shape
+      description: Endpoint and non-sensitive parameters. Remove prompts/media IDs if they are private.
+      placeholder: |
+        POST /api/flow/generate-video
+        model_family=omni_flash
+        duration_s=4
+        resolution=360p
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error / response
+      description: Include the HTTP status and Flow error code/message. Sanitize secrets.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: manual
+    attributes:
+      label: Does the same action work manually in flow.google.com using the same browser/account?
+      options:
+        - Yes
+        - No
+        - Not tested
+    validations:
+      required: true
+
+  - type: input
+    id: extension
+    attributes:
+      label: Extension and browser versions (if relevant)
+      description: FlowKit extension version from chrome://extensions and Chrome/Chromium version.
+      placeholder: "Extension 0.x.x, Chrome 1xx"
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction steps
+      description: Describe the smallest safe sequence that reproduces the problem; use dummy prompts and redact private IDs.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Recent Flow UI changes, model labels, screenshots, or sanitized structural observations.
